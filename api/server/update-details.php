@@ -18,14 +18,17 @@ if (!isset($_SESSION['user_id'])) {
     pteroJsonError(403, 'Not authenticated.');
 }
 
-$input = json_decode(file_get_contents('php://input') ?: '{}', true);
+$rawBody = file_get_contents('php://input') ?: '';
+$input = json_decode($rawBody !== '' ? $rawBody : '{}', true);
 
 if (!is_array($input)) {
-    pteroJsonError(400, 'Invalid request body.');
+    $input = [];
 }
 
+$input = array_merge($_POST, $input);
+
 $csrfToken = (string)($input['csrf_token'] ?? '');
-$identifier = trim((string)($input['id'] ?? ''));
+$identifier = trim((string)($input['id'] ?? $input['server_identifier'] ?? ''));
 $field = trim((string)($input['field'] ?? ''));
 $value = trim((string)($input['value'] ?? ''));
 
@@ -110,6 +113,10 @@ try {
     echo json_encode([
         'ok' => true,
         'error' => null,
+        'message' => ucfirst($field) . ' updated successfully.',
+        'name' => $newName,
+        'description' => $newDescription,
+        'field' => $field,
         'data' => [
             'message' => ucfirst($field) . ' updated successfully.',
             'name' => $newName,
