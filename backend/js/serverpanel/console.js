@@ -186,15 +186,17 @@
         //showCommandMessage('Sending command...', false);
 
         try {
-            const formData = new FormData();
-            formData.append('csrf_token', csrfToken);
-            formData.append('server_identifier', identifier);
-            formData.append('command', command);
-
             const response = await fetch(COMMAND_URL, {
                 method: 'POST',
-                body: formData,
-                headers: { 'Accept': 'application/json' }
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    id: identifier,
+                    command: command
+                })
             });
 
             const rawText = await response.text();

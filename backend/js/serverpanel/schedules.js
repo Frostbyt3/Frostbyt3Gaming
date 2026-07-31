@@ -787,20 +787,21 @@
         const isCreateMode = scheduleModalMode === 'create';
         const endpoint = isCreateMode ? endpoints.create : endpoints.update;
 
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        formData.append('server_identifier', serverId);
-        formData.append('name', editFields.name.value.trim());
-        formData.append('minute', editFields.minute.value.trim() || '*');
-        formData.append('hour', editFields.hour.value.trim() || '*');
-        formData.append('day_of_month', editFields.dayOfMonth.value.trim() || '*');
-        formData.append('month', editFields.month.value.trim() || '*');
-        formData.append('day_of_week', editFields.dayOfWeek.value.trim() || '*');
-        formData.append('only_when_online', editFields.onlyWhenOnline.checked ? '1' : '0');
-        formData.append('is_active', editFields.isActive.checked ? '1' : '0');
+        const payload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            name: editFields.name.value.trim(),
+            minute: editFields.minute.value.trim() || '*',
+            hour: editFields.hour.value.trim() || '*',
+            day_of_month: editFields.dayOfMonth.value.trim() || '*',
+            month: editFields.month.value.trim() || '*',
+            day_of_week: editFields.dayOfWeek.value.trim() || '*',
+            only_when_online: editFields.onlyWhenOnline.checked,
+            is_active: editFields.isActive.checked
+        };
 
         if (!isCreateMode) {
-            formData.append('schedule_id', editFields.scheduleId.value);
+            payload.schedule_id = editFields.scheduleId.value;
         }
 
         try {
@@ -812,7 +813,8 @@
                         endpoint,
                         {
                             method: 'POST',
-                            body: formData
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
                         },
                         'Invalid JSON from schedule endpoint:'
                     );
@@ -854,17 +856,18 @@
         const isCreateMode = taskModalMode === 'create';
         const endpoint = isCreateMode ? endpoints.taskCreate : endpoints.taskUpdate;
 
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        formData.append('server_identifier', serverId);
-        formData.append('schedule_id', taskEditFields.scheduleId.value);
-        formData.append('action', normalizeTaskActionValue(taskEditFields.action.value));
-        formData.append('payload', payload);
-        formData.append('time_offset', taskEditFields.timeOffset.value || '0');
-        formData.append('continue_on_failure', taskEditFields.continueOnFailure.checked ? '1' : '0');
+        const taskPayload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            schedule_id: taskEditFields.scheduleId.value,
+            action: normalizeTaskActionValue(taskEditFields.action.value),
+            payload: payload,
+            time_offset: taskEditFields.timeOffset.value || '0',
+            continue_on_failure: taskEditFields.continueOnFailure.checked
+        };
 
         if (!isCreateMode) {
-            formData.append('task_id', taskEditFields.taskId.value);
+            taskPayload.task_id = taskEditFields.taskId.value;
         }
 
         try {
@@ -876,7 +879,8 @@
                         endpoint,
                         {
                             method: 'POST',
-                            body: formData
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(taskPayload)
                         },
                         'Invalid JSON from task endpoint:'
                     );
@@ -901,10 +905,11 @@
             return;
         }
 
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        formData.append('server_identifier', serverId);
-        formData.append('schedule_id', String(scheduleId));
+        const payload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            schedule_id: String(scheduleId)
+        };
 
         try {
             await withButtonBusyState(buttonEl, 'Running...', async () => {
@@ -912,7 +917,8 @@
                     endpoints.execute,
                     {
                         method: 'POST',
-                        body: formData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
                     },
                     'Invalid JSON from schedule execute endpoint:'
                 );
@@ -935,10 +941,11 @@
             return;
         }
 
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        formData.append('server_identifier', serverId);
-        formData.append('schedule_id', String(scheduleId));
+        const payload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            schedule_id: String(scheduleId)
+        };
 
         try {
             await withButtonBusyState(buttonEl, 'Deleting...', async () => {
@@ -946,7 +953,8 @@
                     endpoints.delete,
                     {
                         method: 'POST',
-                        body: formData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
                     },
                     'Invalid JSON from schedule delete endpoint:'
                 );
@@ -961,11 +969,12 @@
     }
 
     async function deleteTask(taskId, buttonEl = null) {
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        formData.append('server_identifier', serverId);
-        formData.append('schedule_id', String(scheduleId));
-        formData.append('task_id', String(taskId));
+        const payload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            schedule_id: String(scheduleId),
+            task_id: String(taskId)
+        };
 
         try {
             await withButtonBusyState(buttonEl, 'Deleting...', async () => {
@@ -973,7 +982,8 @@
                     endpoints.taskDelete,
                     {
                         method: 'POST',
-                        body: formData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
                     },
                     'Invalid JSON from task delete endpoint:'
                 );

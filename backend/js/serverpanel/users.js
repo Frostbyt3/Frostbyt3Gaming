@@ -402,19 +402,18 @@
 
                 try {
                     await withButtonBusyState(button, 'Deleting...', async () => {
-                        const body = new URLSearchParams();
-                        body.set('csrf_token', csrfToken);
-                        body.set('server_identifier', serverId);
-                        body.set('subuser_uuid', subuserUuid);
-
                         const result = await request(
                             endpoints.delete,
                             {
                                 method: 'POST',
                                 headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                                    'Content-Type': 'application/json'
                                 },
-                                body: body.toString()
+                                body: JSON.stringify({
+                                    csrf_token: csrfToken,
+                                    id: serverId,
+                                    subuser_uuid: subuserUuid
+                                })
                             },
                             'Invalid JSON from subuser delete endpoint:'
                         );
@@ -456,24 +455,21 @@
         event.preventDefault();
 
         const permissions = getCheckedPermissions();
-        const body = new URLSearchParams();
-
-        body.set('csrf_token', csrfToken);
-        body.set('server_identifier', serverId);
-
-        permissions.forEach((permission) => {
-            body.append('permissions[]', permission);
-        });
+        const payload = {
+            csrf_token: csrfToken,
+            id: serverId,
+            permissions: permissions
+        };
 
         let endpoint = endpoints.create;
         let busyText = 'Creating...';
 
         if (mode === 'create') {
-            body.set('email', emailField.value.trim());
+            payload.email = emailField.value.trim();
         } else {
             endpoint = endpoints.update;
             busyText = 'Saving...';
-            body.set('subuser_uuid', uuidField.value.trim());
+            payload.subuser_uuid = uuidField.value.trim();
         }
 
         try {
@@ -483,9 +479,9 @@
                     {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                            'Content-Type': 'application/json'
                         },
-                        body: body.toString()
+                        body: JSON.stringify(payload)
                     },
                     'Invalid JSON from subuser save endpoint:'
                 );

@@ -560,16 +560,18 @@ document.addEventListener('click', function (e) {
         }
 
         try {
-            const formData = new FormData();
-            formData.append('csrf_token', csrfToken);
-            formData.append('server_identifier', identifier);
-            formData.append('field', field);
-            formData.append('value', value);
-
             const response = await fetch(UPDATE_DETAILS_URL, {
                 method: 'POST',
-                body: formData,
-                headers: { 'Accept': 'application/json' }
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    id: identifier,
+                    field: field,
+                    value: value
+                })
             });
 
             const rawText = await response.text();

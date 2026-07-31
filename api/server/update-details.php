@@ -100,14 +100,17 @@ try {
         exit;
     }
 
-    if (
-        isset($_SESSION['server_meta']) &&
-        is_array($_SESSION['server_meta']) &&
-        isset($_SESSION['server_meta'][$identifier]) &&
-        is_array($_SESSION['server_meta'][$identifier])
-    ) {
-        $_SESSION['server_meta'][$identifier]['name'] = $newName;
-        $_SESSION['server_meta'][$identifier]['description'] = $newDescription;
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    if (isset($_SESSION['server_meta']) && is_array($_SESSION['server_meta'])) {
+        if (isset($_SESSION['server_meta'][$identifier]) && is_array($_SESSION['server_meta'][$identifier])) {
+            $_SESSION['server_meta'][$identifier]['name'] = $newName;
+            $_SESSION['server_meta'][$identifier]['description'] = $newDescription;
+        }
+
+        session_write_close();
     }
 
     echo json_encode([
