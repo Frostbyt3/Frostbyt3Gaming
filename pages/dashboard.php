@@ -46,8 +46,9 @@ if ($panelUserId <= 0) {
     $pteroError = 'No valid panel user ID was found in your session.';
 } else {
     $showAllServers = isShowingAllServers();
+    $includeAdminAllServers = $showAllServers && $canViewAllServers;
 
-    pteroEnsureServerAccessSession(false);
+    pteroEnsureServerAccessSession(false, $includeAdminAllServers);
 
     $serverMeta = $_SESSION['server_meta'] ?? [];
     $allowedServers = $_SESSION['allowed_servers'] ?? [];
@@ -56,7 +57,7 @@ if ($panelUserId <= 0) {
     $serverPanelAdminMap = $_SESSION['server_is_panel_admin'] ?? [];
 
     if (!is_array($serverMeta) || empty($serverMeta)) {
-        pteroEnsureServerAccessSession(true);
+        pteroEnsureServerAccessSession(true, $includeAdminAllServers);
 
         $serverMeta = $_SESSION['server_meta'] ?? [];
         $allowedServers = $_SESSION['allowed_servers'] ?? [];
@@ -80,21 +81,18 @@ if ($panelUserId <= 0) {
         $displayServers = [];
 
         if ($showAllServers && $canViewAllServers) {
-            $allServers = pteroGetAllServers();
-
-            foreach ($allServers as $rawServer) {
-                $clean = pteroSanitizeServerForSite($rawServer);
-                $identifier = (string)($clean['identifier'] ?? '');
+            foreach ($serverMeta as $identifier => $server) {
+                $identifier = (string)$identifier;
 
                 if ($identifier === '') {
                     continue;
                 }
 
-                if (!isset($clean['owner_username']) || $clean['owner_username'] === '') {
-                    $clean['owner_username'] = (string)($clean['owner_username'] ?? '');
+                if (!is_array($server)) {
+                    continue;
                 }
 
-                $displayServers[] = $clean;
+                $displayServers[] = $server;
             }
         } else {
             foreach ($serverMeta as $identifier => $server) {
