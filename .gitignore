@@ -1,0 +1,35 @@
+# Local/editor metadata
+.vscode/
+.vs/
+*.sqlite
+
+# Secrets and environment-specific config
+config/secrets.php
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+.env
+.env.*
+
+# Backups created before manual edits
+*.bak
+*.backup
+*.orig
+
+# Downloadable binaries, archives, installers, and large game assets
+downloads/
+wow/
+*.zip
+*.rar
+*.7z
+*.exe
+*.pak
+*.mpq
+*.psd
+
+# Runtime/upload logs
+*.log
+backend/uplimg/
+backend/fivem/

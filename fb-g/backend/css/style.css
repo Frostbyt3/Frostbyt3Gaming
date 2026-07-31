@@ -1,0 +1,386 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700&display=swap');
+
+body {
+    margin: 0;
+    font-family: 'Google Sans', sans-serif;
+    background-color: #111;
+    color: #eee;
+}
+
+main {
+    background-image: url("");
+}
+
+.snowflake {
+    color: #eee;
+    font-size: 1em;
+    font-family: Arial, sans-serif;
+    text-shadow: 0 0 5px #000;
+}
+
+.snowflake,
+.snowflake .inner {
+    animation-iteration-count: infinite;
+    animation-play-state: running;
+}
+
+@keyframes snowflakes-fall {
+    0% {
+        transform: translateY(0);
+    }
+
+    100% {
+        transform: translateY(110vh);
+    }
+}
+
+@keyframes snowflakes-shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    50% {
+        transform: translateX(80px);
+    }
+}
+
+.snowflake {
+    position: fixed;
+    top: -10%;
+    z-index: 9999;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+    pointer-events: none;
+    animation-name: snowflakes-shake;
+    animation-duration: 3s;
+    animation-timing-function: ease-in-out;
+}
+
+.snowflake .inner {
+    animation-duration: 10s;
+    animation-name: snowflakes-fall;
+    animation-timing-function: linear;
+}
+
+/* Positioning & delays */
+.snowflake:nth-of-type(0) {
+    left: 1%;
+    animation-delay: 0s;
+}
+
+.snowflake:nth-of-type(0) .inner {
+    animation-delay: 0s;
+}
+
+.snowflake:first-of-type {
+    left: 10%;
+    animation-delay: 1s;
+}
+
+.snowflake:first-of-type .inner,
+.snowflake:nth-of-type(8) .inner {
+    animation-delay: 1s;
+}
+
+.snowflake:nth-of-type(2) {
+    left: 20%;
+    animation-delay: .5s;
+}
+
+.snowflake:nth-of-type(2) .inner,
+.snowflake:nth-of-type(6) .inner {
+    animation-delay: 6s;
+}
+
+.snowflake:nth-of-type(3) {
+    left: 30%;
+    animation-delay: 2s;
+}
+
+.snowflake:nth-of-type(3) .inner,
+.snowflake:nth-of-type(11) .inner {
+    animation-delay: 4s;
+}
+
+.snowflake:nth-of-type(4) {
+    left: 40%;
+    animation-delay: 2s;
+}
+
+.snowflake:nth-of-type(4) .inner,
+.snowflake:nth-of-type(10) .inner {
+    animation-delay: 2s;
+}
+
+.snowflake:nth-of-type(5) {
+    left: 50%;
+    animation-delay: 3s;
+}
+
+.snowflake:nth-of-type(5) .inner {
+    animation-delay: 8s;
+}
+
+.snowflake:nth-of-type(6) {
+    left: 60%;
+    animation-delay: 2s;
+}
+
+.snowflake:nth-of-type(7) {
+    left: 70%;
+    animation-delay: 1s;
+}
+
+.snowflake:nth-of-type(7) .inner {
+    animation-delay: 2.5s;
+}
+
+.snowflake:nth-of-type(8) {
+    left: 80%;
+    animation-delay: 0s;
+}
+
+.snowflake:nth-of-type(9) {
+    left: 90%;
+    animation-delay: 1.5s;
+}
+
+.snowflake:nth-of-type(9) .inner {
+    animation-delay: 3s;
+}
+
+.snowflake:nth-of-type(10) {
+    left: 25%;
+    animation-delay: 0s;
+}
+
+.snowflake:nth-of-type(11) {
+    left: 65%;
+    animation-delay: 2.5s;
+}
+
+header.header-bullshit {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background: #1a1a1a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+header .piece-of-shit-logo {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #22aeff;
+}
+
+nav.garbage-nav-bar a {
+    margin-left: 20px;
+    color: #eee;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+nav.garbage-nav-bar a:hover {
+    color: #22aeff;
+}
+
+.hero {
+    padding: 80px 20px;
+    text-align: center;
+    background: linear-gradient(135deg, #222, #111);
+}
+
+.hero h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    color: #fff;
+}
+
+.hero p {
+    font-size: 1.2rem;
+    color: #ccc;
+}
+
+.fucking-servers {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: transparent;
+    padding: 20px 0;
+    overflow-x: hidden;
+    z-index: 0;
+}
+
+.fucking-servers .server-fucks {
+    position: relative;
+    margin-bottom: 15px;
+    overflow: hidden;
+    /* keeps glow neatly inside */
+    text-align: center;
+    padding: 15px;
+    padding-left: 25px;
+    border: 2px solid #737373;
+    border-radius: 6px;
+    width: 300px;
+    background: #17171b;
+    color: #aaa;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, .12), 0 2px 4px 0 rgba(0, 0, 0, .08);
+    z-index: 1;
+}
+
+.server-fucks h1 {
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.server-info p {
+    margin: 6px 0;
+    font-size: 0.95rem;
+    color: #ccc;
+}
+
+.server-info p strong {
+    color: #fff;
+}
+
+.server-info .status {
+    font-weight: bold;
+    margin: 8px 0;
+    padding: 4px 10px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.server-info .status.online {
+    background: linear-gradient(135deg, #00cc44, #009933);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.server-info .status.offline {
+    background: linear-gradient(135deg, #cc0000, #990000);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.server-info .motd {
+    color: #fff;
+    font-weight: bold;
+}
+
+.server-info .motdtext {
+    color: #fff;
+    font-style: italic;
+}
+
+.copy-status {
+    color: #22aeff;
+    font-size: 1.2em;
+    position: relative;
+    cursor: pointer;
+    z-index: 999;
+}
+
+.copy-status .motdtext {
+  transition: color 0.2s, text-shadow 0.2s;
+}
+.copy-status:hover .motdtext {
+  color: #22aeff; /* or whatever accent color you like */
+  text-shadow: 0 0 5px rgba(34, 174, 255, 0.6);
+}
+
+/* .copy-status::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 1em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+} */
+
+.copy-status:hover::after {
+    opacity: 1;
+}
+
+.server-info .copy-hint {
+  font-size: 0.8em;
+  color: #aaa;          /* subtle gray */
+  font-style: italic;
+  margin-left: 5px;     /* small spacing from label */
+}
+
+#tooltip {
+  position: fixed;
+  background: #333;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(5px); /* start slightly lower */
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 9999;
+}
+
+#tooltip.show {
+  opacity: 1;
+  transform: translateY(0); /* move into place */
+}
+
+.join-button {
+    display: inline-block;
+    padding: 8px 16px;
+    margin-top: 10px;
+    background: #1b6dff;
+    color: #fff;
+    border-radius: 6px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.join-button:hover {
+    background: #0d4fcc;
+}
+
+footer.fucking-footer {
+    text-align: center;
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.9rem;
+    color: #aaa;
+}
+
+footer.fucking-footer a {
+    color: #aaa;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+footer.fucking-footer a:hover {
+    color: #22aeff;
+}
