@@ -47,8 +47,14 @@ if ($panelUserId <= 0) {
 } else {
     $showAllServers = isShowingAllServers();
     $includeAdminAllServers = $showAllServers && $canViewAllServers;
+    $forceServerRefresh = isset($_GET['refresh_servers']) && $_GET['refresh_servers'] === '1';
+    $serverCacheMaxAgeSeconds = $includeAdminAllServers ? 30 : 60;
 
-    pteroEnsureServerAccessSession(false, $includeAdminAllServers);
+    pteroEnsureServerAccessSession(
+        $forceServerRefresh,
+        $includeAdminAllServers,
+        $serverCacheMaxAgeSeconds
+    );
 
     $serverMeta = $_SESSION['server_meta'] ?? [];
     $allowedServers = $_SESSION['allowed_servers'] ?? [];
@@ -57,7 +63,7 @@ if ($panelUserId <= 0) {
     $serverPanelAdminMap = $_SESSION['server_is_panel_admin'] ?? [];
 
     if (!is_array($serverMeta) || empty($serverMeta)) {
-        pteroEnsureServerAccessSession(true, $includeAdminAllServers);
+        pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
 
         $serverMeta = $_SESSION['server_meta'] ?? [];
         $allowedServers = $_SESSION['allowed_servers'] ?? [];

@@ -202,6 +202,26 @@ try {
         }
     }
 
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    if (
+        isset($_SESSION['server_meta']) &&
+        is_array($_SESSION['server_meta']) &&
+        isset($_SESSION['server_meta'][$serverIdentifier]) &&
+        is_array($_SESSION['server_meta'][$serverIdentifier])
+    ) {
+        $_SESSION['server_meta'][$serverIdentifier]['expired_at'] = $newExpiry->format('Y-m-d H:i:s');
+        $_SESSION['server_meta'][$serverIdentifier]['is_expired'] = false;
+
+        if ($unsuspendWarning === null) {
+            $_SESSION['server_meta'][$serverIdentifier]['suspended'] = false;
+        }
+    }
+
+    session_write_close();
+
     $currency = 'USD';
 
     $currencyStmt = $pdo->prepare(

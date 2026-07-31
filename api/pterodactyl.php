@@ -1629,7 +1629,11 @@ if (!function_exists('pteroSyncServerAccessSession')) {
 }
 
 if (!function_exists('pteroEnsureServerAccessSession')) {
-    function pteroEnsureServerAccessSession(bool $forceRefresh = false, bool $includeAdminAllServers = true): array
+    function pteroEnsureServerAccessSession(
+        bool $forceRefresh = false,
+        bool $includeAdminAllServers = true,
+        int $maxAgeSeconds = 300
+    ): array
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             return [];
@@ -1643,12 +1647,15 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
 
         $allowedServers = $_SESSION['allowed_servers'] ?? [];
         $cachedIncludesAdminAll = !empty($_SESSION['server_access_includes_admin_all']);
+        $lastSync = (int)($_SESSION['server_access_last_sync'] ?? 0);
+        $cacheIsFresh = $maxAgeSeconds <= 0 || ($lastSync > 0 && (time() - $lastSync) < $maxAgeSeconds);
 
         if (
             !$forceRefresh &&
             is_array($allowedServers) &&
             !empty($allowedServers) &&
-            (!$includeAdminAllServers || $cachedIncludesAdminAll)
+            (!$includeAdminAllServers || $cachedIncludesAdminAll) &&
+            $cacheIsFresh
         ) {
             return [
                 'allowed_servers' => $allowedServers,
@@ -1663,9 +1670,7 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
 
         $accessMap = pteroGetServerAccessMapForUser($panelUserId, $includeAdminAllServers);
 
-        if (!empty($accessMap)) {
-            pteroSyncServerAccessSession($accessMap, $includeAdminAllServers);
-        }
+        pteroSyncServerAccessSession($accessMap, $includeAdminAllServers);
 
         return [
             'allowed_servers' => $_SESSION['allowed_servers'] ?? [],
