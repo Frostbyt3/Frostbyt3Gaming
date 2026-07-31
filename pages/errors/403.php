@@ -1,4 +1,5 @@
 <?php
+http_response_code(403);
 
 function getRandom403() {
     $messages = [

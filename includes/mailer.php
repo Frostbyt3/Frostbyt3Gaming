@@ -4,6 +4,7 @@ declare(strict_types=1);
 // mailer.php
 
 require_once __DIR__ . '/../config/secrets.php';
+require_once __DIR__ . '/error-handling.php';
 
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
@@ -92,10 +93,8 @@ function fbgSendVerificationEmail(array $data): bool
         $mail->Host = SMTP_HOST;
         $mail->Port = SMTP_PORT;
 
-        $mail->SMTPDebug = 2;
-        $mail->Debugoutput = function ($str, $level) {
-            error_log("PHPMailer [$level]: $str");
-        };
+        $mail->SMTPDebug = fbgIsLocalRequest() ? 2 : 0;
+        $mail->Debugoutput = 'error_log';
 
         if (defined('SMTP_USE_AUTH') && SMTP_USE_AUTH) {
             $mail->SMTPAuth = true;
@@ -205,10 +204,8 @@ function fbgSendAccountEmailChangeVerification(array $data): bool
         $mail->Host = SMTP_HOST;
         $mail->Port = SMTP_PORT;
 
-        $mail->SMTPDebug = 2;
-        $mail->Debugoutput = function ($str, $level) {
-            error_log("PHPMailer [$level]: $str");
-        };
+        $mail->SMTPDebug = fbgIsLocalRequest() ? 2 : 0;
+        $mail->Debugoutput = 'error_log';
 
         if (defined('SMTP_USE_AUTH') && SMTP_USE_AUTH) {
             $mail->SMTPAuth = true;
