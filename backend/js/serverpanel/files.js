@@ -49,6 +49,10 @@
     const editorPathLabel = document.getElementById('files-editor-path');
     const editorStatus = document.getElementById('files-editor-status');
     const editorNotice = document.getElementById('files-editor-notice');
+    const editorShell = document.getElementById('files-code-editor');
+    const editorHighlight = document.getElementById('files-editor-highlight');
+    const editorLineNumbers = document.getElementById('files-editor-line-numbers');
+    const editorLanguageLabel = document.getElementById('files-editor-language');
 
     let dragDepth = 0;
     let uploadInProgress = false;
@@ -59,6 +63,7 @@
     let editorOriginalValue = '';
     let editorIsLoading = false;
     let editorIsSaving = false;
+    let editorLanguage = 'plain';
 
     let currentItems = [];
     let currentSearchTerm = '';
@@ -111,6 +116,12 @@
             .replace(/'/g, '&#039;');
     }
 
+    function escapeEditorHtml(value) {
+        return escapeHtml(value)
+            .replace(/\t/g, '    ')
+            .replace(/ {2}/g, ' &nbsp;');
+    }
+
     function normalizePath(path) {
         const value = String(path || '/').trim();
         if (!value) return '/';
@@ -141,6 +152,134 @@
         const value = String(name || '').trim().toLowerCase();
         const lastDot = value.lastIndexOf('.');
         return lastDot === -1 ? '' : value.slice(lastDot + 1);
+    }
+
+    function getEditorLanguageFromPath(path) {
+        const ext = getExtension(getBaseName(path));
+
+        if (ext === 'ini') {
+            return 'ini';
+        }
+
+        if (ext === 'properties') {
+            return 'properties';
+        }
+
+        return 'plain';
+    }
+
+    function getEditorLanguageLabel(language) {
+        if (language === 'ini') return 'INI';
+        if (language === 'properties') return 'Properties';
+        return 'Plain Text';
+    }
+
+    function setEditorLanguage(language) {
+        editorLanguage = ['ini', 'properties'].includes(language) ? language : 'plain';
+
+        if (editorShell) {
+            editorShell.dataset.language = editorLanguage;
+        }
+
+        if (editorLanguageLabel) {
+            editorLanguageLabel.textContent = getEditorLanguageLabel(editorLanguage);
+        }
+    }
+
+    function highlightIniLikeLine(line) {
+        const escapedLine = escapeEditorHtml(line);
+        const leadingMatch = line.match(/^\s*/);
+        const leading = leadingMatch ? leadingMatch[0] : '';
+        const trimmed = line.slice(leading.length);
+
+        if (trimmed === '') {
+            return escapedLine || '&nbsp;';
+        }
+
+        if (trimmed.startsWith(';') || trimmed.startsWith('#')) {
+            return `<span class="fbg-code-comment">${escapedLine}</span>`;
+        }
+
+        if (/^\[[^\]]+\]\s*(?:[;#].*)?$/.test(trimmed)) {
+            const commentIndex = trimmed.search(/\s[;#]/);
+            const sectionPart = commentIndex >= 0 ? trimmed.slice(0, commentIndex) : trimmed;
+            const commentPart = commentIndex >= 0 ? trimmed.slice(commentIndex) : '';
+
+            return `${escapeEditorHtml(leading)}<span class="fbg-code-section">${escapeEditorHtml(sectionPart)}</span>${commentPart ? `<span class="fbg-code-comment">${escapeEditorHtml(commentPart)}</span>` : ''}`;
+        }
+
+        const separatorMatch = trimmed.match(/^([^:=\s][^:=]*?)(\s*[:=]\s*)(.*)$/);
+        if (!separatorMatch) {
+            return escapedLine;
+        }
+
+        const [, key, separator, rawValue] = separatorMatch;
+        const inlineCommentMatch = rawValue.match(/^([^;#]*?)(\s[;#].*)$/);
+        const value = inlineCommentMatch ? inlineCommentMatch[1] : rawValue;
+        const comment = inlineCommentMatch ? inlineCommentMatch[2] : '';
+        const valueClass = /^(true|false|null|yes|no|on|off)$/i.test(value.trim())
+            ? 'fbg-code-boolean'
+            : /^-?\d+(?:\.\d+)?$/.test(value.trim())
+                ? 'fbg-code-number'
+                : 'fbg-code-value';
+
+        return [
+            escapeEditorHtml(leading),
+            `<span class="fbg-code-key">${escapeEditorHtml(key)}</span>`,
+            `<span class="fbg-code-separator">${escapeEditorHtml(separator)}</span>`,
+            `<span class="${valueClass}">${escapeEditorHtml(value)}</span>`,
+            comment ? `<span class="fbg-code-comment">${escapeEditorHtml(comment)}</span>` : ''
+        ].join('');
+    }
+
+    function highlightEditorContents(contents) {
+        const normalized = String(contents ?? '');
+        const lines = normalized.split('\n');
+
+        if (editorLanguage === 'ini' || editorLanguage === 'properties') {
+            return lines.map(highlightIniLikeLine).join('\n');
+        }
+
+        return escapeEditorHtml(normalized);
+    }
+
+    function updateEditorLineNumbers(contents) {
+        if (!editorLineNumbers) return;
+
+        const lineCount = Math.max(1, String(contents ?? '').split('\n').length);
+        const lines = [];
+
+        for (let index = 1; index <= lineCount; index++) {
+            lines.push(String(index));
+        }
+
+        editorLineNumbers.textContent = lines.join('\n');
+    }
+
+    function syncEditorScroll() {
+        if (!editorTextarea) return;
+
+        if (editorHighlight) {
+            editorHighlight.scrollTop = editorTextarea.scrollTop;
+            editorHighlight.scrollLeft = editorTextarea.scrollLeft;
+        }
+
+        if (editorLineNumbers) {
+            editorLineNumbers.scrollTop = editorTextarea.scrollTop;
+        }
+    }
+
+    function renderCodeEditor() {
+        if (!editorTextarea) return;
+
+        const contents = editorTextarea.value || '';
+
+        if (editorHighlight) {
+            editorHighlight.innerHTML = highlightEditorContents(contents);
+        }
+
+        updateEditorLineNumbers(contents);
+        syncEditorScroll();
     }
 
     function isEditableFile(entry) {
@@ -361,11 +500,13 @@
         editorOriginalValue = '';
         editorIsLoading = false;
         editorIsSaving = false;
+        setEditorLanguage('plain');
 
         if (editorTextarea) {
             editorTextarea.value = '';
             editorTextarea.readOnly = false;
         }
+        renderCodeEditor();
 
         if (editorPathLabel) {
             editorPathLabel.textContent = '/';
@@ -388,6 +529,7 @@
         editorFilePath = cleanPath;
         editorOriginalValue = '';
         editorIsLoading = true;
+        setEditorLanguage(getEditorLanguageFromPath(cleanPath));
 
         openEditorModal();
 
@@ -406,12 +548,14 @@
             editorTextarea.value = '';
             editorTextarea.readOnly = true;
         }
+        renderCodeEditor();
 
         if (fileSize > MAX_EDITOR_FILE_SIZE) {
             if (editorTextarea) {
                 editorTextarea.value = '';
                 editorTextarea.readOnly = true;
             }
+            renderCodeEditor();
 
             setEditorNotice('This file is too large to edit in the browser right now.', true);
 
@@ -437,6 +581,7 @@
                 editorTextarea.readOnly = false;
                 editorTextarea.focus();
             }
+            renderCodeEditor();
 
             editorOriginalValue = contents;
             setEditorDirtyState();
@@ -447,6 +592,7 @@
                 editorTextarea.value = '';
                 editorTextarea.readOnly = true;
             }
+            renderCodeEditor();
 
             setEditorNotice(error.message || 'Failed to load file.', true);
 
@@ -1560,6 +1706,8 @@
                 editorTextarea.value.substring(end);
 
             editorTextarea.selectionStart = editorTextarea.selectionEnd = start + 4;
+            renderCodeEditor();
+            setEditorDirtyState();
         }
     });
 
@@ -1578,7 +1726,12 @@
         }
     });
 
-    editorTextarea?.addEventListener('input', setEditorDirtyState);
+    editorTextarea?.addEventListener('input', () => {
+        renderCodeEditor();
+        setEditorDirtyState();
+    });
+
+    editorTextarea?.addEventListener('scroll', syncEditorScroll);
 
     loadFiles();
 })();

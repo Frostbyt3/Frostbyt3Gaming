@@ -49,6 +49,7 @@ The server panel includes Pterodactyl-backed tools for:
 - Server details rename/description updates.
 - File manager browsing.
 - File read/write/edit support for allowed editable file types.
+- Basic language detection and syntax coloring for `.ini` and `.properties` files in the browser editor.
 - File upload, download, rename, delete, and folder creation.
 - Backups: list, create, download, lock, restore, and delete.
 - Network allocations: list, create, update notes, set primary, and delete.

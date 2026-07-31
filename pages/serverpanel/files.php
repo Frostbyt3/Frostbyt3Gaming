@@ -246,14 +246,26 @@ $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
 
             <div class="fbg-files-editor-notice" id="files-editor-notice" hidden></div>
 
-            <textarea
-                id="files-editor-textarea"
-                class="fbg-files-editor-textarea"
-                spellcheck="false"
-                autocomplete="off"
-                autocorrect="off"
-                autocapitalize="off"
-            ></textarea>
+            <div class="fbg-files-code-editor" id="files-code-editor" data-language="plain">
+                <div class="fbg-files-code-editor-toolbar">
+                    <span class="fbg-files-code-editor-language" id="files-editor-language">Plain Text</span>
+                </div>
+
+                <div class="fbg-files-code-editor-body">
+                    <pre class="fbg-files-code-editor-lines" id="files-editor-line-numbers" aria-hidden="true">1</pre>
+                    <div class="fbg-files-code-editor-input-wrap">
+                        <pre class="fbg-files-code-editor-highlight" id="files-editor-highlight" aria-hidden="true"></pre>
+                        <textarea
+                            id="files-editor-textarea"
+                            class="fbg-files-editor-textarea"
+                            spellcheck="false"
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                        ></textarea>
+                    </div>
+                </div>
+            </div>
 
             <div class="fbg-files-modal-actions">
                 <button type="button" class="btn fbg-neutral-button btn-sm" id="files-editor-cancel">
