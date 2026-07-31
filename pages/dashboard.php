@@ -26,13 +26,6 @@ if ($panelUserId > 0 && $canViewAllServers && isset($_POST['server_scope_toggle'
     setShowAllServers($requestedScope === 'all');
 }
 
-$displayName = (string)($_SESSION['username'] ?? 'User');
-if (!empty($_SESSION['name'])) {
-    $displayName = explode(' ', (string)$_SESSION['name'])[0];
-}
-
-$email = (string)($_SESSION['email'] ?? '');
-
 $userServers = [];
 $pteroError = null;
 $showAllServers = false;
@@ -193,30 +186,8 @@ session_write_close();
 ?>
 
 <section class="fbg-dashboard">
-    <div class="fbg-dashboard-header">
-        <div class="fbg-user-card">
-            <?php $avatarUrl = getGravatarUrl($email, 72); ?>
-
-            <a href="https://gravatar.com/profile" target="_blank" rel="noopener noreferrer" class="fbg-avatar-link" aria-label="Change your avatar on Gravatar">
-                <img src="<?php echo htmlspecialchars($avatarUrl); ?>" class="fbg-user-avatar" alt="Avatar">
-                <span class="fbg-avatar-tooltip">Change your <feature>Gravatar</feature></span>
-            </a>
-
-            <div class="fbg-user-info">
-                <h1><?php echo htmlspecialchars($displayName); ?></h1>
-
-                <div class="fbg-user-meta">
-                    <span><?php echo htmlspecialchars($email); ?></span>
-                    <span>Username: <?php echo htmlspecialchars((string)($_SESSION['username'] ?? '')); ?></span>
-                </div>
-
-                <div class="fbg-user-actions">
-                    <a href="./page.php?name=logout" class="btn">Logout</a>
-                </div>
-            </div>
-        </div>
-
-        <?php if ($canViewAllServers): ?>
+    <?php if ($canViewAllServers): ?>
+        <div class="fbg-dashboard-header fbg-dashboard-header--compact">
             <form method="post" class="fbg-server-scope-form">
                 <input type="hidden" name="server_scope_toggle" value="1">
 
@@ -235,8 +206,8 @@ session_write_close();
                     <span class="fbg-server-scope-slider" aria-hidden="true"></span>
                 </label>
             </form>
-        <?php endif; ?>
-    </div>
+        </div>
+    <?php endif; ?>
 
     <?php if ($actionMessage): ?>
         <div class="fbg-dashboard-alert success">

@@ -145,6 +145,51 @@ function fbgFindPanelUserById(int $userId): ?array
     return $user ?: null;
 }
 
+function fbgFindPanelUserCredentialsById(int $userId): ?array
+{
+    if ($userId <= 0) {
+        return null;
+    }
+
+    $stmt = fbgPteroDb()->prepare("
+        SELECT id, username, email, name_first, name_last, password
+        FROM users
+        WHERE id = :id
+        LIMIT 1
+    ");
+    $stmt->execute(['id' => $userId]);
+
+    $user = $stmt->fetch();
+
+    return $user ?: null;
+}
+
+function fbgVerifyCurrentPanelPassword(int $userId, string $password): bool
+{
+    if ($userId <= 0 || $password === '') {
+        return false;
+    }
+
+    $user = fbgFindPanelUserCredentialsById($userId);
+
+    if (!$user || empty($user['password'])) {
+        return false;
+    }
+
+    return password_verify($password, (string)$user['password']);
+}
+
+function fbgRefreshLoggedInUserSession(array $panelUser): void
+{
+    $_SESSION['user_id'] = (int)($panelUser['id'] ?? $_SESSION['user_id'] ?? 0);
+    $_SESSION['username'] = (string)($panelUser['username'] ?? $_SESSION['username'] ?? '');
+    $_SESSION['email'] = (string)($panelUser['email'] ?? $_SESSION['email'] ?? '');
+
+    $firstName = trim((string)($panelUser['first_name'] ?? $panelUser['name_first'] ?? ''));
+    $lastName = trim((string)($panelUser['last_name'] ?? $panelUser['name_last'] ?? ''));
+    $_SESSION['name'] = trim($firstName . ' ' . $lastName);
+}
+
 function fbgFindPanelUserByLogin(string $emailOrUsername): ?array
 {
     $emailOrUsername = trim($emailOrUsername);
@@ -193,12 +238,20 @@ function fbgRememberCookieParams(int $expiresTimestamp): array
 
 function fbgSetRememberCookie(string $selector, string $validator, int $expiresTimestamp): void
 {
+    if (headers_sent()) {
+        return;
+    }
+
     $value = $selector . ':' . $validator;
     setcookie(FBG_REMEMBER_COOKIE, $value, fbgRememberCookieParams($expiresTimestamp));
 }
 
 function fbgClearRememberCookie(): void
 {
+    if (headers_sent()) {
+        return;
+    }
+
     setcookie(FBG_REMEMBER_COOKIE, '', [
         'expires'  => time() - 3600,
         'path'     => '/',

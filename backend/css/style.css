@@ -6410,3 +6410,65 @@ textarea.startup-variable-input {
 .fbg-admin-radio-option input[type="radio"] {
     margin: 0;
 }
+
+.fbg-account-page {
+    min-height: calc(100vh - 180px);
+    padding: 34px 18px 56px;
+}
+
+.fbg-account-shell {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+}
+
+.fbg-account-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.fbg-account-header h1 {
+    margin: 0 0 6px;
+    font-size: 2rem;
+    line-height: 1.1;
+}
+
+.fbg-account-header p {
+    margin: 0;
+    color: #cfcfcf;
+}
+
+.fbg-account-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+}
+
+.fbg-account-section {
+    background: #1b1b1b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 18px;
+}
+
+.fbg-account-section:first-child {
+    grid-column: 1 / -1;
+}
+
+.fbg-account-section .fbg-settings-section-footer {
+    padding-top: 16px;
+}
+
+@media (max-width: 820px) {
+    .fbg-account-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .fbg-account-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -76,6 +76,7 @@
                         <?php endif; ?>
 
                         <hr>
+                        <a href="/page.php?name=account">Manage Account</a>
                         <a href="/page.php?name=logout" class="danger">Logout</a>
                     </div>
                 </li>

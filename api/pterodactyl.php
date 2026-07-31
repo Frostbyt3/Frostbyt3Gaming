@@ -1794,6 +1794,53 @@ if (!function_exists('pteroGetPanelUserById')) {
     }
 }
 
+if (!function_exists('pteroUpdatePanelUser')) {
+    function pteroUpdatePanelUser(int $panelUserId, array $changes): array
+    {
+        if ($panelUserId <= 0) {
+            return [
+                'ok' => false,
+                'status' => 0,
+                'error' => 'Invalid user ID.',
+                'data' => null,
+            ];
+        }
+
+        $current = pteroGetPanelUserById($panelUserId);
+
+        if (!$current) {
+            return [
+                'ok' => false,
+                'status' => 404,
+                'error' => 'User could not be found in Pterodactyl.',
+                'data' => null,
+            ];
+        }
+
+        $payload = [
+            'email'      => (string)($changes['email'] ?? $current['email'] ?? ''),
+            'username'   => (string)($changes['username'] ?? $current['username'] ?? ''),
+            'first_name' => (string)($changes['first_name'] ?? $current['first_name'] ?? $current['name_first'] ?? ''),
+            'last_name'  => (string)($changes['last_name'] ?? $current['last_name'] ?? $current['name_last'] ?? ''),
+        ];
+
+        if (array_key_exists('password', $changes) && (string)$changes['password'] !== '') {
+            $payload['password'] = (string)$changes['password'];
+        }
+
+        if (isset($changes['language']) || isset($current['language'])) {
+            $payload['language'] = (string)($changes['language'] ?? $current['language']);
+        }
+
+        if (isset($changes['external_id']) || array_key_exists('external_id', $current)) {
+            $externalId = $changes['external_id'] ?? $current['external_id'] ?? null;
+            $payload['external_id'] = $externalId !== null ? (string)$externalId : null;
+        }
+
+        return pteroRequest('PATCH', 'users/' . $panelUserId, $payload);
+    }
+}
+
 if (!function_exists('pteroUserIsPanelAdmin')) {
     function pteroUserIsPanelAdmin(int $panelUserId): bool
     {
