@@ -1,52 +1,274 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../includes/db.php'; // adjust as needed
+require_once __DIR__ . '/../includes/functions.php';
 
-function getVisibleGameCategories(): array
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-        SELECT id, title, image_url, short_url
-        FROM panel.game_category
-        WHERE hide = 0
-        ORDER BY sort ASC, title ASC
-    ");
-
-    $stmt->execute();
-
-    return $stmt->fetchAll();
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-$categories = getVisibleGameCategories();
+$catalog = fbgGetShopCatalog();
+$currency = fbgGetShopCurrency();
+$userId = (int)($_SESSION['user_id'] ?? 0);
+$isLoggedIn = $userId > 0;
+$balance = $isLoggedIn ? fbgGetUserCreditBalance($userId) : 0.0;
+
+function fbgShopFormatMemory(int $megabytes): string
+{
+    if ($megabytes > 0 && $megabytes % 1024 === 0) {
+        return number_format($megabytes / 1024) . ' GB';
+    }
+
+    return number_format($megabytes) . ' MB';
+}
+
+function fbgShopFormatDisk(int $megabytes): string
+{
+    if ($megabytes === 0) {
+        return '&infin;';
+    }
+
+    return fbgShopFormatMemory($megabytes);
+}
+
+function fbgShopFormatCpu(int $cpu): string
+{
+    if ($cpu === 0) {
+        return '&infin;';
+    }
+
+    return number_format($cpu) . '%';
+}
+
+function fbgShopPluralize(int $count, string $singular, string $plural): string
+{
+    return number_format($count) . ' ' . ($count === 1 ? $singular : $plural);
+}
 ?>
 
-<section class="server-title">
-    <h1>Our Servers</h1>
-    <p>Select a game below to start your order.</p>
-</section>
+<section class="fbg-shop-page">
+    <div class="fbg-shop-shell">
+        <div class="fbg-shop-header">
+            <div>
+                <h1>Game Servers</h1>
+                <p>Choose a configured server plan and deploy it automatically with your account balance.</p>
+            </div>
 
-<section class="server-cards">
-    <div class="cards">
-        <?php if (empty($categories)): ?>
-            <p>No server categories are available right now.</p>
-        <?php else: ?>
-            <?php foreach ($categories as $category): ?>
-                <div class="servercard">
-                    <h2><?= htmlspecialchars((string)$category['title']) ?></h2>
+            <div class="fbg-shop-balance">
+                <span>Account Balance</span>
+                <strong><?php echo $isLoggedIn ? htmlspecialchars(fbgFormatCredit($balance, $currency)) : 'Login Required'; ?></strong>
+                <a href="./page.php?name=credit">Manage Balance</a>
+            </div>
+        </div>
 
-                    <img src="<?= htmlspecialchars((string)$category['image_url']) ?>" alt="<?= htmlspecialchars((string)$category['title']) ?>">
+        <div id="fbg-shop-message" class="fbg-dashboard-alert" style="display:none; margin-bottom: 18px;"></div>
 
-                    <?php
-                        $slug = urlencode((string)$category['short_url']);
-                    ?>
-
-                    <a href="./page.php?name=order&plan=<?= $slug ?>" class="btn">
-                        Open Panel Shop
-                    </a>
+        <?php if (empty($catalog)): ?>
+            <section class="fbg-account-section">
+                <div class="fbg-empty-state">
+                    No server plans are available right now.
                 </div>
+            </section>
+        <?php else: ?>
+            <div class="fbg-shop-category-list">
+            <?php foreach ($catalog as $category): ?>
+                <?php
+                $categoryPanelId = 'shop-category-' . (int)$category['id'];
+                ?>
+                <section class="fbg-shop-category-card">
+                    <button
+                        type="button"
+                        class="fbg-shop-category-trigger"
+                        aria-expanded="false"
+                        aria-controls="<?php echo htmlspecialchars($categoryPanelId); ?>"
+                    >
+                        <span class="fbg-shop-category-summary">
+                            <img
+                                src="<?php echo htmlspecialchars((string)$category['image_url']); ?>"
+                                alt=""
+                                aria-hidden="true"
+                            >
+                            <span>
+                                <strong><?php echo htmlspecialchars((string)$category['title']); ?></strong>
+                                <small><?php echo count($category['games']); ?> available plan<?php echo count($category['games']) === 1 ? '' : 's'; ?></small>
+                            </span>
+                        </span>
+                        <span class="fbg-shop-category-caret" aria-hidden="true">▾</span>
+                    </button>
+
+                    <div
+                        id="<?php echo htmlspecialchars($categoryPanelId); ?>"
+                        class="fbg-shop-category-panel"
+                        hidden
+                    >
+                        <?php if (empty($category['games'])): ?>
+                            <div class="fbg-empty-state">
+                                No visible plans are configured for this category yet.
+                            </div>
+                        <?php else: ?>
+                            <div class="fbg-shop-plan-grid">
+                            <?php foreach ($category['games'] as $game): ?>
+                                <?php
+                                $price = (float)($game['price'] ?? 0);
+                                $canAfford = $isLoggedIn && $balance >= $price;
+                                ?>
+                                <article class="fbg-shop-plan-card">
+                                    <div class="fbg-shop-plan-media">
+                                        <img
+                                            src="<?php echo htmlspecialchars((string)$game['image_url']); ?>"
+                                            alt="<?php echo htmlspecialchars((string)$game['name']); ?>"
+                                        >
+                                    </div>
+
+                                    <div class="fbg-shop-plan-body">
+                                        <div class="fbg-shop-plan-title-row">
+                                            <h3><?php echo htmlspecialchars((string)$game['name']); ?></h3>
+                                            <strong><?php echo htmlspecialchars(fbgFormatCredit($price, $currency)); ?></strong>
+                                        </div>
+
+                                        <div class="fbg-shop-plan-specs">
+                                            <span><?php echo htmlspecialchars(fbgShopFormatMemory((int)$game['memory'])); ?> RAM</span>
+                                            <span><?php echo fbgShopFormatDisk((int)$game['disk']); ?> Disk</span>
+                                            <span><?php echo fbgShopFormatCpu((int)$game['cpu']); ?> CPU</span>
+                                            <?php if ((int)$game['database_limit'] > 0): ?>
+                                                <span><?php echo fbgShopPluralize((int)$game['database_limit'], 'Database', 'Databases'); ?></span>
+                                            <?php endif; ?>
+                                            <span><?php echo (int)$game['backup_limit']; ?> Backups</span>
+                                            <span><?php echo fbgShopPluralize((int)$game['allocation_limit'], 'Port', 'Ports'); ?></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="fbg-shop-plan-actions">
+                                        <?php if (!$isLoggedIn): ?>
+                                            <a class="btn fbg-primary-button" href="./page.php?name=login">
+                                                Login to Purchase
+                                            </a>
+                                        <?php else: ?>
+                                            <button
+                                                type="button"
+                                                class="btn fbg-primary-button fbg-shop-purchase-button"
+                                                data-game-id="<?php echo (int)$game['id']; ?>"
+                                                data-default-text="Purchase Server"
+                                                <?php echo $canAfford ? '' : 'disabled'; ?>
+                                            >
+                                                <?php echo $canAfford ? 'Purchase Server' : 'Insufficient Balance'; ?>
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </section>
             <?php endforeach; ?>
+            </div>
         <?php endif; ?>
     </div>
 </section>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const message = document.getElementById("fbg-shop-message");
+    const buttons = document.querySelectorAll(".fbg-shop-purchase-button");
+    const categoryCards = document.querySelectorAll(".fbg-shop-category-card");
+    const csrfToken = <?php echo json_encode((string)$_SESSION['csrf_token']); ?>;
+
+    const readJsonResponse = async (response) => {
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.toLowerCase().includes("application/json")) {
+            throw new Error(response.ok
+                ? "The server returned an unexpected response."
+                : "The server returned an error page instead of JSON.");
+        }
+
+        try {
+            return await response.json();
+        } catch (error) {
+            throw new Error("The server returned invalid JSON.");
+        }
+    };
+
+    const showMessage = (text, type) => {
+        if (!message) return;
+        message.textContent = text;
+        message.className = "fbg-dashboard-alert is-visible" + (type === "error" ? " error" : " success");
+        message.style.display = "block";
+        message.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
+
+    categoryCards.forEach((card) => {
+        const trigger = card.querySelector(".fbg-shop-category-trigger");
+        const panel = card.querySelector(".fbg-shop-category-panel");
+
+        if (!trigger || !panel) return;
+
+        trigger.addEventListener("click", () => {
+            const isOpen = trigger.getAttribute("aria-expanded") === "true";
+
+            trigger.setAttribute("aria-expanded", isOpen ? "false" : "true");
+            panel.hidden = isOpen;
+            card.classList.toggle("is-open", !isOpen);
+        });
+    });
+
+    buttons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const gameId = button.dataset.gameId;
+            const originalText = button.dataset.defaultText || button.textContent;
+            let provisioningStep = 0;
+            let provisioningTimer = null;
+
+            const stopProvisioningAnimation = () => {
+                if (provisioningTimer) {
+                    clearInterval(provisioningTimer);
+                    provisioningTimer = null;
+                }
+            };
+
+            button.disabled = true;
+            button.textContent = "Provisioning.";
+            provisioningTimer = setInterval(() => {
+                provisioningStep = (provisioningStep + 1) % 3;
+                button.textContent = "Provisioning" + ".".repeat(provisioningStep + 1);
+            }, 500);
+
+            try {
+                const response = await fetch("/api/shop/purchase-server.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        csrf_token: csrfToken,
+                        game_id: gameId
+                    })
+                });
+
+                const payload = await readJsonResponse(response);
+
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.error || "Could not purchase server.");
+                }
+
+                stopProvisioningAnimation();
+                button.textContent = "Provisioned";
+                showMessage(payload.data?.message || "Server purchased and provisioning has started.", "success");
+
+                if (payload.data?.identifier) {
+                    setTimeout(() => {
+                        window.location.href = "/page.php?name=dashboard";
+                    }, 1500);
+                }
+            } catch (error) {
+                stopProvisioningAnimation();
+                showMessage(error.message || "Could not purchase server.", "error");
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        });
+    });
+});
+</script>

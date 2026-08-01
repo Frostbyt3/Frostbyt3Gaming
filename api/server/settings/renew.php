@@ -9,6 +9,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../pterodactyl.php';
 require_once __DIR__ . '/../../../includes/auth.php';
+require_once __DIR__ . '/../../../includes/functions.php';
 
 function settingsJsonResponse(int $statusCode, array $payload): void
 {
@@ -115,6 +116,15 @@ try {
     }
 
     if (empty($serverRow['product_id'])) {
+        $repairedServerRow = fbgRepairShopServerMetadataFromDefaultName($serverId);
+
+        if ($repairedServerRow) {
+            $serverRow['product_id'] = $repairedServerRow['product_id'];
+            $serverRow['expired_at'] = $repairedServerRow['expired_at'];
+        }
+    }
+
+    if (empty($serverRow['product_id'])) {
         throw new RuntimeException("You can't renew this server.");
     }
 
@@ -165,9 +175,9 @@ try {
 
     $expiryBase = !empty($serverRow['expired_at'])
         ? new DateTimeImmutable((string)$serverRow['expired_at'])
-        : new DateTimeImmutable('now');
+        : new DateTimeImmutable('today');
 
-    $newExpiry = $expiryBase->modify('+1 month');
+    $newExpiry = $expiryBase->modify('+30 days');
 
     $updateUserStmt = $pdo->prepare(
         'UPDATE users

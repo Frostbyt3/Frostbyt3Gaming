@@ -24,6 +24,7 @@ $allowed = [
     'login'                 => 'login.php',
     'dashboard'             => 'dashboard.php',
     'account'               => 'account.php',
+    'credit'                => 'credit.php',
     'verify-email-change'   => 'verify-email-change.php',
     'order'                 => 'order.php',
     'legal'                 => 'legal.php',
@@ -41,6 +42,7 @@ $allowed = [
     'admin-file-upload'     => 'admin/fileupload.php',
     'admin-link-shortener'  => 'admin/shorten.php',
     'admin-service-manager' => 'admin/servicemanager.php',
+    'admin-payments'        => 'admin/payments.php',
     'admin-settings'        => 'admin/settings.php',
     'admin-webp-png'        => 'admin/webp2png.php',
 

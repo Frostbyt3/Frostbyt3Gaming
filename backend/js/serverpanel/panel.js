@@ -68,7 +68,6 @@ document.addEventListener('click', function (e) {
     let pageVisible = document.visibilityState === 'visible';
     let pollTimer = null;
     let currentPollDelay = POLL_NORMAL;
-    let reloadScheduled = false;
     let lastInstallState = isInstalling;
     let burstTimeouts = [];
 
@@ -108,11 +107,7 @@ document.addEventListener('click', function (e) {
         }
 
         pollTimer = setTimeout(async () => {
-            try {
-                await refresh();
-            } finally {
-                scheduleNextPoll(currentPollDelay);
-            }
+            await refresh();
         }, delay);
     }
 
@@ -311,22 +306,12 @@ document.addEventListener('click', function (e) {
             lastInstallState = nextInstalling;
             isInstalling = nextInstalling;
 
-            if (!reloadScheduled) {
-                reloadScheduled = true;
-
-                consoleAppend(
-                    '\x1b[93m[FBG]:\x1b[0m ' +
-                    (nextInstalling
-                        ? '\x1b[93mServer entering install mode. Reloading...\x1b[0m'
-                        : '\x1b[92mInstallation finished. Reloading...\x1b[0m')
-                );
-
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
-            }
-
-            return;
+            consoleAppend(
+                '\x1b[93m[FBG]:\x1b[0m ' +
+                (nextInstalling
+                    ? '\x1b[93mServer entering install mode.\x1b[0m'
+                    : '\x1b[92mInstallation finished.\x1b[0m')
+            );
         }
 
         lastInstallState = nextInstalling;

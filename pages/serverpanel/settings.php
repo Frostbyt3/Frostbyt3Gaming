@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/functions.php';
 
 $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
 $serverId = (int)($selectedServer['id'] ?? 0);
@@ -110,6 +111,16 @@ try {
     $renewRow = $renewStmt->fetch();
 
     if ($renewRow) {
+        if (empty($renewRow['product_id'])) {
+            $repairedRenewRow = fbgRepairShopServerMetadataFromDefaultName($serverId);
+
+            if ($repairedRenewRow) {
+                $renewRow['product_id'] = $repairedRenewRow['product_id'];
+                $renewRow['expired_at'] = $repairedRenewRow['expired_at'];
+                $renewRow['price'] = $repairedRenewRow['price'];
+            }
+        }
+
         if (!empty($renewRow['expired_at'])) {
             $expiryRaw = (string)$renewRow['expired_at'];
             $expiryDisplay = date('M j, Y g:i A', strtotime($expiryRaw));
@@ -247,7 +258,7 @@ try {
                 <?php endif; ?>
 
                 <p class="fbg-settings-note">
-                    Your server will be renewed for an additional month and the cost will be deducted from your balance.
+                    Your server will be renewed for an additional 30 days and the cost will be deducted from your balance.
                 </p>
 
                 <?php if (!$canRenewServer && $renewDisabledReason !== ''): ?>

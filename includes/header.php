@@ -48,6 +48,8 @@
                 $displayName = $_SESSION['username'];
                 $email = $_SESSION['email'] ?? '';
                 $avatarUrl = getGravatarUrl($email, 24);
+                $creditBalance = fbgGetUserCreditBalance((int)($_SESSION['user_id'] ?? 0));
+                $shopCurrency = fbgGetShopCurrency();
 
                 if (!empty($_SESSION['name'])) {
                     $displayName = explode(' ', $_SESSION['name'])[0];
@@ -65,6 +67,10 @@
                         <div class="nav-user-summary">
                             <div class="nav-user-name"><?php echo htmlspecialchars($displayName); ?></div>
                             <div class="nav-user-email"><?php echo htmlspecialchars($email); ?></div>
+                            <div class="nav-user-credit">
+                                <span>Account Balance</span>
+                                <strong><?php echo htmlspecialchars(fbgFormatCredit($creditBalance, $shopCurrency)); ?></strong>
+                            </div>
                         </div>
 
                         <hr>
@@ -77,6 +83,7 @@
 
                         <hr>
                         <a href="/page.php?name=account">Manage Account</a>
+                        <a href="/page.php?name=credit">Manage Balance</a>
                         <a href="/page.php?name=logout" class="danger">Logout</a>
                     </div>
                 </li>

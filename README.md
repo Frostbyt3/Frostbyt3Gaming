@@ -40,6 +40,18 @@ This repository is the live website codebase. It powers public site pages, user 
 - Suspended/expired server display handling.
 - Server renewal integration.
 
+### Frontend Shop And Balance
+
+- Manage Balance page with current account balance, balance uploads, transaction history, and server purchase history.
+- Stripe and PayPal add-balance checkout flows using the existing Pterodactyl shop settings model.
+- Admin payment settings page for Stripe, PayPal, currency, and deposit limits.
+- Public game server catalog driven by Pterodactyl ShopSystem category and game tables.
+- Collapsible server plan categories with plan specs, pricing, and balance-aware purchase controls.
+- Purchase-with-balance flow that provisions Pterodactyl servers through the Application API.
+- Shop purchase ledger for recording provisioned server plan name, date, amount, currency, and linked server/game IDs.
+- Provisioned shop servers receive `product_id` and 30-day `expired_at` metadata for renewal compatibility.
+- Server renewal deducts account balance, extends expiration by 30 days, and can unsuspend renewed servers.
+
 ### Server Panel
 
 The server panel includes Pterodactyl-backed tools for:
@@ -58,6 +70,7 @@ The server panel includes Pterodactyl-backed tools for:
 - Subuser listing, creation, update, view, and deletion.
 - Activity viewing.
 - Settings tab for renewal, reinstall, and server diagnostics.
+- Install-state status polling without forced full-page reload loops.
 
 ### Admin Tools
 
@@ -69,6 +82,7 @@ The server panel includes Pterodactyl-backed tools for:
 - File upload manager.
 - Image upload manager.
 - WebP-to-PNG conversion tool.
+- Payment settings manager for frontend shop checkout configuration.
 - Admin sidebar/navigation.
 - Access-level based admin visibility.
 
@@ -76,6 +90,7 @@ The server panel includes Pterodactyl-backed tools for:
 
 - Central Pterodactyl Application API and Client API helper in `api/pterodactyl.php`.
 - JSON-first server management endpoints under `api/server/`.
+- Shop checkout and provisioning endpoints under `api/shop/`.
 - Server status polling endpoint.
 - Admin conversion endpoints.
 - Protected file upload/download endpoint.
