@@ -2087,7 +2087,11 @@ a.button {
 }
 
 .fbg-shop-plan-actions .btn {
+    box-sizing: border-box;
+    display: inline-flex;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     justify-content: center;
 }
 
