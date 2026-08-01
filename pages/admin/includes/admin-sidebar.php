@@ -60,13 +60,18 @@ if (!function_exists('fbgAdminNavIsActive')) {
             </a>
         </div>
 
-        <!-- System -->
+        <!-- Shop -->
         <div class="fbg-admin-nav-group">
-            <span class="fbg-admin-nav-group-title">System</span>
+            <span class="fbg-admin-nav-group-title">Shop</span>
 
             <a href="./page.php?name=admin-payments" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-payments', $currentAdminPage) ?>">
                 Payments
             </a>
+        </div>
+
+        <!-- System -->
+        <div class="fbg-admin-nav-group">
+            <span class="fbg-admin-nav-group-title">System</span>
 
             <a href="./page.php?name=admin-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-settings', $currentAdminPage) ?>">
                 Settings
