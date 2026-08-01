@@ -6765,15 +6765,18 @@ textarea.startup-variable-input {
     opacity: 0.75;
 }
 
-#service-cards-sortable tr {
+#service-cards-sortable tr,
+[data-fbg-sortable-body] tr {
     cursor: move;
 }
 
-#service-cards-sortable tr.is-dragging {
+#service-cards-sortable tr.is-dragging,
+[data-fbg-sortable-body] tr.is-dragging {
     opacity: 0.45;
 }
 
-#service-cards-sortable tr.is-drag-over td {
+#service-cards-sortable tr.is-drag-over td,
+[data-fbg-sortable-body] tr.is-drag-over td {
     border-top: 2px solid #22aeff;
 }
 

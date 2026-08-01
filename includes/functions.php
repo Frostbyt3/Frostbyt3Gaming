@@ -1332,7 +1332,7 @@ if (!function_exists('fbgGetShopCatalog')) {
                 SELECT id, title, image_url, short_url, sort
                 FROM game_category
                 WHERE hide = 0
-                ORDER BY sort ASC, title ASC
+                ORDER BY sort ASC, id ASC
             ");
             $categoryStmt->execute();
             $categories = $categoryStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1362,7 +1362,7 @@ if (!function_exists('fbgGetShopCatalog')) {
                     sort
                 FROM games
                 WHERE hide = 0
-                ORDER BY sort ASC, name ASC
+                ORDER BY sort ASC, id ASC
             ");
             $gameStmt->execute();
             $games = $gameStmt->fetchAll(PDO::FETCH_ASSOC);

@@ -11,7 +11,13 @@ if (!function_exists('fbgAdminNavIsActive')) {
 }
 ?>
 
-<script src="/backend/js/admin.js"></script>
+<?php
+$fbgAdminScript = '/backend/js/admin.js';
+if (function_exists('asset')) {
+    $fbgAdminScript = asset($fbgAdminScript);
+}
+?>
+<script src="<?= htmlspecialchars($fbgAdminScript, ENT_QUOTES, 'UTF-8') ?>"></script>
 
 <aside class="fbg-admin-sidebar">
     <div class="fbg-admin-sidebar-brand">
@@ -66,6 +72,10 @@ if (!function_exists('fbgAdminNavIsActive')) {
 
             <a href="./page.php?name=admin-payments" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-payments', $currentAdminPage) ?>">
                 Payments
+            </a>
+
+            <a href="./page.php?name=admin-shop-categories" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-categories', $currentAdminPage) ?>">
+                Categories
             </a>
         </div>
 

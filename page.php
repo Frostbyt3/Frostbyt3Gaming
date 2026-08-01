@@ -43,6 +43,7 @@ $allowed = [
     'admin-link-shortener'  => 'admin/shorten.php',
     'admin-service-manager' => 'admin/servicemanager.php',
     'admin-payments'        => 'admin/payments.php',
+    'admin-shop-categories' => 'admin/categories.php',
     'admin-settings'        => 'admin/settings.php',
     'admin-webp-png'        => 'admin/webp2png.php',
 
