@@ -111,13 +111,84 @@ declare(strict_types=1);
             "Have you tried turning it off and back on again?",
             "An actual company now!",
             "Perfectly legal",
-            "I am 30 to 40 years old and do not need this",
+            /* "I am 30 to 40 years old and do not need this", */
             "Arise, chicken, arise!",
-            "1-800 Billy Witch Doctor"
+            /* "1-800 Billy Witch Doctor", */
+            "Powered by caffeine",
+            "May contain dragons",
+            "Now with 10% more uptime!",
+            "It's probably the DNS...",
+            "Works on my server",
+            "Deploy. Play. Repeat.",
+            "No hamsters were harmed",
+            "99 little bugs in the code...",
+            "Ctrl+S is your friend",
+            "Keep calm and restart the server",
+            "Here be game servers",
+            "Built by gamers, for gamers",
+            "Have you backed up today?",
+            "Adventure awaits!",
+            "Powered by bad decisions and good coffee",
+            "One more deployment...",
+            "Certified Beach Bob approved",
+            "No creepers beyond this point",
+            "Your next adventure starts here!",
+            "Cloudy with a chance of uptime",
+            "404? Not here",
+            "Running on duct tape and determination",
+            "Powered by Linux",
+            "Feature, not bug",
+            "Shipped on Friday!",
+            "May contain rubber ducks",
+            "Your TPS is showing",
+            "Rolling nat 20s since 2024",
+            "Hello there!",
+            "General Kenobi!",
+            "The cake is not a lie",
+            "The cake might actually be a lie",
+            "Half-Life 3 confirmed",
+            "Loading terrain...",
+            "Punching trees since 2009",
+            "Noobs welcome!",
+            "Respawning soon...",
+            "Achievement unlocked!",
+            "Would survive a Creeper explosion",
+            "Don't feed the gremlins",
+            "Check the cable first",
+            "Powered by hopes and dreams",
+            "Compiling... please stand by",
+            "May the source be with you",
+            "Please don't press Alt+F4",
+            "Works 99% of the time",
+            "Some assembly required",
+            "Welcome back, nerd",
+            "Adventure is only a click away",
+            "Your server misses you",
+            "Guaranteed 100% less dial-up",
+            "Because self-hosting is a personality trait",
+            "Beach Bob approved",
+            "Spawn responsibly",
+            "No dodos were harmed",
+            "Emergency maintenance complete!",
+            "Dragons?",
+            "I used to be an adventurer like you..."
         ];
 
-        // Pick one at random
-        return $messages[array_rand($messages)];
+        // If there is only one message, just return it.
+        if (count($messages) <= 1) {
+            return $messages[0] ?? '';
+        }
+
+        do {
+            $title = $messages[array_rand($messages)];
+        } while (
+            isset($_SESSION['lastRandomTitle']) &&
+            $title === $_SESSION['lastRandomTitle']
+        );
+
+        $_SESSION['lastRandomTitle'] = $title;
+
+        return $title;
     }
 
     function getMinecraftStatus($host, $port, $timeout = 2)

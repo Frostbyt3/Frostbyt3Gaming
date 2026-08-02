@@ -279,12 +279,14 @@ if (!function_exists('pteroGetAllServers')) {
     {
         $page = 1;
         $allServers = [];
+        $GLOBALS['ptero_last_application_error'] = null;
 
         do {
             $result = pteroGetServers($page, $perPage);
 
             if (!$result['ok']) {
-                break;
+                $GLOBALS['ptero_last_application_error'] = (string)($result['error'] ?? 'Unable to load servers from Pterodactyl.');
+                return [];
             }
 
             $data = $result['data']['data'] ?? [];
@@ -501,6 +503,7 @@ if (!function_exists('pteroGetAllServersForUserId')) {
     {
         $page = 1;
         $allServers = [];
+        $GLOBALS['ptero_last_application_error'] = null;
 
         do {
             $result = pteroRequest(
@@ -509,7 +512,8 @@ if (!function_exists('pteroGetAllServersForUserId')) {
             );
 
             if (!$result['ok']) {
-                break;
+                $GLOBALS['ptero_last_application_error'] = (string)($result['error'] ?? 'Unable to load servers from Pterodactyl.');
+                return [];
             }
 
             $data = $result['data']['data'] ?? [];
@@ -1665,10 +1669,26 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
                 'server_meta' => $_SESSION['server_meta'] ?? [],
                 'last_sync' => (int)($_SESSION['server_access_last_sync'] ?? 0),
                 'includes_admin_all' => $cachedIncludesAdminAll,
+                'error' => null,
             ];
         }
 
+        $GLOBALS['ptero_last_application_error'] = null;
         $accessMap = pteroGetServerAccessMapForUser($panelUserId, $includeAdminAllServers);
+        $accessError = $GLOBALS['ptero_last_application_error'] ?? null;
+
+        if (is_string($accessError) && trim($accessError) !== '') {
+            return [
+                'allowed_servers' => $_SESSION['allowed_servers'] ?? [],
+                'server_permissions' => $_SESSION['server_permissions'] ?? [],
+                'server_is_owner' => $_SESSION['server_is_owner'] ?? [],
+                'server_is_panel_admin' => $_SESSION['server_is_panel_admin'] ?? [],
+                'server_meta' => $_SESSION['server_meta'] ?? [],
+                'last_sync' => (int)($_SESSION['server_access_last_sync'] ?? 0),
+                'includes_admin_all' => !empty($_SESSION['server_access_includes_admin_all']),
+                'error' => trim($accessError),
+            ];
+        }
 
         pteroSyncServerAccessSession($accessMap, $includeAdminAllServers);
 
@@ -1680,6 +1700,7 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
             'server_meta' => $_SESSION['server_meta'] ?? [],
             'last_sync' => (int)($_SESSION['server_access_last_sync'] ?? 0),
             'includes_admin_all' => !empty($_SESSION['server_access_includes_admin_all']),
+            'error' => null,
         ];
     }
 }

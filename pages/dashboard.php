@@ -43,11 +43,12 @@ if ($panelUserId <= 0) {
     $forceServerRefresh = isset($_GET['refresh_servers']) && $_GET['refresh_servers'] === '1';
     $serverCacheMaxAgeSeconds = $includeAdminAllServers ? 30 : 60;
 
-    pteroEnsureServerAccessSession(
+    $accessSession = pteroEnsureServerAccessSession(
         $forceServerRefresh,
         $includeAdminAllServers,
         $serverCacheMaxAgeSeconds
     );
+    $accessError = is_array($accessSession) ? trim((string)($accessSession['error'] ?? '')) : '';
 
     $serverMeta = $_SESSION['server_meta'] ?? [];
     $allowedServers = $_SESSION['allowed_servers'] ?? [];
@@ -56,7 +57,8 @@ if ($panelUserId <= 0) {
     $serverPanelAdminMap = $_SESSION['server_is_panel_admin'] ?? [];
 
     if (!is_array($serverMeta) || empty($serverMeta)) {
-        pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
+        $accessSession = pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
+        $accessError = is_array($accessSession) ? trim((string)($accessSession['error'] ?? '')) : '';
 
         $serverMeta = $_SESSION['server_meta'] ?? [];
         $allowedServers = $_SESSION['allowed_servers'] ?? [];
@@ -65,8 +67,10 @@ if ($panelUserId <= 0) {
         $serverPanelAdminMap = $_SESSION['server_is_panel_admin'] ?? [];
     }
 
-    if (!is_array($serverMeta) || empty($serverMeta)) {
+    if ($accessError !== '') {
         $pteroError = 'Unable to load your server list right now. Please try again.';
+    } elseif (!is_array($serverMeta) || empty($serverMeta)) {
+        $userServers = [];
     } else {
         $isCurrentUserPanelAdmin = false;
 
@@ -181,6 +185,7 @@ $actionError = $_SESSION['dashboard_flash_error'] ?? null;
 unset($_SESSION['dashboard_flash_success'], $_SESSION['dashboard_flash_error']);
 
 $csrfTokenForJs = (string)($_SESSION['csrf_token'] ?? '');
+$serversPageUrl = './page.php?name=servers';
 
 session_write_close();
 ?>
@@ -228,8 +233,25 @@ session_write_close();
     <?php endif; ?>
 
     <?php if (empty($userServers) && !$pteroError): ?>
-        <div class="fbg-dashboard-alert">
-            No servers were found for your account.
+        <div class="fbg-dashboard-empty-wrap">
+            <section class="fbg-server-card fbg-dashboard-empty-card" aria-labelledby="dashboard-empty-title">
+                <div class="fbg-dashboard-empty-icon" aria-hidden="true">
+                    <i class="fas fa-gamepad"></i>
+                </div>
+
+                <h1 id="dashboard-empty-title">No adventures have begun yet.</h1>
+
+                <p>
+                    Your server dashboard is waiting for its first deployment.
+                    Visit the
+                    <a href="<?php echo htmlspecialchars($serversPageUrl, ENT_QUOTES, 'UTF-8'); ?>">Servers</a>
+                    page to get started.
+                </p>
+
+                <a href="<?php echo htmlspecialchars($serversPageUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-primary-button">
+                    🚀 Start Your Adventure
+                </a>
+            </section>
         </div>
     <?php endif; ?>
 
