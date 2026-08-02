@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pending
             && !fbgIsPendingRegistrationConsumed($pending)
             && !fbgIsPendingRegistrationVerified($pending)
+            && fbgPendingRegistrationResendCooldownRemaining($pending) === 0
         ) {
             $refreshResult = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
 

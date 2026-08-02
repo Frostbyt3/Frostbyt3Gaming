@@ -34,6 +34,8 @@ if (empty($_SESSION['csrf_token'])) {
 
 $errors = [];
 $success = null;
+$securityContext = [];
+$genericRegistrationFailure = 'Registration could not be completed. Please try again.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postedToken = $_POST['csrf_token'] ?? '';
@@ -47,12 +49,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Security check failed. Please refresh and try again.';
     }
 
+    $clientIp = fbgRegistrationClientIp();
+    $securityRejection = empty($errors) ? fbgRegistrationValidateInvisibleSecurity($_POST) : null;
+
+    if ($securityRejection !== null) {
+        fbgRecordRejectedRegistrationAttempt([
+            'username' => $username,
+            'email' => $email,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+        ], $securityRejection, $clientIp);
+
+        $errors[] = $genericRegistrationFailure;
+    }
+
     if ($username === '' || strlen($username) < 3) {
         $errors[] = 'Username must be at least 3 characters.';
     }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please enter a valid email address.';
+
+        if ($email !== '') {
+            fbgRecordRejectedRegistrationAttempt([
+                'username' => $username,
+                'email' => $email,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+            ], FbgRegistrationRejectionReason::INVALID_EMAIL, $clientIp);
+        }
     }
 
     if ($firstName === '' || $lastName === '') {
@@ -93,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'email' => $email,
             'first_name' => $firstName,
             'last_name' => $lastName,
+            'ip_address' => $clientIp,
         ]);
 
         if (empty($pendingResult['ok'])) {
@@ -129,6 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$securityContext = fbgPrepareRegistrationFormSecurity();
 ?>
 
 <section class="auth-section">
@@ -155,6 +183,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <input type="hidden" name="csrf_token"
                    value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+
+            <div class="fbg-registration-honeypot" aria-hidden="true">
+                <label for="registration-honeypot">Company Website</label>
+                <input
+                    id="registration-honeypot"
+                    type="text"
+                    name="<?php echo htmlspecialchars((string)$securityContext['honeypot_field'], ENT_QUOTES, 'UTF-8'); ?>"
+                    value=""
+                    autocomplete="off"
+                    tabindex="-1">
+            </div>
 
             <div class="form-group">
                 <label for="username">Username</label>
@@ -225,3 +264,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
 </section>
+
+<style>
+.fbg-registration-honeypot {
+    position: absolute;
+    left: -10000px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+</style>
