@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/registration.php';
 requireLogin();
 
 if (!function_exists('canAccess')) {
@@ -44,12 +45,31 @@ $adminCards = [
         'button' => 'Manage Pages',
     ], */
     [
+        'title' => 'Registrations',
+        'description' => 'Review pending registrations, resend verification emails, and approve accounts manually.',
+        'link' => '?name=admin-registrations',
+        'button' => 'Review Registrations',
+    ],
+    [
         'title' => 'Settings',
         'description' => 'Adjust site-wide settings, configuration, and future integrations.',
         'link' => '?name=admin-settings',
         'button' => 'Open Settings',
     ],
 ];
+
+$registrationStats = [
+    'active' => 0,
+    'pending' => 0,
+    'verified' => 0,
+    'last_24_hours' => 0,
+];
+
+try {
+    $registrationStats = fbgPendingRegistrationStats();
+} catch (Throwable $e) {
+    error_log('Admin registration stats failed: ' . $e->getMessage());
+}
 ?>
 
 <?php $currentAdminPage = 'admin-home'; ?>
@@ -110,12 +130,29 @@ $adminCards = [
 
             <section class="fbg-admin-panel">
                 <div class="fbg-admin-panel-header">
-                    <h2>Notes</h2>
+                    <h2>Registrations</h2>
                 </div>
 
-                <div class="fbg-admin-note">
-                    <p>This dashboard is the foundation for the unified Frostbyt3 admin panel.</p>
-                    <p>Website tools come first, then Pterodactyl admin features can be folded into the same shell later.</p>
+                <div class="fbg-admin-stat-list">
+                    <div class="fbg-admin-stat">
+                        <span class="fbg-admin-stat-label">Active</span>
+                        <strong><?= number_format($registrationStats['active']) ?></strong>
+                    </div>
+
+                    <div class="fbg-admin-stat">
+                        <span class="fbg-admin-stat-label">Pending Email</span>
+                        <strong><?= number_format($registrationStats['pending']) ?></strong>
+                    </div>
+
+                    <div class="fbg-admin-stat">
+                        <span class="fbg-admin-stat-label">Verified</span>
+                        <strong><?= number_format($registrationStats['verified']) ?></strong>
+                    </div>
+
+                    <div class="fbg-admin-stat">
+                        <span class="fbg-admin-stat-label">Last 24 Hours</span>
+                        <strong><?= number_format($registrationStats['last_24_hours']) ?></strong>
+                    </div>
                 </div>
             </section>
         </div>

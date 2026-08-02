@@ -44,6 +44,7 @@ $allowed = [
     'admin-service-manager' => 'admin/servicemanager.php',
     'admin-payments'        => 'admin/payments.php',
     'admin-shop-categories' => 'admin/categories.php',
+    'admin-registrations'   => 'admin/registrations.php',
     'admin-settings'        => 'admin/settings.php',
     'admin-webp-png'        => 'admin/webp2png.php',
 

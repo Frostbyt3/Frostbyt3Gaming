@@ -87,6 +87,10 @@ if (function_exists('asset')) {
                 Settings
             </a>
 
+            <a href="./page.php?name=admin-registrations" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-registrations', $currentAdminPage) ?>">
+                Registrations
+            </a>
+
             <a href="./page.php?name=dashboard" class="fbg-admin-nav-link">
                 Back to Client Area
             </a>

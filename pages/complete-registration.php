@@ -9,7 +9,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../includes/registration.php';
 require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../api/pterodactyl.php';
 
 $selector = trim((string)($_GET['selector'] ?? ''));
 
@@ -51,108 +50,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($errors)) {
     $password = (string)($_POST['password'] ?? '');
     $confirmPassword = (string)($_POST['confirm_password'] ?? '');
 
-    if (!function_exists('fbgValidatePassword')) {
-        function fbgGetCommonWeakPasswords(): array
-        {
-            return [
-                'password',
-                'password123',
-                '12345678',
-                '123456789',
-                '1234567890',
-                'qwerty',
-                'qwerty123',
-                'letmein',
-                'welcome',
-                'admin',
-                'admin123',
-                'abc123',
-                'iloveyou',
-            ];
-        }
-
-        function fbgValidatePassword(string $password, string $confirmPassword): array
-        {
-            $errors = [];
-
-            if (strlen($password) < 10) {
-                $errors[] = 'Password must be at least 10 characters.';
-            }
-
-            if (!preg_match('/[a-z]/', $password)) {
-                $errors[] = 'Password must include at least one lowercase letter.';
-            }
-
-            if (!preg_match('/[A-Z]/', $password)) {
-                $errors[] = 'Password must include at least one uppercase letter.';
-            }
-
-            if (!preg_match('/\d/', $password)) {
-                $errors[] = 'Password must include at least one number.';
-            }
-
-            if (!preg_match('/[^a-zA-Z0-9]/', $password)) {
-                $errors[] = 'Password must include at least one special character.';
-            }
-
-            if (in_array(strtolower($password), fbgGetCommonWeakPasswords(), true)) {
-                $errors[] = 'That password is too common. Please choose a stronger one.';
-            }
-
-            if ($password !== $confirmPassword) {
-                $errors[] = 'Passwords do not match.';
-            }
-
-            return $errors;
-        }
-    }
-
     $errors = array_merge($errors, fbgValidatePassword($password, $confirmPassword));
 
     if (empty($errors)) {
-        $existingByEmail = pteroFindUserByEmail((string)$pending['email']);
-        if ($existingByEmail) {
-            $errors[] = 'An account with that email already exists.';
-        }
-    }
-
-    if (empty($errors) && function_exists('pteroFindUserByUsername')) {
-        $existingByUsername = pteroFindUserByUsername((string)$pending['username']);
-        if ($existingByUsername) {
-            $errors[] = 'An account with that username already exists.';
-        }
-    }
-
-    if (empty($errors)) {
-        $result = pteroCreateUser([
-            'username'   => (string)$pending['username'],
-            'email'      => (string)$pending['email'],
-            'first_name' => (string)$pending['first_name'],
-            'last_name'  => (string)$pending['last_name'],
-            'password'   => $password,
-        ]);
+        $result = fbgCreatePterodactylUserFromPendingRegistration($pending, $password);
 
         if (empty($result['ok'])) {
             $errors[] = $result['error'] ?? 'Failed to create your account.';
         } else {
-            $consumed = fbgMarkPendingRegistrationConsumed((int)$pending['id']);
+            $created = $result['data']['attributes'] ?? [];
 
-            if (!$consumed) {
-                $errors[] = 'Your account was created, but the registration record could not be finalized.';
-            } else {
-                $created = $result['data']['attributes'] ?? [];
+            $_SESSION['user_id'] = (int)($created['id'] ?? 0);
+            $_SESSION['username'] = $created['username'] ?? (string)$pending['username'];
+            $_SESSION['email'] = $created['email'] ?? (string)$pending['email'];
+            $_SESSION['name'] = trim(
+                ((string)($created['first_name'] ?? $pending['first_name'])) . ' ' .
+                ((string)($created['last_name'] ?? $pending['last_name']))
+            );
 
-                $_SESSION['user_id'] = (int)($created['id'] ?? 0);
-                $_SESSION['username'] = $created['username'] ?? (string)$pending['username'];
-                $_SESSION['email'] = $created['email'] ?? (string)$pending['email'];
-                $_SESSION['name'] = trim(
-                    ((string)($created['first_name'] ?? $pending['first_name'])) . ' ' .
-                    ((string)($created['last_name'] ?? $pending['last_name']))
-                );
-
-                fbgRedirect('./page.php?name=dashboard');
-                exit;
-            }
+            fbgRedirect('./page.php?name=dashboard');
+            exit;
         }
     }
 }

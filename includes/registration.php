@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/registration-security.php';
+require_once __DIR__ . '/../api/pterodactyl.php';
 
 function fbgPendingRegistrationDb(): PDO
 {
@@ -25,6 +26,15 @@ function fbgGenerateVerificationTokenPair(): array
 
 function fbgDeleteExpiredPendingRegistrations(): void
 {
+    fbgMarkExpiredPendingRegistrations();
+
+    if (fbgRegistrationSettingBool('registration_cleanup_enabled', true)) {
+        fbgCleanupExpiredPendingRegistrations();
+    }
+}
+
+function fbgMarkExpiredPendingRegistrations(): int
+{
     fbgEnsurePendingRegistrationSecuritySchema();
     $pdo = fbgPendingRegistrationDb();
 
@@ -33,7 +43,6 @@ function fbgDeleteExpiredPendingRegistrations(): void
          SET rejection_reason = :rejection_reason,
              rejected_at = UTC_TIMESTAMP()
          WHERE consumed_at IS NULL
-           AND email_verified_at IS NULL
            AND rejected_at IS NULL
            AND verification_expires_at < UTC_TIMESTAMP()'
     );
@@ -42,9 +51,7 @@ function fbgDeleteExpiredPendingRegistrations(): void
         ':rejection_reason' => FbgRegistrationRejectionReason::VERIFICATION_EXPIRED,
     ]);
 
-    if (fbgRegistrationSettingBool('registration_cleanup_enabled', true)) {
-        fbgCleanupExpiredPendingRegistrations();
-    }
+    return $stmt->rowCount();
 }
 
 function fbgCleanupExpiredPendingRegistrations(): int
@@ -132,6 +139,31 @@ function fbgFindPendingRegistrationBySelector(string $selector): ?array
 
     $stmt->execute([
         ':selector' => $selector,
+    ]);
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+function fbgFindPendingRegistrationById(int $id): ?array
+{
+    if ($id <= 0) {
+        return null;
+    }
+
+    fbgEnsurePendingRegistrationSecuritySchema();
+    $pdo = fbgPendingRegistrationDb();
+
+    $stmt = $pdo->prepare(
+        'SELECT *
+         FROM pending_registrations
+         WHERE id = :id
+         LIMIT 1'
+    );
+
+    $stmt->execute([
+        ':id' => $id,
     ]);
 
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -249,6 +281,206 @@ function fbgMarkPendingRegistrationConsumed(int $id): bool
     ]);
 
     return $stmt->rowCount() > 0;
+}
+
+function fbgMarkPendingRegistrationManuallyApproved(int $id, int $adminId, string $reason): bool
+{
+    fbgEnsurePendingRegistrationSecuritySchema();
+    $pdo = fbgPendingRegistrationDb();
+
+    $stmt = $pdo->prepare(
+        'UPDATE pending_registrations
+         SET email_verified_at = COALESCE(email_verified_at, UTC_TIMESTAMP()),
+             approved_by_admin_id = :admin_id,
+             manual_approval_reason = :reason,
+             manually_approved_at = UTC_TIMESTAMP()
+         WHERE id = :id
+           AND consumed_at IS NULL
+           AND rejected_at IS NULL'
+    );
+
+    $stmt->execute([
+        ':id' => $id,
+        ':admin_id' => $adminId > 0 ? $adminId : null,
+        ':reason' => $reason,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
+function fbgPendingRegistrationStats(): array
+{
+    fbgEnsurePendingRegistrationSecuritySchema();
+    fbgMarkExpiredPendingRegistrations();
+
+    $createdColumn = fbgPendingRegistrationColumnExists('created_at') ? 'created_at' : null;
+    $recentSql = $createdColumn !== null
+        ? "SUM(CASE WHEN {$createdColumn} >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END)"
+        : '0';
+
+    $stmt = fbgPendingRegistrationDb()->prepare("
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN consumed_at IS NULL AND rejected_at IS NULL THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NULL THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NOT NULL THEN 1 ELSE 0 END) AS verified,
+            SUM(CASE WHEN consumed_at IS NULL AND rejected_at IS NOT NULL AND rejection_reason = :expired_reason THEN 1 ELSE 0 END) AS expired,
+            SUM(CASE WHEN rejected_at IS NOT NULL AND (rejection_reason IS NULL OR rejection_reason <> :rejected_expired_reason) THEN 1 ELSE 0 END) AS rejected,
+            SUM(CASE WHEN consumed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed,
+            {$recentSql} AS last_24_hours
+        FROM pending_registrations
+    ");
+
+    $stmt->execute([
+        ':expired_reason' => FbgRegistrationRejectionReason::VERIFICATION_EXPIRED,
+        ':rejected_expired_reason' => FbgRegistrationRejectionReason::VERIFICATION_EXPIRED,
+    ]);
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'total' => (int)($row['total'] ?? 0),
+        'active' => (int)($row['active'] ?? 0),
+        'pending' => (int)($row['pending'] ?? 0),
+        'verified' => (int)($row['verified'] ?? 0),
+        'expired' => (int)($row['expired'] ?? 0),
+        'rejected' => (int)($row['rejected'] ?? 0),
+        'completed' => (int)($row['completed'] ?? 0),
+        'last_24_hours' => (int)($row['last_24_hours'] ?? 0),
+    ];
+}
+
+function fbgGetCommonWeakPasswords(): array
+{
+    return [
+        'password',
+        'password123',
+        '12345678',
+        '123456789',
+        '1234567890',
+        'qwerty',
+        'qwerty123',
+        'letmein',
+        'welcome',
+        'admin',
+        'admin123',
+        'abc123',
+        'iloveyou',
+    ];
+}
+
+function fbgValidatePassword(string $password, string $confirmPassword): array
+{
+    $errors = [];
+
+    if (strlen($password) < 10) {
+        $errors[] = 'Password must be at least 10 characters.';
+    }
+
+    if (!preg_match('/[a-z]/', $password)) {
+        $errors[] = 'Password must include at least one lowercase letter.';
+    }
+
+    if (!preg_match('/[A-Z]/', $password)) {
+        $errors[] = 'Password must include at least one uppercase letter.';
+    }
+
+    if (!preg_match('/\d/', $password)) {
+        $errors[] = 'Password must include at least one number.';
+    }
+
+    if (!preg_match('/[^a-zA-Z0-9]/', $password)) {
+        $errors[] = 'Password must include at least one special character.';
+    }
+
+    if (in_array(strtolower($password), fbgGetCommonWeakPasswords(), true)) {
+        $errors[] = 'That password is too common. Please choose a stronger one.';
+    }
+
+    if ($password !== $confirmPassword) {
+        $errors[] = 'Passwords do not match.';
+    }
+
+    return $errors;
+}
+
+function fbgCreatePterodactylUserFromPendingRegistration(array $pendingRegistration, string $password): array
+{
+    $id = (int)($pendingRegistration['id'] ?? 0);
+
+    if ($id <= 0) {
+        return [
+            'ok' => false,
+            'error' => 'Invalid registration record.',
+            'data' => null,
+        ];
+    }
+
+    if (fbgIsPendingRegistrationConsumed($pendingRegistration)) {
+        return [
+            'ok' => false,
+            'error' => 'That registration has already been completed.',
+            'data' => null,
+        ];
+    }
+
+    if (!fbgIsPendingRegistrationVerified($pendingRegistration)) {
+        return [
+            'ok' => false,
+            'error' => 'Email must be verified before creating the account.',
+            'data' => null,
+        ];
+    }
+
+    $existingByEmail = pteroFindUserByEmail((string)$pendingRegistration['email']);
+    if ($existingByEmail) {
+        return [
+            'ok' => false,
+            'error' => 'An account with that email already exists.',
+            'data' => null,
+        ];
+    }
+
+    if (function_exists('pteroFindUserByUsername')) {
+        $existingByUsername = pteroFindUserByUsername((string)$pendingRegistration['username']);
+        if ($existingByUsername) {
+            return [
+                'ok' => false,
+                'error' => 'An account with that username already exists.',
+                'data' => null,
+            ];
+        }
+    }
+
+    $result = pteroCreateUser([
+        'username' => (string)$pendingRegistration['username'],
+        'email' => (string)$pendingRegistration['email'],
+        'first_name' => (string)$pendingRegistration['first_name'],
+        'last_name' => (string)$pendingRegistration['last_name'],
+        'password' => $password,
+    ]);
+
+    if (empty($result['ok'])) {
+        return [
+            'ok' => false,
+            'error' => $result['error'] ?? 'Failed to create your account.',
+            'data' => null,
+        ];
+    }
+
+    if (!fbgMarkPendingRegistrationConsumed($id)) {
+        return [
+            'ok' => false,
+            'error' => 'Your account was created, but the registration record could not be finalized.',
+            'data' => $result['data'] ?? null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'error' => null,
+        'data' => $result['data'] ?? null,
+    ];
 }
 
 function fbgIsPendingRegistrationExpired(array $pendingRegistration): bool

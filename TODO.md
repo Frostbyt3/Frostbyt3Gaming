@@ -24,12 +24,12 @@
 - [x] Add invisible randomized honeypot protection to the registration form.
 - [x] Add server-side registration timing protection.
 - [x] Add configurable IP rate limiting for registration attempts.
-- [ ] Extract shared pending-registration account creation service from `complete-registration.php`.
-- [ ] Add safe, repeatable cleanup task/entrypoint for expired retained registrations.
-- [ ] Add Registration Settings controls to the Admin Settings page.
-- [ ] Add Pending Registrations admin management page with pagination/search/filter/sort.
-- [ ] Add admin resend-verification action with new token, cooldown, counters, and delivery reporting.
-- [ ] Add admin manual approval action with required reason and duplicate username/email checks.
-- [ ] Add registration statistics to the admin dashboard.
+- [x] Extract shared pending-registration account creation service from `complete-registration.php`.
+- [x] Add safe, repeatable cleanup task/entrypoint for expired retained registrations.
+- [x] Add Registration Settings controls to the Admin Settings page.
+- [x] Add Pending Registrations admin management page with pagination/search/filter/sort.
+- [x] Add admin resend-verification action with new token, cooldown, counters, and delivery reporting.
+- [x] Add admin manual approval action with required reason and duplicate username/email checks.
+- [x] Add registration statistics to the admin dashboard.
 - [ ] Add registration security logging without passwords, plaintext tokens, token hashes, or session data.
 - [ ] Add or document coverage for legitimate registration, bot rejection paths, resend, manual approval, cleanup, and stats.
