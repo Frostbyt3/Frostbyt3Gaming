@@ -66,6 +66,15 @@ function fbgAdminRegistrationSendVerification(array $pendingRegistration, string
     ]);
 }
 
+function fbgAdminRegistrationSendCompletion(array $pendingRegistration, string $selector, string $token): bool
+{
+    return fbgSendRegistrationCompletionEmail([
+        'to_email' => (string)$pendingRegistration['email'],
+        'first_name' => (string)($pendingRegistration['first_name'] ?? ''),
+        'completion_url' => fbgAdminRegistrationVerificationUrl($selector, $token),
+    ]);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     fbgAdminRegistrationVerifyCsrf();
 
@@ -114,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    if ($action === 'manual_approval') {
+    if (in_array($action, ['manual_approval', 'manual_approval_email', 'manual_approval_set_password'], true)) {
         $reason = trim((string)($_POST['manual_approval_reason'] ?? ''));
 
         if ($reason === '') {
@@ -127,6 +136,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (function_exists('pteroFindUserByUsername') && pteroFindUserByUsername((string)$pending['username'])) {
             fbgAdminRegistrationRedirect('A Pterodactyl account already exists with that username.', 'error');
+        }
+
+        if ($action === 'manual_approval_set_password') {
+            $password = (string)($_POST['manual_approval_password'] ?? '');
+            $confirmPassword = (string)($_POST['manual_approval_confirm_password'] ?? '');
+            $passwordErrors = fbgValidatePassword($password, $confirmPassword);
+
+            if (!empty($passwordErrors)) {
+                fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
+            }
+
+            $approved = fbgMarkPendingRegistrationManuallyApproved(
+                (int)$pending['id'],
+                (int)($_SESSION['user_id'] ?? 0),
+                $reason
+            );
+
+            if (!$approved) {
+                fbgAdminRegistrationRedirect('Registration could not be manually approved.', 'error');
+            }
+
+            $approvedPending = fbgFindPendingRegistrationById((int)$pending['id']);
+            if (!$approvedPending) {
+                fbgAdminRegistrationRedirect('Approved registration could not be reloaded.', 'error');
+            }
+
+            $created = fbgCreatePterodactylUserFromPendingRegistration($approvedPending, $password);
+
+            if (empty($created['ok'])) {
+                fbgAdminRegistrationRedirect($created['error'] ?? 'Account could not be created.', 'error');
+            }
+
+            fbgAdminRegistrationRedirect('Registration approved and account created.');
         }
 
         $refresh = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
@@ -145,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
-            $sent = fbgAdminRegistrationSendVerification($pending, (string)$refresh['selector'], (string)$refresh['token']);
+            $sent = fbgAdminRegistrationSendCompletion($pending, (string)$refresh['selector'], (string)$refresh['token']);
         } catch (Throwable $e) {
             $sent = false;
         }
@@ -468,12 +510,11 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         <div class="fbg-modal-header">
             <h3 id="registration-approval-title">Manual Approval</h3>
-            <p id="registration-approval-description">Approve this registration and send the user their completion email.</p>
+            <p id="registration-approval-description">Approve this registration and choose how the account should be completed.</p>
         </div>
 
         <form method="POST" class="fbg-admin-form" id="registration-approval-form">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-            <input type="hidden" name="action" value="manual_approval">
             <input type="hidden" name="registration_id" id="registration-approval-id" value="">
 
             <div class="fbg-admin-field">
@@ -486,9 +527,30 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 <textarea id="registration-approval-reason" name="manual_approval_reason" rows="4" maxlength="500" required></textarea>
             </div>
 
+            <div class="fbg-registration-approval-passwords" id="registration-approval-password-fields">
+                <div class="fbg-admin-field">
+                    <label for="registration-approval-password">Password</label>
+                    <input
+                        id="registration-approval-password"
+                        type="password"
+                        name="manual_approval_password"
+                        autocomplete="new-password">
+                </div>
+
+                <div class="fbg-admin-field">
+                    <label for="registration-approval-confirm-password">Confirm Password</label>
+                    <input
+                        id="registration-approval-confirm-password"
+                        type="password"
+                        name="manual_approval_confirm_password"
+                        autocomplete="new-password">
+                </div>
+            </div>
+
             <div class="fbg-modal-actions">
                 <button type="button" class="btn fbg-neutral-button" id="registration-approval-cancel">Cancel</button>
-                <button type="submit" class="btn">Approve</button>
+                <button type="submit" class="btn" name="action" value="manual_approval_email" data-approval-email-submit>Approve and Send Email</button>
+                <button type="submit" class="btn" name="action" value="manual_approval_set_password" data-approval-password-submit>Approve and Set Password</button>
             </div>
         </form>
     </div>
@@ -569,6 +631,13 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     max-width: 520px;
     width: min(520px, calc(100vw - 32px));
 }
+
+.fbg-registration-approval-passwords {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: grid;
+    gap: 14px;
+    padding-top: 14px;
+}
 </style>
 
 <script>
@@ -581,6 +650,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalLabel = document.getElementById('registration-approval-label');
     const modalReason = document.getElementById('registration-approval-reason');
     const modalDescription = document.getElementById('registration-approval-description');
+    const modalPassword = document.getElementById('registration-approval-password');
+    const modalConfirmPassword = document.getElementById('registration-approval-confirm-password');
+    const emailSubmit = document.querySelector('[data-approval-email-submit]');
+    const passwordSubmit = document.querySelector('[data-approval-password-submit]');
+
+    const setPasswordRequired = (isRequired) => {
+        if (modalPassword) {
+            modalPassword.required = isRequired;
+        }
+
+        if (modalConfirmPassword) {
+            modalConfirmPassword.required = isRequired;
+        }
+    };
 
     const closeMenus = () => {
         menus.forEach((menu) => {
@@ -614,9 +697,12 @@ document.addEventListener('DOMContentLoaded', () => {
         modalId.value = button.dataset.registrationId || '';
         modalLabel.value = email !== '' ? `${label} (${email})` : label;
         if (modalDescription) {
-            modalDescription.textContent = `Approve ${label} and send the user their completion email.`;
+            modalDescription.textContent = `Approve ${label}, then either email a password setup link or set the password now.`;
         }
         modalReason.value = '';
+        if (modalPassword) modalPassword.value = '';
+        if (modalConfirmPassword) modalConfirmPassword.value = '';
+        setPasswordRequired(false);
         modal.hidden = false;
         document.body.classList.add('fbg-modal-open');
         closeMenus();
@@ -632,6 +718,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-registration-approve-trigger]').forEach((button) => {
         button.addEventListener('click', () => openApprovalModal(button));
     });
+
+    if (emailSubmit) {
+        emailSubmit.addEventListener('click', () => setPasswordRequired(false));
+    }
+
+    if (passwordSubmit) {
+        passwordSubmit.addEventListener('click', () => setPasswordRequired(true));
+    }
 
     document.addEventListener('click', (event) => {
         if (!event.target.closest('[data-registration-actions]')) {
