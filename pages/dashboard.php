@@ -56,7 +56,7 @@ if ($panelUserId <= 0) {
     $serverOwnerMap = $_SESSION['server_is_owner'] ?? [];
     $serverPanelAdminMap = $_SESSION['server_is_panel_admin'] ?? [];
 
-    if (!is_array($serverMeta) || empty($serverMeta)) {
+    if (!is_array($serverMeta) || !is_array($allowedServers)) {
         $accessSession = pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
         $accessError = is_array($accessSession) ? trim((string)($accessSession['error'] ?? '')) : '';
 
@@ -272,7 +272,16 @@ session_write_close();
                 $disableStop = $isInstalling;
                 $disableRestart = $isInstalling;
 
-                $serverAddress = pteroGetCurrentServerAddress($serverId);
+                $allocationHost = trim((string)($server['allocation_alias'] ?? ''));
+
+                if ($allocationHost === '') {
+                    $allocationHost = trim((string)($server['allocation_ip'] ?? ''));
+                }
+
+                $allocationPort = trim((string)($server['allocation_port'] ?? ''));
+                $serverAddress = ($allocationHost !== '' && $allocationPort !== '')
+                    ? $allocationHost . ':' . $allocationPort
+                    : 'Unavailable';
 
                 $isSuspended = !empty($server['suspended']);
 

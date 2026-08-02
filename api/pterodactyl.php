@@ -4,6 +4,10 @@
 
 require_once __DIR__ . '/../config/secrets.php';
 
+if (!function_exists('fbgPteroDb')) {
+    require_once __DIR__ . '/../includes/auth.php';
+}
+
 if (!defined('PTERO_BASE_URL')) {
     define('PTERO_BASE_URL', 'https://panel.frostbyt3gaming.com');
 }
@@ -1427,6 +1431,122 @@ if (!function_exists('pteroDecodeSubuserPermissions')) {
     }
 }
 
+if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
+    function pteroGetServerAccessMapForUserFromDatabase(int $panelUserId, bool $isPanelAdmin = false): ?array
+    {
+        if ($panelUserId <= 0) {
+            return [];
+        }
+
+        try {
+            $whereSql = $isPanelAdmin
+                ? 's.owner_id = :owner_id'
+                : '(s.owner_id = :owner_id OR su.id IS NOT NULL)';
+
+            $stmt = fbgPteroDb()->prepare("
+                SELECT
+                    s.id,
+                    s.uuid,
+                    s.uuidShort AS identifier,
+                    s.node_id,
+                    s.name,
+                    s.description,
+                    s.status,
+                    s.owner_id,
+                    s.memory,
+                    s.disk,
+                    s.cpu,
+                    s.allocation_limit,
+                    s.nest_id,
+                    s.egg_id,
+                    s.expired_at,
+                    s.created_at,
+                    s.updated_at,
+                    n.name AS node_name,
+                    e.name AS egg_name,
+                    u.username AS owner_username,
+                    u.email AS owner_email,
+                    a.ip AS allocation_ip,
+                    a.ip_alias AS allocation_alias,
+                    a.port AS allocation_port,
+                    su.permissions AS subuser_permissions
+                FROM servers s
+                LEFT JOIN nodes n ON n.id = s.node_id
+                LEFT JOIN eggs e ON e.id = s.egg_id
+                LEFT JOIN users u ON u.id = s.owner_id
+                LEFT JOIN allocations a ON a.id = s.allocation_id
+                LEFT JOIN subusers su ON su.server_id = s.id AND su.user_id = :subuser_id
+                WHERE {$whereSql}
+                ORDER BY s.name ASC
+            ");
+            $stmt->execute([
+                'subuser_id' => $panelUserId,
+                'owner_id' => $panelUserId,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Unable to load dashboard server access from database: ' . $e->getMessage());
+            return null;
+        }
+
+        $accessMap = [];
+
+        foreach ($stmt->fetchAll() as $row) {
+            $identifier = trim((string)($row['identifier'] ?? ''));
+            $serverDbId = (int)($row['id'] ?? 0);
+            $ownerId = (int)($row['owner_id'] ?? 0);
+
+            if ($identifier === '' || $serverDbId <= 0) {
+                continue;
+            }
+
+            $rawStatus = strtolower(trim((string)($row['status'] ?? '')));
+            $isOwner = $ownerId === $panelUserId;
+            $expiredAt = $row['expired_at'] ?? null;
+
+            $server = [
+                'id' => $serverDbId,
+                'uuid' => (string)($row['uuid'] ?? ''),
+                'identifier' => $identifier,
+                'name' => (string)($row['name'] ?? 'Unnamed Server'),
+                'description' => (string)($row['description'] ?? ''),
+                'suspended' => $rawStatus === 'suspended',
+                'is_installing' => $rawStatus === 'installing',
+                'install_status' => $rawStatus,
+                'owner_id' => $ownerId,
+                'owner_username' => (string)($row['owner_username'] ?? ''),
+                'owner_email' => (string)($row['owner_email'] ?? ''),
+                'node_id' => (int)($row['node_id'] ?? 0),
+                'node_name' => (string)($row['node_name'] ?? ''),
+                'allocation_ip' => (string)($row['allocation_ip'] ?? ''),
+                'allocation_alias' => (string)($row['allocation_alias'] ?? ''),
+                'allocation_port' => (string)($row['allocation_port'] ?? ''),
+                'memory' => (int)($row['memory'] ?? 0),
+                'disk' => (int)($row['disk'] ?? 0),
+                'cpu' => (int)($row['cpu'] ?? 0),
+                'feature_allocations' => (int)($row['allocation_limit'] ?? 0),
+                'created_at' => (string)($row['created_at'] ?? ''),
+                'updated_at' => (string)($row['updated_at'] ?? ''),
+                'expired_at' => $expiredAt,
+                'is_expired' => !empty($expiredAt) && strtotime((string)$expiredAt) <= time(),
+                'egg_id' => (int)($row['egg_id'] ?? 0),
+                'nest_id' => (int)($row['nest_id'] ?? 0),
+                'egg_name' => trim((string)($row['egg_name'] ?? '')) ?: 'unknown',
+            ];
+
+            $accessMap[$identifier] = [
+                'server' => $server,
+                'is_owner' => $isOwner,
+                'is_panel_admin' => $isPanelAdmin && $isOwner,
+                'permissions' => $isOwner
+                    ? pteroGetOwnerPermissionSet()
+                    : pteroDecodeSubuserPermissions($row['subuser_permissions'] ?? null),
+            ];
+        }
+
+        return $accessMap;
+    }
+}
+
 if (!function_exists('pteroGetOwnerPermissionSet')) {
     function pteroGetOwnerPermissionSet(): array
     {
@@ -1493,6 +1613,15 @@ if (!function_exists('pteroGetServerAccessMapForUser')) {
         }
 
         $isPanelAdmin = pteroUserIsPanelAdmin($panelUserId);
+
+        if (!$includeAdminAllServers || !$isPanelAdmin) {
+            $databaseAccessMap = pteroGetServerAccessMapForUserFromDatabase($panelUserId, $isPanelAdmin);
+
+            if (is_array($databaseAccessMap)) {
+                return $databaseAccessMap;
+            }
+        }
+
         $servers = ($isPanelAdmin && !$includeAdminAllServers)
             ? pteroGetAllServersForUserId($panelUserId)
             : pteroGetAllServers();
@@ -1649,15 +1778,30 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
             return [];
         }
 
+        $isPanelAdmin = pteroUserIsPanelAdmin($panelUserId);
         $allowedServers = $_SESSION['allowed_servers'] ?? [];
         $cachedIncludesAdminAll = !empty($_SESSION['server_access_includes_admin_all']);
         $lastSync = (int)($_SESSION['server_access_last_sync'] ?? 0);
         $cacheIsFresh = $maxAgeSeconds <= 0 || ($lastSync > 0 && (time() - $lastSync) < $maxAgeSeconds);
+        $canUseCachedAccess = $includeAdminAllServers && $isPanelAdmin;
+        $hasAccessCache =
+            $lastSync > 0 &&
+            is_array($allowedServers) &&
+            isset(
+                $_SESSION['server_permissions'],
+                $_SESSION['server_is_owner'],
+                $_SESSION['server_is_panel_admin'],
+                $_SESSION['server_meta']
+            ) &&
+            is_array($_SESSION['server_permissions']) &&
+            is_array($_SESSION['server_is_owner']) &&
+            is_array($_SESSION['server_is_panel_admin']) &&
+            is_array($_SESSION['server_meta']);
 
         if (
             !$forceRefresh &&
-            is_array($allowedServers) &&
-            !empty($allowedServers) &&
+            $canUseCachedAccess &&
+            $hasAccessCache &&
             (!$includeAdminAllServers || $cachedIncludesAdminAll) &&
             $cacheIsFresh
         ) {
@@ -1865,6 +2009,27 @@ if (!function_exists('pteroUpdatePanelUser')) {
 if (!function_exists('pteroUserIsPanelAdmin')) {
     function pteroUserIsPanelAdmin(int $panelUserId): bool
     {
+        if ($panelUserId <= 0) {
+            return false;
+        }
+
+        try {
+            $stmt = fbgPteroDb()->prepare("
+                SELECT root_admin
+                FROM users
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmt->execute(['id' => $panelUserId]);
+            $row = $stmt->fetch();
+
+            if ($row) {
+                return !empty($row['root_admin']);
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to load panel admin status from database: ' . $e->getMessage());
+        }
+
         $user = pteroGetPanelUserById($panelUserId);
 
         if (!$user) {
