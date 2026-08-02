@@ -98,6 +98,21 @@
     background: var(--fbg-brightblue);
 }
 
+option,
+optgroup {
+    background-color: var(--fbg-card-bg);
+    color: var(--fbg-white);
+}
+
+option {
+    padding: 10px 12px;
+}
+
+option:checked {
+    background-color: var(--fbg-button-bg);
+    color: var(--fbg-white);
+}
+
 /* =========================
    Core - Base Layout
    ========================= */
@@ -6728,6 +6743,22 @@ textarea.startup-variable-input {
     grid-column: span 2;
 }
 
+.fbg-admin-compact-action-row {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.fbg-admin-compact-action-row .fbg-admin-field:first-child {
+    flex: 0 1 520px;
+    min-width: min(100%, 280px);
+}
+
+.fbg-admin-compact-action {
+    flex: 0 0 auto;
+}
+
 .fbg-admin-field label {
     font-size: 0.85rem;
     font-weight: 700;
@@ -6746,6 +6777,26 @@ textarea.startup-variable-input {
     color: var(--fbg-white);
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.fbg-admin-field select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: rgba(255,255,255,0.04);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--fbg-text-muted) 50%),
+        linear-gradient(135deg, var(--fbg-text-muted) 50%, transparent 50%);
+    background-position:
+        calc(100% - 18px) 50%,
+        calc(100% - 12px) 50%;
+    background-repeat: no-repeat;
+    background-size: 6px 6px, 6px 6px;
+    padding-right: 42px;
+}
+
+.fbg-admin-field select:hover {
+    border-color: rgba(34, 174, 255, 0.35);
 }
 
 .fbg-admin-field textarea {
@@ -6771,6 +6822,45 @@ textarea.startup-variable-input {
 .fbg-admin-checkbox input {
     width: 18px;
     height: 18px;
+}
+
+.fbg-admin-option-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.fbg-admin-option-list .fbg-admin-checkbox {
+    align-items: flex-start;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.fbg-admin-option-list .fbg-admin-checkbox span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.fbg-admin-option-list .fbg-admin-checkbox small {
+    color: var(--fbg-text-muted);
+    font-size: 0.78rem;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.fbg-admin-plan-preview {
+    aspect-ratio: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    display: block;
+    height: 58px;
+    object-fit: cover;
+    width: 58px;
 }
 
 .fbg-admin-form-actions {

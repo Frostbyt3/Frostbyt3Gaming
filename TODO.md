@@ -10,7 +10,7 @@
 - [x] Add server purchase history to the Manage Balance page.
 - [x] Record shop purchase metadata for renewals and 30-day expiration tracking.
 - [x] Remove server-panel install-state hard reloads and stabilize polling.
-- [ ] Add admin CRUD for shop categories and server plans.
+- [x] Add admin CRUD for shop categories and server plans.
 - [ ] Add order/invoice detail pages for completed balance uploads and server purchases.
 - [ ] Add invoice support after the core shop loop is stable.
 

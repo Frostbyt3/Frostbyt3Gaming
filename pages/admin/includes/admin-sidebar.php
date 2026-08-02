@@ -77,6 +77,10 @@ if (function_exists('asset')) {
             <a href="./page.php?name=admin-shop-categories" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-categories', $currentAdminPage) ?>">
                 Categories
             </a>
+
+            <a href="./page.php?name=admin-shop-plans" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-plans', $currentAdminPage) ?>">
+                Plans
+            </a>
         </div>
 
         <!-- System -->
