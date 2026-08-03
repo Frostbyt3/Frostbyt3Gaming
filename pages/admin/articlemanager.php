@@ -209,6 +209,7 @@ $stmt = db()->query('
 ');
 
 $articles = $stmt->fetchAll();
+$articleBaseUrl = 'https://frostbyt3gaming.com/page.php?name=news&article=';
 ?>
 
 <?php $currentAdminPage = 'admin-articles'; ?>
@@ -381,9 +382,23 @@ $articles = $stmt->fetchAll();
                             </thead>
                             <tbody>
                                 <?php foreach ($articles as $article): ?>
+                                    <?php
+                                    $articleUrl = $articleBaseUrl . rawurlencode((string)$article['slug']);
+                                    ?>
                                     <tr>
                                         <td><?= htmlspecialchars((string)$article['title'], ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td><?= htmlspecialchars((string)$article['slug'], ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td>
+                                            <div class="fbg-admin-table-actions">
+                                                <span><?= htmlspecialchars((string)$article['slug'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-sm"
+                                                    onclick="copyArticleLink('<?= htmlspecialchars($articleUrl, ENT_QUOTES, 'UTF-8') ?>', this)"
+                                                >
+                                                    Copy Link
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td><?= (int)$article['is_published'] === 1 ? 'Yes' : 'No' ?></td>
                                         <td><?= !empty($article['published_at']) ? htmlspecialchars((string)$article['published_at'], ENT_QUOTES, 'UTF-8') : '-' ?></td>
                                         <td>
@@ -416,3 +431,18 @@ $articles = $stmt->fetchAll();
         </div>
     </div>
 </section>
+
+<script>
+function copyArticleLink(text, element) {
+    navigator.clipboard.writeText(text).then(function () {
+        const original = element.innerHTML;
+        element.innerHTML = 'Copied!';
+
+        setTimeout(function () {
+            element.innerHTML = original;
+        }, 2000);
+    }).catch(function (err) {
+        console.error('Clipboard copy failed:', err);
+    });
+}
+</script>
