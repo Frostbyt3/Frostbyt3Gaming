@@ -38,6 +38,7 @@ $allowed = [
     // Admin
     'admin-home'            => 'admin/home.php',
     'admin-articles'        => 'admin/articlemanager.php',
+    'admin-users'           => 'admin/users.php',
     'admin-image-upload'    => 'admin/image.php',
     'admin-file-upload'     => 'admin/fileupload.php',
     'admin-link-shortener'  => 'admin/shorten.php',

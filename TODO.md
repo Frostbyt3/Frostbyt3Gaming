@@ -36,29 +36,29 @@
 
 ## Admin User Management
 
-- [ ] Add an Admin Users page and route.
-- [ ] Add Admin Users sidebar/navigation entry.
-- [ ] Build a users table similar to the Admin Registrations table.
-- [ ] Display user ID, email, first name, last name, username, 2FA status, owned server count, website access level, and Pterodactyl panel access level.
-- [ ] Make the user's email address link to a dedicated edit/details page.
-- [ ] Add search, filter, sort, and pagination controls for users.
-- [ ] Load user list data from the Pterodactyl users table plus the `mainsite.admin_access` table.
-- [ ] Add a user profile edit page.
-- [ ] Add Identity controls for email, username, first name, last name, and default language.
-- [ ] Limit default language options to English for now.
-- [ ] Add optional admin password reset field that keeps the current password when left blank.
-- [ ] Add clear admin copy explaining that users are not automatically notified when an admin changes their password.
-- [ ] Add Permissions controls for Pterodactyl backend administrator access.
-- [ ] Add Permissions controls for main website access level using `mainsite.admin_access.user_id`, `access_level`, and `is_active`.
-- [ ] Add Personal Details controls for country, zip code, address, and account balance/credit.
-- [ ] Decide whether account balance edits should be direct, ledger-backed, or both.
-- [ ] Add Associated Servers table with server ID, server name, node name, creation date, and expiration date.
-- [ ] Add user deletion action.
-- [ ] Block user deletion when any servers are associated with the account.
-- [ ] Add confirmation modal for user deletion.
-- [ ] Add CSRF protection and audit-safe error handling to all user admin write actions.
-- [ ] Use Pterodactyl API updates where possible for panel user changes.
-- [ ] Keep direct database writes limited to website/admin-access and shop balance data where appropriate.
+- [x] Add an Admin Users page and route.
+- [x] Add Admin Users sidebar/navigation entry.
+- [x] Build a users table similar to the Admin Registrations table.
+- [x] Display user ID, email, first name, last name, username, 2FA status, owned server count, website access level, and Pterodactyl panel access level.
+- [x] Make the user's email address link to a dedicated edit/details page.
+- [x] Add search, filter, sort, and pagination controls for users.
+- [x] Load user list data from the Pterodactyl users table plus the `mainsite.admin_access` table.
+- [x] Add a user profile edit page.
+- [x] Add Identity controls for email, username, first name, last name, and default language.
+- [x] Limit default language options to English for now.
+- [x] Add optional admin password reset field that keeps the current password when left blank.
+- [x] Add clear admin copy explaining that users are not automatically notified when an admin changes their password.
+- [x] Add Permissions controls for Pterodactyl backend administrator access.
+- [x] Add Permissions controls for main website access level using `mainsite.admin_access.user_id`, `access_level`, and `is_active`.
+- [x] Add Personal Details controls for country, zip code, address, and account balance/credit.
+- [x] Decide whether account balance edits should be direct, ledger-backed, or both.
+- [x] Add Associated Servers table with server ID, server name, node name, creation date, and expiration date.
+- [x] Add user deletion action.
+- [x] Block user deletion when any servers are associated with the account.
+- [x] Add confirmation modal for user deletion.
+- [x] Add CSRF protection and audit-safe error handling to all user admin write actions.
+- [x] Use Pterodactyl API updates where possible for panel user changes.
+- [x] Keep direct database writes limited to website/admin-access and shop balance data where appropriate.
 
 ## Admin Server Administration
 
