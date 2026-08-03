@@ -93,6 +93,8 @@
 - [x] Add editable server name field.
 - [x] Require server name before saving.
 - [x] Add editable external identifier field.
+- [x] Add grouped shop plan picker.
+- [x] Save selected shop plan ID for renewal handling.
 - [x] Add editable expiration date field.
 - [x] Add editable server description field.
 - [x] Add searchable server owner selector.

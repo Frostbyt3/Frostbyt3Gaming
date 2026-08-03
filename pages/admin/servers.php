@@ -214,6 +214,7 @@ function fbgAdminServersFind(int $serverId): ?array
             s.allocation_limit,
             s.database_limit,
             s.backup_limit,
+            s.product_id,
             s.allocation_id,
             s.nest_id,
             s.egg_id,
@@ -240,12 +241,16 @@ function fbgAdminServersFind(int $serverId): ?array
             u.email AS owner_email,
             a.ip AS allocation_ip,
             a.ip_alias AS allocation_alias,
-            a.port AS allocation_port
+            a.port AS allocation_port,
+            g.name AS product_name,
+            gc.title AS product_category_title
         FROM servers s
         LEFT JOIN nodes n ON n.id = s.node_id
         LEFT JOIN eggs e ON e.id = s.egg_id
         LEFT JOIN users u ON u.id = s.owner_id
         LEFT JOIN allocations a ON a.id = s.allocation_id
+        LEFT JOIN games g ON g.id = s.product_id
+        LEFT JOIN game_category gc ON gc.id = g.category_id
         WHERE s.id = :id
         LIMIT 1
     ");
@@ -269,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_details') {
         $name = trim((string)($_POST['name'] ?? ''));
         $externalId = trim((string)($_POST['external_id'] ?? ''));
+        $productId = max(0, (int)($_POST['product_id'] ?? 0));
         $description = trim((string)($_POST['description'] ?? ''));
         $ownerInput = trim((string)($_POST['owner_search'] ?? ''));
         $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
@@ -288,6 +294,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fbgAdminServersRedirect('Selected server owner could not be found.', 'error', $serverId);
         }
 
+        if ($productId > 0) {
+            $productStmt = fbgPteroDb()->prepare('SELECT id FROM games WHERE id = :id LIMIT 1');
+            $productStmt->execute(['id' => $productId]);
+            if ((int)($productStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected server plan could not be found.', 'error', $serverId);
+            }
+        }
+
         $detailsPayload = [
             'name' => $name,
             'user' => $ownerId,
@@ -301,8 +315,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fbgAdminServersRedirect((string)($result['error'] ?? 'Server details could not be updated.'), 'error', $serverId);
         }
 
-        $expireStmt = fbgPteroDb()->prepare('UPDATE servers SET expired_at = :expired_at, updated_at = NOW() WHERE id = :id');
+        $expireStmt = fbgPteroDb()->prepare('
+            UPDATE servers
+            SET product_id = :product_id,
+                expired_at = :expired_at,
+                updated_at = NOW()
+            WHERE id = :id
+        ');
         $expireStmt->execute([
+            'product_id' => $productId > 0 ? $productId : null,
             'expired_at' => $expiredAt,
             'id' => $serverId,
         ]);
@@ -322,6 +343,7 @@ if (!in_array($activeServerTab, ['about', 'details', 'build', 'startup', 'databa
 }
 
 $ownerOptions = [];
+$planOptionsByCategory = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -329,6 +351,27 @@ if ($editingServer) {
         ORDER BY name_first ASC, name_last ASC, username ASC
     ");
     $ownerOptions = $ownerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $planStmt = fbgPteroDb()->query("
+        SELECT
+            g.id,
+            g.name,
+            g.price,
+            g.hide,
+            c.title AS category_title
+        FROM games g
+        LEFT JOIN game_category c ON c.id = g.category_id
+        ORDER BY COALESCE(c.sort, 999999) ASC, c.title ASC, COALESCE(g.sort, 999999) ASC, g.name ASC
+    ");
+
+    foreach (($planStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $planOption) {
+        $categoryTitle = trim((string)($planOption['category_title'] ?? 'Uncategorized'));
+        if ($categoryTitle === '') {
+            $categoryTitle = 'Uncategorized';
+        }
+
+        $planOptionsByCategory[$categoryTitle][] = $planOption;
+    }
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -768,6 +811,32 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                         <div class="fbg-admin-field">
                             <label for="server-detail-external-id">External Identifier</label>
                             <input id="server-detail-external-id" name="external_id" type="text" value="<?= htmlspecialchars((string)($editingServer['external_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="server-detail-product-id">Plan</label>
+                            <select id="server-detail-product-id" name="product_id">
+                                <option value="0">Unassigned</option>
+                                <?php foreach ($planOptionsByCategory as $categoryTitle => $plansInCategory): ?>
+                                    <optgroup label="<?= htmlspecialchars($categoryTitle, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?php foreach ($plansInCategory as $planOption): ?>
+                                            <?php
+                                            $planLabel = (string)($planOption['name'] ?? 'Unnamed Plan');
+                                            if (isset($planOption['price'])) {
+                                                $planLabel .= ' - ' . fbgFormatCredit((float)$planOption['price']);
+                                            }
+                                            if ((int)($planOption['hide'] ?? 0) !== 0) {
+                                                $planLabel .= ' (Hidden)';
+                                            }
+                                            ?>
+                                            <option value="<?= (int)$planOption['id'] ?>" <?= (int)($editingServer['product_id'] ?? 0) === (int)$planOption['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($planLabel, ENT_QUOTES, 'UTF-8') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </optgroup>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="fbg-admin-help-text">Sets the shop plan ID used by renewal pricing and expiration handling.</p>
                         </div>
 
                         <div class="fbg-admin-field">
