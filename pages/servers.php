@@ -12,6 +12,9 @@ $currency = fbgGetShopCurrency();
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $isLoggedIn = $userId > 0;
 $balance = $isLoggedIn ? fbgGetUserCreditBalance($userId) : 0.0;
+$tosUrl = trim((string)fbgGetShopSetting('settings::shop::tos_url', ''));
+$tosLink = $tosUrl !== '' ? $tosUrl : './page.php?name=legal&doc=terms';
+$tosCanFrame = $tosUrl !== '';
 
 function fbgShopFormatMemory(int $megabytes): string
 {
@@ -111,6 +114,7 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                                 <?php
                                 $price = (float)($game['price'] ?? 0);
                                 $canAfford = $isLoggedIn && $balance >= $price;
+                                $balanceAfterOrder = max(0, $balance - $price);
                                 ?>
                                 <article class="fbg-shop-plan-card">
                                     <div class="fbg-shop-plan-media">
@@ -141,17 +145,22 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                                     <div class="fbg-shop-plan-actions">
                                         <?php if (!$isLoggedIn): ?>
                                             <a class="btn fbg-primary-button" href="./page.php?name=login">
-                                                Login to Purchase
+                                                Login to Order
                                             </a>
                                         <?php else: ?>
                                             <button
                                                 type="button"
                                                 class="btn fbg-primary-button fbg-shop-purchase-button"
                                                 data-game-id="<?php echo (int)$game['id']; ?>"
-                                                data-default-text="Purchase Server"
+                                                data-game-name="<?php echo htmlspecialchars((string)$category['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-plan-name="<?php echo htmlspecialchars((string)$game['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-price="<?php echo htmlspecialchars(fbgFormatCredit($price, $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-current-balance="<?php echo htmlspecialchars(fbgFormatCredit($balance, $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-balance-after="<?php echo htmlspecialchars(fbgFormatCredit($balanceAfterOrder, $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-default-text="Order Plan"
                                                 <?php echo $canAfford ? '' : 'disabled'; ?>
                                             >
-                                                <?php echo $canAfford ? 'Purchase Server' : 'Insufficient Balance'; ?>
+                                                <?php echo $canAfford ? 'Order Plan' : 'Insufficient Balance'; ?>
                                             </button>
                                         <?php endif; ?>
                                     </div>
@@ -167,12 +176,100 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
     </div>
 </section>
 
+<?php if ($isLoggedIn): ?>
+    <div class="fbg-modal-overlay" id="fbg-shop-order-modal" hidden>
+        <div class="fbg-modal-card fbg-shop-order-modal" role="dialog" aria-modal="true" aria-labelledby="fbg-shop-order-title">
+            <button type="button" class="fbg-modal-close fbg-shop-order-close" id="fbg-shop-order-close" aria-label="Close">X</button>
+
+            <div class="fbg-modal-header">
+                <h3 id="fbg-shop-order-title">Your adventure is about to begin!</h3>
+                <p>You're one click away from deploying your new server.</p>
+            </div>
+
+            <div class="fbg-shop-order-copy">
+                <p>By selecting Confirm Order, you acknowledge that you have read and agree to the Terms of Service.</p>
+                <p>Your new world will begin taking shape immediately after your order is confirmed. You'll be exploring it in no time!</p>
+            </div>
+
+            <div class="fbg-shop-order-tos">
+                <div class="fbg-shop-order-tos-header">
+                    <strong>Terms of Service</strong>
+                    <a id="fbg-shop-order-tos-link" href="<?php echo htmlspecialchars($tosLink, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">
+                        Open Terms
+                    </a>
+                </div>
+
+                <?php if ($tosCanFrame): ?>
+                    <iframe
+                        id="fbg-shop-order-tos-frame"
+                        src="<?php echo htmlspecialchars($tosLink, ENT_QUOTES, 'UTF-8'); ?>"
+                        title="Terms of Service"
+                    ></iframe>
+                <?php else: ?>
+                    <div class="fbg-shop-order-tos-fallback">
+                        Terms of Service are available using the link above.
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <dl class="fbg-shop-order-summary">
+                <div>
+                    <dt>Game</dt>
+                    <dd id="fbg-shop-order-game">-</dd>
+                </div>
+                <div>
+                    <dt>Plan</dt>
+                    <dd id="fbg-shop-order-plan">-</dd>
+                </div>
+                <div>
+                    <dt>Price</dt>
+                    <dd id="fbg-shop-order-price">-</dd>
+                </div>
+                <div>
+                    <dt>Current Balance</dt>
+                    <dd id="fbg-shop-order-balance">-</dd>
+                </div>
+                <div>
+                    <dt>Balance After Order</dt>
+                    <dd id="fbg-shop-order-after">-</dd>
+                </div>
+            </dl>
+
+            <label class="fbg-shop-order-agree">
+                <input type="checkbox" id="fbg-shop-order-agree">
+                <span>
+                    I have read and agree to the
+                    <a href="<?php echo htmlspecialchars($tosLink, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Terms of Service</a>.
+                </span>
+            </label>
+
+            <div class="fbg-modal-actions fbg-shop-order-actions">
+                <button type="button" class="btn fbg-neutral-button" id="fbg-shop-order-cancel">Cancel</button>
+                <button type="button" class="btn fbg-primary-button" id="fbg-shop-order-confirm" disabled>Confirm Order</button>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const message = document.getElementById("fbg-shop-message");
     const buttons = document.querySelectorAll(".fbg-shop-purchase-button");
     const categoryCards = document.querySelectorAll(".fbg-shop-category-card");
     const csrfToken = <?php echo json_encode((string)$_SESSION['csrf_token']); ?>;
+    const orderModal = document.getElementById("fbg-shop-order-modal");
+    const orderClose = document.getElementById("fbg-shop-order-close");
+    const orderCancel = document.getElementById("fbg-shop-order-cancel");
+    const orderAgree = document.getElementById("fbg-shop-order-agree");
+    const orderConfirm = document.getElementById("fbg-shop-order-confirm");
+    const orderFields = {
+        game: document.getElementById("fbg-shop-order-game"),
+        plan: document.getElementById("fbg-shop-order-plan"),
+        price: document.getElementById("fbg-shop-order-price"),
+        balance: document.getElementById("fbg-shop-order-balance"),
+        after: document.getElementById("fbg-shop-order-after")
+    };
+    let activePurchaseButton = null;
 
     const readJsonResponse = async (response) => {
         const contentType = response.headers.get("content-type") || "";
@@ -198,6 +295,34 @@ document.addEventListener("DOMContentLoaded", () => {
         message.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
 
+    const openOrderModal = (button) => {
+        if (!orderModal || !orderAgree || !orderConfirm) return false;
+
+        activePurchaseButton = button;
+        orderFields.game.textContent = button.dataset.gameName || "-";
+        orderFields.plan.textContent = button.dataset.planName || "-";
+        orderFields.price.textContent = button.dataset.price || "-";
+        orderFields.balance.textContent = button.dataset.currentBalance || "-";
+        orderFields.after.textContent = button.dataset.balanceAfter || "-";
+        orderAgree.checked = false;
+        orderConfirm.disabled = true;
+        orderModal.hidden = false;
+        document.body.classList.add("fbg-modal-open");
+        orderAgree.focus();
+
+        return true;
+    };
+
+    const closeOrderModal = () => {
+        if (!orderModal || !orderAgree || !orderConfirm) return;
+
+        orderModal.hidden = true;
+        orderAgree.checked = false;
+        orderConfirm.disabled = true;
+        activePurchaseButton = null;
+        document.body.classList.remove("fbg-modal-open");
+    };
+
     categoryCards.forEach((card) => {
         const trigger = card.querySelector(".fbg-shop-category-trigger");
         const panel = card.querySelector(".fbg-shop-category-panel");
@@ -213,8 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    buttons.forEach((button) => {
-        button.addEventListener("click", async () => {
+    const purchaseServer = async (button) => {
             const gameId = button.dataset.gameId;
             const originalText = button.dataset.defaultText || button.textContent;
             let provisioningStep = 0;
@@ -267,6 +391,49 @@ document.addEventListener("DOMContentLoaded", () => {
                 showMessage(error.message || "Could not purchase server.", "error");
                 button.disabled = false;
                 button.textContent = originalText;
+            }
+    };
+
+    if (orderAgree && orderConfirm) {
+        orderAgree.addEventListener("change", () => {
+            orderConfirm.disabled = !orderAgree.checked;
+        });
+    }
+
+    if (orderConfirm) {
+        orderConfirm.addEventListener("click", () => {
+            if (!activePurchaseButton || !orderAgree?.checked) return;
+
+            const button = activePurchaseButton;
+            closeOrderModal();
+            purchaseServer(button);
+        });
+    }
+
+    [orderClose, orderCancel].forEach((control) => {
+        if (control) {
+            control.addEventListener("click", closeOrderModal);
+        }
+    });
+
+    if (orderModal) {
+        orderModal.addEventListener("click", (event) => {
+            if (event.target === orderModal) {
+                closeOrderModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && orderModal && !orderModal.hidden) {
+            closeOrderModal();
+        }
+    });
+
+    buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+            if (!openOrderModal(button)) {
+                purchaseServer(button);
             }
         });
     });
