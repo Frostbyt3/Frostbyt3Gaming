@@ -62,44 +62,44 @@
 
 ## Admin Server Administration
 
-- [ ] Add an Admin Servers page and route.
-- [ ] Add Admin Servers sidebar/navigation entry.
-- [ ] Add server list table with search, filters, sorting, and pagination.
-- [ ] Make server rows link to a dedicated admin server details page.
-- [ ] Add quick button from admin server details to the existing frontend server panel/console page.
-- [ ] Add tabbed admin server layout: About, Details, Build Configuration, Startup, Database, Mounts, Manage, and Delete.
+- [x] Add an Admin Servers page and route.
+- [x] Add Admin Servers sidebar/navigation entry.
+- [x] Add server list table with search, filters, sorting, and pagination.
+- [x] Make server rows link to a dedicated admin server details page.
+- [x] Add quick button from admin server details to the existing frontend server panel/console page.
+- [x] Add tabbed admin server layout: About, Details, Build Configuration, Startup, Database, Mounts, Manage, and Delete.
 
 ### Admin Server About Tab
 
-- [ ] Display server owner ID.
-- [ ] Display owner username, first name, and last name.
-- [ ] Display node name.
-- [ ] Add small owner/node icons or visual identifiers.
-- [ ] Display internal server ID.
-- [ ] Display external identifier.
-- [ ] Display UUID / Docker container ID.
-- [ ] Display current egg.
-- [ ] Display server name.
-- [ ] Display CPU limit.
-- [ ] Display CPU pinning.
-- [ ] Display memory.
-- [ ] Display disk space.
-- [ ] Display block IO weight.
-- [ ] Display default connection allocation.
-- [ ] Display connection alias.
+- [x] Display server owner ID.
+- [x] Display owner username, first name, and last name.
+- [x] Display node name.
+- [x] Add small owner/node icons or visual identifiers.
+- [x] Display internal server ID.
+- [x] Display external identifier.
+- [x] Display UUID / Docker container ID.
+- [x] Display current egg.
+- [x] Display server name.
+- [x] Display CPU limit.
+- [x] Display CPU pinning.
+- [x] Display memory.
+- [x] Display disk space.
+- [x] Display block IO weight.
+- [x] Display default connection allocation.
+- [x] Display connection alias.
 
 ### Admin Server Details Tab
 
-- [ ] Add editable server name field.
-- [ ] Require server name before saving.
-- [ ] Add editable external identifier field.
-- [ ] Add editable expiration date field.
-- [ ] Add editable server description field.
-- [ ] Add searchable server owner selector.
-- [ ] Search owner selector after two or more typed characters.
-- [ ] Search users by matching database user fields that start with the typed value.
-- [ ] Save selected user as the new server owner.
-- [ ] Validate ownership changes carefully before saving.
+- [x] Add editable server name field.
+- [x] Require server name before saving.
+- [x] Add editable external identifier field.
+- [x] Add editable expiration date field.
+- [x] Add editable server description field.
+- [x] Add searchable server owner selector.
+- [x] Search owner selector after two or more typed characters.
+- [x] Search users by matching database user fields that start with the typed value.
+- [x] Save selected user as the new server owner.
+- [x] Validate ownership changes carefully before saving.
 
 ### Admin Server Build Configuration Tab
 

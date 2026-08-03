@@ -6790,6 +6790,228 @@ textarea.startup-variable-input {
     color: var(--fbg-white);
 }
 
+.fbg-admin-status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.055);
+    color: var(--fbg-text-main);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.fbg-admin-status-pill.is-active {
+    background: rgba(34, 197, 94, 0.14);
+    color: #bfffd0;
+}
+
+.fbg-admin-status-pill.is-suspended,
+.fbg-admin-status-pill.is-error {
+    background: rgba(255, 59, 59, 0.16);
+    color: #ffc7c7;
+}
+
+.fbg-admin-status-pill.is-installing {
+    background: rgba(255, 195, 55, 0.16);
+    color: #ffe1a0;
+}
+
+.fbg-admin-icon-button {
+    display: inline-flex;
+    width: 38px;
+    min-width: 38px;
+    height: 34px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.fbg-admin-servers-table code {
+    color: var(--fbg-text-muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+.fbg-admin-server-modal {
+    position: relative;
+    width: min(1280px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--fbg-body-bg), var(--fbg-lighter-gray));
+    border: 1px solid var(--fbg-border-medium);
+    box-shadow: 0 18px 40px var(--fbg-box-shadow);
+}
+
+.fbg-admin-server-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 20px 0;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--fbg-border-medium);
+}
+
+.fbg-admin-server-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--fbg-text-main);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.fbg-admin-server-tab:hover,
+.fbg-admin-server-tab.is-active {
+    border-color: rgba(0, 191, 255, 0.42);
+    background: rgba(0, 191, 255, 0.12);
+    color: var(--fbg-white);
+}
+
+.fbg-admin-server-console-link {
+    margin-left: auto;
+}
+
+.fbg-admin-server-tab-panel[hidden] {
+    display: none;
+}
+
+.fbg-admin-server-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.fbg-admin-server-info-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.fbg-admin-server-info-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    background: rgba(0, 191, 255, 0.12);
+    color: var(--fbg-brightblue);
+}
+
+.fbg-admin-server-info-card div {
+    min-width: 0;
+}
+
+.fbg-admin-server-info-card div > span,
+.fbg-admin-server-detail-list dt {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--fbg-text-dark);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.fbg-admin-server-info-card strong,
+.fbg-admin-server-detail-list dd {
+    color: var(--fbg-white);
+}
+
+.fbg-admin-server-info-card strong,
+.fbg-admin-server-info-card small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fbg-admin-server-info-card small {
+    margin-top: 3px;
+    color: var(--fbg-text-muted);
+}
+
+.fbg-admin-server-about-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.fbg-admin-server-detail-list {
+    padding: 16px;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.fbg-admin-server-detail-list h3 {
+    margin: 0 0 14px;
+}
+
+.fbg-admin-server-detail-list dl {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.fbg-admin-server-detail-list div {
+    min-width: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.fbg-admin-server-detail-list div:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.fbg-admin-server-detail-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.fbg-admin-server-detail-list code {
+    color: var(--fbg-text-main);
+}
+
+@media (max-width: 1100px) {
+    .fbg-admin-server-overview-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .fbg-admin-server-overview-grid,
+    .fbg-admin-server-about-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fbg-admin-server-console-link {
+        margin-left: 0;
+    }
+}
+
 .fbg-admin-nav {
     display: flex;
     flex-direction: column;
