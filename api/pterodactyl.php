@@ -109,6 +109,103 @@ if (!function_exists('pteroRequest')) {
     }
 }
 
+if (!function_exists('pteroDatabaseManagementRequest')) {
+    function pteroDatabaseManagementRequest(string $method, string $endpoint, ?array $body = null): array
+    {
+        if (!defined('PTERO_DB_MANAGEMENT_API_KEY') || PTERO_DB_MANAGEMENT_API_KEY === '') {
+            return [
+                'ok' => false,
+                'status' => 0,
+                'error' => 'Pterodactyl database management API key is not configured.',
+                'data' => null,
+            ];
+        }
+
+        $url = rtrim(PTERO_BASE_URL, '/') . '/api/application/' . ltrim($endpoint, '/');
+
+        $ch = curl_init($url);
+
+        $headers = [
+            'Accept: Application/vnd.pterodactyl.v1+json',
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . PTERO_DB_MANAGEMENT_API_KEY,
+        ];
+
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST  => strtoupper($method),
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_NOSIGNAL       => true,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+
+        if ($body !== null) {
+            $jsonBody = json_encode($body, JSON_UNESCAPED_SLASHES);
+
+            if ($jsonBody === false) {
+                curl_close($ch);
+
+                return [
+                    'ok' => false,
+                    'status' => 0,
+                    'error' => 'Failed to encode request body as JSON.',
+                    'data' => null,
+                ];
+            }
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody);
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
+
+        curl_close($ch);
+
+        if ($response === false || $curlErr !== '') {
+            return [
+                'ok' => false,
+                'status' => $httpCode ?: 0,
+                'error' => 'cURL error: ' . $curlErr,
+                'data' => null,
+            ];
+        }
+
+        $decoded = null;
+        if ($response !== '' && $response !== null) {
+            $decoded = json_decode($response, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'ok' => false,
+                    'status' => $httpCode,
+                    'error' => 'Invalid JSON response from Pterodactyl Application API.',
+                    'data' => $response,
+                ];
+            }
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            return [
+                'ok' => false,
+                'status' => $httpCode,
+                'error' => $decoded['errors'][0]['detail'] ?? 'Unknown API error',
+                'data' => $decoded,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'status' => $httpCode,
+            'error' => null,
+            'data' => $decoded,
+        ];
+    }
+}
+
 if (!function_exists('pteroClientRequest')) {
     function pteroClientRequest(string $method, string $endpoint, ?array $body = null): array
     {
@@ -433,6 +530,7 @@ if (!function_exists('pteroSanitizeServerForSite')) {
             'disk' => (int)($attrs['limits']['disk'] ?? 0),
             'cpu' => (int)($attrs['limits']['cpu'] ?? 0),
             'feature_allocations' => (int)($attrs['feature_limits']['allocations'] ?? 0),
+            'feature_databases' => (int)($attrs['feature_limits']['databases'] ?? 0),
 
             'created_at' => $attrs['created_at'] ?? '',
             'updated_at' => $attrs['updated_at'] ?? '',
@@ -1215,6 +1313,40 @@ if (!function_exists('pteroDeleteScheduleTask')) {
     }
 }
 
+if (!function_exists('pteroListDatabases')) {
+    function pteroListDatabases(string $serverIdentifier, bool $includePassword = false): array
+    {
+        $endpoint = "servers/{$serverIdentifier}/databases";
+
+        if ($includePassword) {
+            $endpoint .= '?include=password';
+        }
+
+        return pteroClientRequest('GET', $endpoint);
+    }
+}
+
+if (!function_exists('pteroCreateDatabase')) {
+    function pteroCreateDatabase(string $serverIdentifier, array $payload): array
+    {
+        return pteroClientRequest('POST', "servers/{$serverIdentifier}/databases", $payload);
+    }
+}
+
+if (!function_exists('pteroRotateDatabasePassword')) {
+    function pteroRotateDatabasePassword(string $serverIdentifier, string $databaseId): array
+    {
+        return pteroClientRequest('POST', "servers/{$serverIdentifier}/databases/{$databaseId}/rotate-password");
+    }
+}
+
+if (!function_exists('pteroDeleteDatabase')) {
+    function pteroDeleteDatabase(string $serverIdentifier, string $databaseId): array
+    {
+        return pteroClientRequest('DELETE', "servers/{$serverIdentifier}/databases/{$databaseId}");
+    }
+}
+
 if (!function_exists('pteroListSubusers')) {
     function pteroListSubusers(string $serverIdentifier): array
     {
@@ -1282,10 +1414,11 @@ if (!function_exists('pteroSubuserPermissionCatalog')) {
                 'allocation.delete' => 'Remove allocations',
             ],
             'Databases' => [
-                'database.create' => 'Create databases',
-                'database.read'   => 'View databases',
-                'database.update' => 'Rotate database passwords',
-                'database.delete' => 'Delete databases',
+                'database.create'        => 'Create databases',
+                'database.read'          => 'View databases',
+                'database.update'        => 'Rotate database passwords',
+                'database.delete'        => 'Delete databases',
+                'database.view_password' => 'View database passwords',
             ],
             'Schedules' => [
                 'schedule.create' => 'Create schedules',
@@ -1395,6 +1528,7 @@ if (!function_exists('pteroSubuserPermissionTemplates')) {
                     'database.read',
                     'database.update',
                     'database.delete',
+                    'database.view_password',
                     'schedule.create',
                     'schedule.read',
                     'schedule.update',

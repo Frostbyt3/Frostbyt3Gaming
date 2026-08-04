@@ -160,6 +160,29 @@ function fbgAdminServersDockerImagesMap(mixed $value): array
     return [$raw => $raw];
 }
 
+function fbgAdminServersDatabaseHostLabel(array $host): string
+{
+    $name = trim((string)($host['name'] ?? ''));
+    $address = trim((string)($host['host'] ?? ''));
+    $port = trim((string)($host['port'] ?? ''));
+    $label = $name !== '' ? $name : 'Database Host #' . (int)($host['id'] ?? 0);
+
+    if ($address !== '') {
+        $label .= ' (' . $address . ($port !== '' ? ':' . $port : '') . ')';
+    }
+
+    return $label;
+}
+
+function fbgAdminServersDatabaseApiError(array $result, string $fallback): string
+{
+    if ((int)($result['status'] ?? 0) === 403) {
+        return 'Pterodactyl denied this database action. Check that PTERO_DB_MANAGEMENT_API_KEY has Server Databases read/write permission, then try again.';
+    }
+
+    return (string)($result['error'] ?? $fallback);
+}
+
 function fbgAdminServersFormatMb(mixed $value): string
 {
     $megabytes = (int)$value;
@@ -574,6 +597,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Server startup configuration updated successfully.', 'success', $serverId, 'startup');
     }
 
+    if ($action === 'create_database') {
+        $databaseHostId = max(0, (int)($_POST['database_host_id'] ?? 0));
+        $databaseName = trim((string)($_POST['database_name'] ?? ''));
+        $remote = trim((string)($_POST['remote'] ?? '%'));
+
+        if ($databaseHostId <= 0) {
+            fbgAdminServersRedirect('Select a valid database host.', 'error', $serverId, 'database');
+        }
+
+        $serverDatabaseLimit = $server['database_limit'] !== null ? (int)$server['database_limit'] : null;
+        if ($serverDatabaseLimit !== null) {
+            $databaseCountStmt = fbgPteroDb()->prepare('SELECT COUNT(*) FROM `databases` WHERE server_id = :server_id');
+            $databaseCountStmt->execute(['server_id' => $serverId]);
+            $serverDatabaseCount = (int)$databaseCountStmt->fetchColumn();
+
+            if ($serverDatabaseCount >= $serverDatabaseLimit) {
+                $limitLabel = $serverDatabaseLimit === 1 ? '1 database' : $serverDatabaseLimit . ' databases';
+                fbgAdminServersRedirect("This server is already at its database limit of {$limitLabel}. Increase the Database Limit on the Build Configuration tab first.", 'error', $serverId, 'database');
+            }
+        }
+
+        if ($databaseName === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $databaseName)) {
+            fbgAdminServersRedirect('Database name may only contain letters, numbers, dashes, and underscores.', 'error', $serverId, 'database');
+        }
+
+        $prefix = 's' . $serverId . '_';
+        if (strlen($prefix . $databaseName) > 48) {
+            fbgAdminServersRedirect('Database name is too long for this server prefix.', 'error', $serverId, 'database');
+        }
+
+        if ($remote === '') {
+            $remote = '%';
+        }
+
+        if (!preg_match('/^[0-9%.]{1,15}$/', $remote)) {
+            fbgAdminServersRedirect('Connections From must be a valid IP address pattern or % wildcard.', 'error', $serverId, 'database');
+        }
+
+        $hostStmt = fbgPteroDb()->prepare('SELECT id FROM database_hosts WHERE id = :id LIMIT 1');
+        $hostStmt->execute(['id' => $databaseHostId]);
+        if ((int)($hostStmt->fetchColumn() ?: 0) <= 0) {
+            fbgAdminServersRedirect('Selected database host could not be found.', 'error', $serverId, 'database');
+        }
+
+        $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases", [
+            'database' => $databaseName,
+            'remote' => $remote,
+            'host' => $databaseHostId,
+        ]);
+
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be created.'), 'error', $serverId, 'database');
+        }
+
+        fbgAdminServersRedirect('Database created successfully.', 'success', $serverId, 'database');
+    }
+
+    if ($action === 'reset_database_password' || $action === 'delete_database') {
+        $databaseId = max(0, (int)($_POST['database_id'] ?? 0));
+
+        if ($databaseId <= 0) {
+            fbgAdminServersRedirect('Select a valid database.', 'error', $serverId, 'database');
+        }
+
+        $databaseStmt = fbgPteroDb()->prepare('
+            SELECT id, database
+            FROM `databases`
+            WHERE id = :id
+              AND server_id = :server_id
+            LIMIT 1
+        ');
+        $databaseStmt->execute([
+            'id' => $databaseId,
+            'server_id' => $serverId,
+        ]);
+        $database = $databaseStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$database) {
+            fbgAdminServersRedirect('Selected database could not be found for this server.', 'error', $serverId, 'database');
+        }
+
+        if ($action === 'reset_database_password') {
+            $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases/{$databaseId}/reset-password");
+
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database password could not be reset.'), 'error', $serverId, 'database');
+            }
+
+            fbgAdminServersRedirect('Database password reset successfully.', 'success', $serverId, 'database');
+        }
+
+        $result = pteroDatabaseManagementRequest('DELETE', "servers/{$serverId}/databases/{$databaseId}");
+
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be deleted.'), 'error', $serverId, 'database');
+        }
+
+        fbgAdminServersRedirect('Database deleted successfully.', 'success', $serverId, 'database');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
@@ -593,6 +716,8 @@ $assignedAllocationOptions = [];
 $nestOptions = [];
 $eggOptions = [];
 $startupEggData = [];
+$databaseHosts = [];
+$serverDatabases = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -718,6 +843,40 @@ if ($editingServer) {
             'rules' => (string)($variable['rules'] ?? ''),
         ];
     }
+
+    $databaseHostStmt = fbgPteroDb()->query('
+        SELECT
+            dh.id,
+            dh.name,
+            dh.host,
+            dh.port,
+            dh.max_databases,
+            COUNT(d.id) AS database_count
+        FROM database_hosts dh
+        LEFT JOIN `databases` d ON d.database_host_id = dh.id
+        GROUP BY dh.id, dh.name, dh.host, dh.port, dh.max_databases
+        ORDER BY dh.name ASC, dh.host ASC
+    ');
+    $databaseHosts = $databaseHostStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $serverDatabasesStmt = fbgPteroDb()->prepare('
+        SELECT
+            d.id,
+            d.database,
+            d.username,
+            d.remote,
+            d.max_connections,
+            d.created_at,
+            dh.name AS host_name,
+            dh.host AS host_address,
+            dh.port AS host_port
+        FROM `databases` d
+        LEFT JOIN database_hosts dh ON dh.id = d.database_host_id
+        WHERE d.server_id = :server_id
+        ORDER BY d.database ASC
+    ');
+    $serverDatabasesStmt->execute(['server_id' => (int)$editingServer['id']]);
+    $serverDatabases = $serverDatabasesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -1037,6 +1196,12 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 <h3 id="admin-server-edit-title"><?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?></h3>
                 <p>Review server ownership, node placement, allocation, resources, and upcoming administrative controls.</p>
             </div>
+
+            <?php if ($message !== ''): ?>
+                <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 18px;">
+                    <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            <?php endif; ?>
 
             <div class="fbg-admin-server-tabs" role="tablist" aria-label="Server administration sections">
                 <?php
@@ -1455,7 +1620,166 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </form>
             </section>
 
-            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup']) as $tabKey): ?>
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'database' ? ' is-active' : '' ?>" data-admin-server-panel="database" <?= $activeServerTab === 'database' ? '' : 'hidden' ?>>
+                <div class="fbg-admin-server-about-grid">
+                    <div>
+                        <div class="fbg-dashboard-alert is-visible" style="margin-bottom: 18px;">
+                            Database passwords can be viewed when visiting this server on the frontend panel.
+                        </div>
+
+                        <div class="fbg-admin-server-detail-list">
+                            <h3>Active Databases</h3>
+                            <div class="fbg-admin-table-wrap fbg-admin-database-table-wrap">
+                                <table class="fbg-admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Database</th>
+                                            <th>Username</th>
+                                            <th>Connections From</th>
+                                            <th>Host</th>
+                                            <th>Max Connections</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($serverDatabases)): ?>
+                                            <tr>
+                                                <td colspan="6">No databases are assigned to this server.</td>
+                                            </tr>
+                                        <?php endif; ?>
+
+                                        <?php foreach ($serverDatabases as $database): ?>
+                                            <tr>
+                                                <td><?= htmlspecialchars((string)$database['database'], ENT_QUOTES, 'UTF-8') ?></td>
+                                                <td><?= htmlspecialchars((string)$database['username'], ENT_QUOTES, 'UTF-8') ?></td>
+                                                <td><?= htmlspecialchars((string)$database['remote'], ENT_QUOTES, 'UTF-8') ?></td>
+                                                <td>
+                                                    <code><?= htmlspecialchars(trim((string)($database['host_address'] ?? '') . ':' . (string)($database['host_port'] ?? ''), ':'), ENT_QUOTES, 'UTF-8') ?></code>
+                                                </td>
+                                                <td>
+                                                    <?php $maxConnections = (int)($database['max_connections'] ?? 0); ?>
+                                                    <?= $maxConnections > 0 ? number_format($maxConnections) : 'Unlimited' ?>
+                                                </td>
+                                                <td>
+                                                    <details class="fbg-admin-row-menu">
+                                                        <summary aria-label="Database actions">
+                                                            <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
+                                                        </summary>
+                                                        <div class="fbg-admin-row-menu-dropdown">
+                                                            <form method="POST">
+                                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                                <input type="hidden" name="action" value="reset_database_password">
+                                                                <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                                                                <input type="hidden" name="database_id" value="<?= (int)$database['id'] ?>">
+                                                                <button type="submit">
+                                                                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                                                                    Reset Password
+                                                                </button>
+                                                            </form>
+
+                                                            <form method="POST" onsubmit="return confirm('Delete database <?= htmlspecialchars((string)$database['database'], ENT_QUOTES, 'UTF-8') ?>? This cannot be undone.');">
+                                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                                <input type="hidden" name="action" value="delete_database">
+                                                                <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                                                                <input type="hidden" name="database_id" value="<?= (int)$database['id'] ?>">
+                                                                <button type="submit" class="danger">
+                                                                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                                                                    Delete Database
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </details>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <form method="POST" class="fbg-admin-server-detail-list">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="create_database">
+                            <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+
+                            <h3>Create New Database</h3>
+
+                            <?php
+                            $serverDatabaseLimit = $editingServer['database_limit'] !== null ? (int)$editingServer['database_limit'] : null;
+                            $serverDatabaseCount = count($serverDatabases);
+                            $databaseLimitReached = $serverDatabaseLimit !== null && $serverDatabaseCount >= $serverDatabaseLimit;
+                            $hasAvailableDatabaseHost = false;
+                            foreach ($databaseHosts as $databaseHostCheck) {
+                                $maxDatabasesCheck = $databaseHostCheck['max_databases'] !== null ? (int)$databaseHostCheck['max_databases'] : null;
+                                $databaseCountCheck = (int)($databaseHostCheck['database_count'] ?? 0);
+                                if ($maxDatabasesCheck === null || $databaseCountCheck < $maxDatabasesCheck) {
+                                    $hasAvailableDatabaseHost = true;
+                                    break;
+                                }
+                            }
+                            $canCreateDatabase = !$databaseLimitReached && $hasAvailableDatabaseHost;
+                            ?>
+
+                            <?php if ($databaseLimitReached): ?>
+                                <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                                    This server is at its database limit. Increase the Database Limit on the Build Configuration tab before creating another database.
+                                </div>
+                            <?php elseif (!$hasAvailableDatabaseHost): ?>
+                                <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                                    No database hosts are currently available.
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-database-host">Database Host</label>
+                                <select id="server-database-host" name="database_host_id" required>
+                                    <?php foreach ($databaseHosts as $databaseHost): ?>
+                                        <?php
+                                        $maxDatabases = $databaseHost['max_databases'] !== null ? (int)$databaseHost['max_databases'] : null;
+                                        $databaseCount = (int)($databaseHost['database_count'] ?? 0);
+                                        $hostFull = $maxDatabases !== null && $databaseCount >= $maxDatabases;
+                                        ?>
+                                        <option value="<?= (int)$databaseHost['id'] ?>" <?= $hostFull ? 'disabled' : '' ?>>
+                                            <?= htmlspecialchars(fbgAdminServersDatabaseHostLabel($databaseHost), ENT_QUOTES, 'UTF-8') ?><?= $hostFull ? ' (Full)' : '' ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="fbg-admin-help-text">Select the database server this database should be created on.</p>
+                            </div>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-database-name">Database</label>
+                                <div style="display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px;">
+                                    <input type="text" value="s<?= (int)$editingServer['id'] ?>_" readonly aria-label="Database prefix">
+                                    <input id="server-database-name" name="database_name" type="text" required placeholder="database" maxlength="<?= max(1, 48 - strlen('s' . (int)$editingServer['id'] . '_')) ?>">
+                                </div>
+                            </div>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-database-remote">Connections</label>
+                                <input id="server-database-remote" name="remote" type="text" value="%" required>
+                                <p class="fbg-admin-help-text">IP address pattern connections are allowed from. Use <code>%</code> to allow any host.</p>
+                            </div>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-database-max-connections">Concurrent Connections</label>
+                                <input id="server-database-max-connections" type="text" value="Unlimited" disabled>
+                                <p class="fbg-admin-help-text">The Application API creates databases with unlimited concurrent connections. Custom limits can be added later with a dedicated database helper.</p>
+                            </div>
+
+                            <p class="fbg-admin-help-text">A username and password will be randomly generated after form submission.</p>
+
+                            <div class="fbg-admin-form-actions">
+                                <button type="submit" class="btn" <?= $canCreateDatabase ? '' : 'disabled' ?>>Create Database</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
                         <p><?= htmlspecialchars($tabs[$tabKey], ENT_QUOTES, 'UTF-8') ?> controls will be added in the next Admin Server Administration pass.</p>

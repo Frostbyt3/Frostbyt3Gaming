@@ -135,13 +135,13 @@
 
 ### Admin Server Database Tab
 
-- [ ] Display active databases for the server.
-- [ ] Add create database form.
-- [ ] Add database host selector.
-- [ ] Add database name field.
-- [ ] Add connections-from field.
-- [ ] Add concurrent connections field.
-- [ ] Add database deletion/reset actions if supported.
+- [x] Display active databases for the server.
+- [x] Add create database form.
+- [x] Add database host selector.
+- [x] Add database name field.
+- [x] Add connections-from field.
+- [x] Add concurrent connections field.
+- [x] Add database deletion/reset actions if supported.
 
 ### Admin Server Mounts Tab
 

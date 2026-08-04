@@ -177,6 +177,14 @@ if (
     $availableTabs['files'] = ['label' => 'Files', 'icon' => 'fas fa-folder-open'];
 }
 
+$databaseLimit = (int)($selectedServer['feature_databases'] ?? 0);
+if (
+    $databaseLimit > 0 &&
+    $hasServerPermission('database.read')
+) {
+    $availableTabs['databases'] = ['label' => 'Databases', 'icon' => 'fas fa-database'];
+}
+
 if ($hasServerPermission('schedule.read')) {
     $availableTabs['schedules'] = ['label' => 'Schedules', 'icon' => 'fas fa-clock'];
 }
