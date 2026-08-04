@@ -111,7 +111,7 @@ $canViewDatabasePassword = $hasServerPermission('database.view_password');
 
             <div class="fbg-database-detail-fields">
                 <div class="fbg-form-group">
-                    <label class="fbg-meta-label" for="database_detail_endpoint">Endpoint</label>
+                    <label class="fbg-meta-label" for="database_detail_endpoint">Database Host</label>
                     <input id="database_detail_endpoint" class="fbg-files-text-input" type="text" readonly>
                 </div>
 

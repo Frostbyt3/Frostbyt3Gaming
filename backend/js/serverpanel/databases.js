@@ -179,7 +179,7 @@
                 <div class="fbg-database-row-meta">
                     <div>
                         <strong>${escapeHtml(endpoint || 'Unavailable')}</strong>
-                        <span>Endpoint</span>
+                        <span>Database Host</span>
                     </div>
                     <div>
                         <strong>${escapeHtml(attr.connections_from || '%')}</strong>
