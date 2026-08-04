@@ -145,10 +145,22 @@ Do not commit API keys, SMTP credentials, database credentials, generated downlo
 The live folder is deployed directly from the working tree. After testing a change:
 
 ```powershell
-git status
-git add <files>
-git commit -m "Describe the change"
-git push origin main
+git -C "<directory>" status
+git -C "<directory"> add . or git -C "<directory>" <files> for specific files
+git -C "<directory>" commit -m "Describe the change"
+git -c "<directory>" push origin main
+```
+
+Some other useful git commands:
+
+See commit history
+```powershell
+git -C "<directory"> log --oneline --graph --decorate -50
+```
+
+See exactly what changed before committing
+```powershell
+git -C "<directory>" diff
 ```
 
 The GitHub remote is:
