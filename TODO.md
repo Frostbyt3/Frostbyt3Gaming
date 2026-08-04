@@ -105,22 +105,22 @@
 
 ### Admin Server Build Configuration Tab
 
-- [ ] Add Resource Management controls.
-- [ ] Add CPU limit field.
-- [ ] Add CPU pinning field.
-- [ ] Add allocated memory field.
-- [ ] Add allocated swap field.
-- [ ] Add disk space limit field.
-- [ ] Add block IO weight field.
-- [ ] Add OOM killer toggle.
-- [ ] Add Application Feature Limits controls.
-- [ ] Add database limit field.
-- [ ] Add allocation/port limit field.
-- [ ] Add backup limit field.
-- [ ] Add Allocation Management controls.
-- [ ] Add default game port selector.
-- [ ] Add assign additional ports selector.
-- [ ] Add remove additional ports selector.
+- [x] Add Resource Management controls.
+- [x] Add CPU limit field.
+- [x] Add CPU pinning field.
+- [x] Add allocated memory field.
+- [x] Add allocated swap field.
+- [x] Add disk space limit field.
+- [x] Add block IO weight field.
+- [x] Add OOM killer toggle.
+- [x] Add Application Feature Limits controls.
+- [x] Add database limit field.
+- [x] Add allocation/port limit field.
+- [x] Add backup limit field.
+- [x] Add Allocation Management controls.
+- [x] Add default game port selector.
+- [x] Add assign additional ports selector.
+- [x] Add remove additional ports selector.
 
 ### Admin Server Startup Tab
 

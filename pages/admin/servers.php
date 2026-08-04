@@ -114,6 +114,24 @@ function fbgAdminServersOwnerIdFromInput(string $value): int
     return 0;
 }
 
+function fbgAdminServersAllocationLabel(array $allocation): string
+{
+    $host = trim((string)($allocation['ip_alias'] ?? ''));
+    if ($host === '') {
+        $host = trim((string)($allocation['ip'] ?? ''));
+    }
+
+    $port = trim((string)($allocation['port'] ?? ''));
+    $label = $host !== '' && $port !== '' ? $host . ':' . $port : 'Allocation #' . (int)($allocation['id'] ?? 0);
+    $notes = trim((string)($allocation['notes'] ?? ''));
+
+    if ($notes !== '') {
+        $label .= ' - ' . $notes;
+    }
+
+    return $label;
+}
+
 function fbgAdminServersFormatMb(mixed $value): string
 {
     $megabytes = (int)$value;
@@ -331,6 +349,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Server details updated successfully.', 'success', $serverId);
     }
 
+    if ($action === 'update_build') {
+        $allocationId = max(0, (int)($_POST['allocation_id'] ?? 0));
+        $memory = max(0, (int)($_POST['memory'] ?? 0));
+        $swap = max(-1, (int)($_POST['swap'] ?? 0));
+        $disk = max(0, (int)($_POST['disk'] ?? 0));
+        $io = (int)($_POST['io'] ?? 500);
+        $cpu = max(0, (int)($_POST['cpu'] ?? 0));
+        $threads = trim((string)($_POST['threads'] ?? ''));
+        $oomDisabled = isset($_POST['oom_disabled']);
+        $databaseLimit = max(0, (int)($_POST['database_limit'] ?? 0));
+        $allocationLimit = max(0, (int)($_POST['allocation_limit'] ?? 0));
+        $backupLimit = max(0, (int)($_POST['backup_limit'] ?? 0));
+        $addAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['add_allocations'] ?? [])))));
+        $removeAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['remove_allocations'] ?? [])))));
+
+        if ($allocationId <= 0) {
+            fbgAdminServersRedirect('Select a valid default game port.', 'error', $serverId, 'build');
+        }
+
+        if ($io < 10 || $io > 1000) {
+            fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', $serverId, 'build');
+        }
+
+        if (in_array($allocationId, $removeAllocations, true)) {
+            fbgAdminServersRedirect('The default game port cannot also be removed.', 'error', $serverId, 'build');
+        }
+
+        if (in_array($allocationId, $addAllocations, true)) {
+            fbgAdminServersRedirect('The default game port does not need to be assigned as an additional port.', 'error', $serverId, 'build');
+        }
+
+        $allocationStmt = fbgPteroDb()->prepare('
+            SELECT id, server_id
+            FROM allocations
+            WHERE id = :id
+              AND node_id = :node_id
+              AND server_id = :server_id
+            LIMIT 1
+        ');
+        $allocationStmt->execute([
+            'id' => $allocationId,
+            'node_id' => (int)$server['node_id'],
+            'server_id' => $serverId,
+        ]);
+
+        if (!$allocationStmt->fetch(PDO::FETCH_ASSOC)) {
+            fbgAdminServersRedirect('Selected default game port is not assigned to this server.', 'error', $serverId, 'build');
+        }
+
+        if (!empty($addAllocations)) {
+            $placeholders = implode(',', array_fill(0, count($addAllocations), '?'));
+            $addStmt = fbgPteroDb()->prepare("
+                SELECT id
+                FROM allocations
+                WHERE id IN ({$placeholders})
+                  AND node_id = ?
+                  AND server_id IS NULL
+            ");
+            $addStmt->execute([...$addAllocations, (int)$server['node_id']]);
+            $validAddIds = array_map('intval', $addStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+            if (count($validAddIds) !== count($addAllocations)) {
+                fbgAdminServersRedirect('One or more selected ports are no longer available to assign.', 'error', $serverId, 'build');
+            }
+        }
+
+        if (!empty($removeAllocations)) {
+            $placeholders = implode(',', array_fill(0, count($removeAllocations), '?'));
+            $removeStmt = fbgPteroDb()->prepare("
+                SELECT id
+                FROM allocations
+                WHERE id IN ({$placeholders})
+                  AND server_id = ?
+            ");
+            $removeStmt->execute([...$removeAllocations, $serverId]);
+            $validRemoveIds = array_map('intval', $removeStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+            if (count($validRemoveIds) !== count($removeAllocations)) {
+                fbgAdminServersRedirect('One or more selected ports are not assigned to this server.', 'error', $serverId, 'build');
+            }
+        }
+
+        $buildPayload = [
+            'allocation' => $allocationId,
+            'memory' => $memory,
+            'swap' => $swap,
+            'disk' => $disk,
+            'io' => $io,
+            'cpu' => $cpu,
+            'threads' => $threads !== '' ? $threads : null,
+            'oom_disabled' => $oomDisabled,
+            'feature_limits' => [
+                'databases' => $databaseLimit,
+                'allocations' => $allocationLimit,
+                'backups' => $backupLimit,
+            ],
+        ];
+
+        if (!empty($addAllocations)) {
+            $buildPayload['add_allocations'] = $addAllocations;
+        }
+
+        if (!empty($removeAllocations)) {
+            $buildPayload['remove_allocations'] = $removeAllocations;
+        }
+
+        $result = pteroRequest('PATCH', "servers/{$serverId}/build", $buildPayload);
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect((string)($result['error'] ?? 'Server build configuration could not be updated.'), 'error', $serverId, 'build');
+        }
+
+        fbgAdminServersRedirect('Server build configuration updated successfully.', 'success', $serverId, 'build');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
@@ -344,6 +476,9 @@ if (!in_array($activeServerTab, ['about', 'details', 'build', 'startup', 'databa
 
 $ownerOptions = [];
 $planOptionsByCategory = [];
+$defaultAllocationOptions = [];
+$availableAllocationOptions = [];
+$assignedAllocationOptions = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -372,6 +507,29 @@ if ($editingServer) {
 
         $planOptionsByCategory[$categoryTitle][] = $planOption;
     }
+
+    $availableAllocationStmt = fbgPteroDb()->prepare('
+        SELECT id, ip, ip_alias, port, server_id, notes
+        FROM allocations
+        WHERE node_id = :node_id
+          AND server_id IS NULL
+        ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
+    ');
+    $availableAllocationStmt->execute(['node_id' => (int)$editingServer['node_id']]);
+    $availableAllocationOptions = $availableAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $assignedAllocationStmt = fbgPteroDb()->prepare('
+        SELECT id, ip, ip_alias, port, server_id, notes
+        FROM allocations
+        WHERE server_id = :server_id
+        ORDER BY CASE WHEN id = :allocation_id THEN 0 ELSE 1 END, COALESCE(ip_alias, ip) ASC, port ASC
+    ');
+    $assignedAllocationStmt->execute([
+        'server_id' => (int)$editingServer['id'],
+        'allocation_id' => (int)$editingServer['allocation_id'],
+    ]);
+    $assignedAllocationOptions = $assignedAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $defaultAllocationOptions = $assignedAllocationOptions;
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -891,7 +1049,137 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </form>
             </section>
 
-            <?php foreach (array_diff(array_keys($tabs), ['about', 'details']) as $tabKey): ?>
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'build' ? ' is-active' : '' ?>" data-admin-server-panel="build" <?= $activeServerTab === 'build' ? '' : 'hidden' ?>>
+                <form method="POST" class="fbg-admin-form">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="action" value="update_build">
+                    <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+
+                    <div class="fbg-admin-server-about-grid">
+                        <div class="fbg-admin-server-detail-list">
+                            <h3>Resource Management</h3>
+                            <div class="fbg-admin-form-grid">
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-cpu">CPU Limit (%)</label>
+                                    <input id="server-build-cpu" name="cpu" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['cpu'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">Set to 0 for unlimited CPU time.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-threads">CPU Pinning</label>
+                                    <input id="server-build-threads" name="threads" type="text" value="<?= htmlspecialchars((string)($editingServer['threads'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="0-3,8">
+                                    <p class="fbg-admin-help-text"><string>Advanced</strong>: Enter the specific CPU cores that this process can run on, or leave blank to allow all cores. This can be a single number, or a comma seperated list. Example: 0, 0-1,3, or 0,1,3,4.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-memory">Allocated Memory (MiB)</label>
+                                    <input id="server-build-memory" name="memory" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['memory'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">Set to 0 for unlimited memory.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-swap">Allocated Swap (MiB)</label>
+                                    <input id="server-build-swap" name="swap" type="number" min="-1" required value="<?= htmlspecialchars((string)($editingServer['swap'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">0 disables swap. -1 allows unlimited swap.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-disk">Disk Space Limit (MiB)</label>
+                                    <input id="server-build-disk" name="disk" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['disk'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">Set to 0 for unlimited disk usage.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-io">Block IO Weight</label>
+                                    <input id="server-build-io" name="io" type="number" min="10" max="1000" required value="<?= htmlspecialchars((string)($editingServer['io'] ?? 500), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text"><strong>Advanced</strong>: The IO performance of this server relative to other running containers on the system. Value should be between 10 and 1000.</p>
+                                </div>
+
+                                <div class="fbg-admin-field fbg-admin-field-full">
+                                    <label>
+                                        <input type="checkbox" name="oom_disabled" value="1" <?= (int)($editingServer['oom_disabled'] ?? 0) === 1 ? 'checked' : '' ?>>
+                                        Disable OOM Killer
+                                    </label>
+                                    <p class="fbg-admin-help-text">When enabled, the server process is less likely to be killed automatically if it exceeds memory limits.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fbg-admin-server-detail-list">
+                            <h3>Application Feature Limits</h3>
+                            <div class="fbg-admin-form-grid">
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-database-limit">Database Limit</label>
+                                    <input id="server-build-database-limit" name="database_limit" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['database_limit'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">The total number of databases a user is allowed to create for this server.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-allocation-limit">Port Limit</label>
+                                    <input id="server-build-allocation-limit" name="allocation_limit" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['allocation_limit'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">The total number of allocations a user is allowed to create for this server.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-build-backup-limit">Backup Limit</label>
+                                    <input id="server-build-backup-limit" name="backup_limit" type="number" min="0" required value="<?= htmlspecialchars((string)($editingServer['backup_limit'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="fbg-admin-help-text">The total number of backups that can be created for this server.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                        <h3>Allocation Management</h3>
+                        <div class="fbg-admin-form-grid">
+                            <div class="fbg-admin-field fbg-admin-field-full">
+                                <label for="server-build-allocation-id">Game Port</label>
+                                <select id="server-build-allocation-id" name="allocation_id" required>
+                                    <?php foreach ($defaultAllocationOptions as $allocationOption): ?>
+                                        <option value="<?= (int)$allocationOption['id'] ?>" <?= (int)$editingServer['allocation_id'] === (int)$allocationOption['id'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars(fbgAdminServersAllocationLabel($allocationOption), ENT_QUOTES, 'UTF-8') ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="fbg-admin-help-text">Select the main connection from ports already assigned to this server.</p>
+                            </div>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-build-add-allocations">Assign Additional Ports</label>
+                                <select id="server-build-add-allocations" name="add_allocations[]" multiple size="8">
+                                    <?php foreach ($availableAllocationOptions as $allocationOption): ?>
+                                        <?php if ((int)$allocationOption['id'] === (int)$editingServer['allocation_id']) continue; ?>
+                                        <option value="<?= (int)$allocationOption['id'] ?>">
+                                            <?= htmlspecialchars(fbgAdminServersAllocationLabel($allocationOption), ENT_QUOTES, 'UTF-8') ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="fbg-admin-help-text">Hold Ctrl to select more than one available port.</p>
+                            </div>
+
+                            <div class="fbg-admin-field">
+                                <label for="server-build-remove-allocations">Remove Additional Ports</label>
+                                <select id="server-build-remove-allocations" name="remove_allocations[]" multiple size="8">
+                                    <?php foreach ($assignedAllocationOptions as $allocationOption): ?>
+                                        <?php if ((int)$allocationOption['id'] === (int)$editingServer['allocation_id']) continue; ?>
+                                        <option value="<?= (int)$allocationOption['id'] ?>">
+                                            <?= htmlspecialchars(fbgAdminServersAllocationLabel($allocationOption), ENT_QUOTES, 'UTF-8') ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="fbg-admin-help-text">Shows ports currently assigned to this server. The current default game port cannot be removed here.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="fbg-admin-form-actions">
+                        <button type="submit" class="btn">Update Build Configuration</button>
+                        <a class="btn fbg-neutral-button" href="./page.php?name=admin-servers&edit=<?= (int)$editingServer['id'] ?>&tab=build">Cancel</a>
+                    </div>
+                </form>
+            </section>
+
+            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
                         <p><?= htmlspecialchars($tabs[$tabKey], ENT_QUOTES, 'UTF-8') ?> controls will be added in the next Admin Server Administration pass.</p>
