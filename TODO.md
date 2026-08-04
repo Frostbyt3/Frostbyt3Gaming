@@ -124,14 +124,14 @@
 
 ### Admin Server Startup Tab
 
-- [ ] Add startup command modification.
-- [ ] Add Service Configuration controls for nest and egg.
-- [ ] Add skip egg install script toggle.
-- [ ] Add warning copy for destructive nest/egg changes.
-- [ ] Add Docker image configuration.
-- [ ] Display startup variable options similar to the frontend server panel startup tab.
-- [ ] Allow startup variable editing where supported.
-- [ ] Handle nest/egg changes through Pterodactyl-safe update/reinstall flow.
+- [x] Add startup command modification.
+- [x] Add Service Configuration controls for nest and egg.
+- [x] Add skip egg install script toggle.
+- [x] Add warning copy for destructive nest/egg changes.
+- [x] Add Docker image configuration.
+- [x] Display startup variable options similar to the frontend server panel startup tab.
+- [x] Allow startup variable editing where supported.
+- [x] Handle nest/egg changes through Pterodactyl-safe update/reinstall flow.
 
 ### Admin Server Database Tab
 

@@ -132,6 +132,34 @@ function fbgAdminServersAllocationLabel(array $allocation): string
     return $label;
 }
 
+function fbgAdminServersDockerImagesMap(mixed $value): array
+{
+    $raw = trim((string)$value);
+
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    $images = [];
+
+    if (is_array($decoded)) {
+        foreach ($decoded as $label => $image) {
+            if (!is_string($image) || trim($image) === '') {
+                continue;
+            }
+
+            $image = trim($image);
+            $label = is_string($label) && trim($label) !== '' ? trim($label) : $image;
+            $images[$image] = $label;
+        }
+
+        return $images;
+    }
+
+    return [$raw => $raw];
+}
+
 function fbgAdminServersFormatMb(mixed $value): string
 {
     $megabytes = (int)$value;
@@ -253,6 +281,9 @@ function fbgAdminServersFind(int $serverId): ?array
                 LIMIT 1
             ) AS node_allocation_alias,
             e.name AS egg_name,
+            e.startup AS egg_startup,
+            e.docker_images AS egg_docker_images,
+            ns.name AS nest_name,
             u.username AS owner_username,
             u.name_first AS owner_first_name,
             u.name_last AS owner_last_name,
@@ -265,6 +296,7 @@ function fbgAdminServersFind(int $serverId): ?array
         FROM servers s
         LEFT JOIN nodes n ON n.id = s.node_id
         LEFT JOIN eggs e ON e.id = s.egg_id
+        LEFT JOIN nests ns ON ns.id = s.nest_id
         LEFT JOIN users u ON u.id = s.owner_id
         LEFT JOIN allocations a ON a.id = s.allocation_id
         LEFT JOIN games g ON g.id = s.product_id
@@ -463,6 +495,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Server build configuration updated successfully.', 'success', $serverId, 'build');
     }
 
+    if ($action === 'update_startup') {
+        $startupCommand = trim((string)($_POST['startup'] ?? ''));
+        $nestId = max(0, (int)($_POST['nest_id'] ?? 0));
+        $eggId = max(0, (int)($_POST['egg_id'] ?? 0));
+        $dockerImageSelect = trim((string)($_POST['docker_image'] ?? ''));
+        $dockerImageCustom = trim((string)($_POST['docker_image_custom'] ?? ''));
+        $dockerImage = $dockerImageCustom !== '' ? $dockerImageCustom : $dockerImageSelect;
+        $skipScripts = isset($_POST['skip_scripts']);
+
+        if ($startupCommand === '') {
+            fbgAdminServersRedirect('Startup command is required.', 'error', $serverId, 'startup');
+        }
+
+        if ($nestId <= 0 || $eggId <= 0) {
+            fbgAdminServersRedirect('Select a valid nest and egg.', 'error', $serverId, 'startup');
+        }
+
+        $eggStmt = fbgPteroDb()->prepare('
+            SELECT id, nest_id, name, startup, docker_images
+            FROM eggs
+            WHERE id = :egg_id
+              AND nest_id = :nest_id
+            LIMIT 1
+        ');
+        $eggStmt->execute([
+            'egg_id' => $eggId,
+            'nest_id' => $nestId,
+        ]);
+        $egg = $eggStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$egg) {
+            fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', $serverId, 'startup');
+        }
+
+        if ($dockerImage === '') {
+            $dockerImages = fbgAdminServersDockerImagesMap($egg['docker_images'] ?? '');
+            $dockerImage = (string)array_key_first($dockerImages);
+        }
+
+        if ($dockerImage === '') {
+            fbgAdminServersRedirect('Docker image is required.', 'error', $serverId, 'startup');
+        }
+
+        $variablesStmt = fbgPteroDb()->prepare('
+            SELECT env_variable, default_value
+            FROM egg_variables
+            WHERE egg_id = :egg_id
+            ORDER BY name ASC
+        ');
+        $variablesStmt->execute(['egg_id' => $eggId]);
+        $postedEnvironment = is_array($_POST['environment'] ?? null) ? $_POST['environment'] : [];
+        $environment = [];
+
+        foreach (($variablesStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+            $key = trim((string)($variable['env_variable'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+
+            $environment[$key] = array_key_exists($key, $postedEnvironment)
+                ? (string)$postedEnvironment[$key]
+                : (string)($variable['default_value'] ?? '');
+        }
+
+        $result = pteroRequest('PATCH', "servers/{$serverId}/startup", [
+            'startup' => $startupCommand,
+            'environment' => $environment,
+            'egg' => $eggId,
+            'image' => $dockerImage,
+            'skip_scripts' => $skipScripts,
+        ]);
+
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect((string)($result['error'] ?? 'Server startup configuration could not be updated.'), 'error', $serverId, 'startup');
+        }
+
+        fbgAdminServersRedirect('Server startup configuration updated successfully.', 'success', $serverId, 'startup');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
@@ -479,6 +590,9 @@ $planOptionsByCategory = [];
 $defaultAllocationOptions = [];
 $availableAllocationOptions = [];
 $assignedAllocationOptions = [];
+$nestOptions = [];
+$eggOptions = [];
+$startupEggData = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -530,6 +644,80 @@ if ($editingServer) {
     ]);
     $assignedAllocationOptions = $assignedAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     $defaultAllocationOptions = $assignedAllocationOptions;
+
+    $nestStmt = fbgPteroDb()->query('
+        SELECT id, name
+        FROM nests
+        ORDER BY name ASC
+    ');
+    $nestOptions = $nestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $serverVariableStmt = fbgPteroDb()->prepare('
+        SELECT variable_id, variable_value
+        FROM server_variables
+        WHERE server_id = :server_id
+    ');
+    $serverVariableStmt->execute(['server_id' => (int)$editingServer['id']]);
+    $serverVariableValues = [];
+    foreach (($serverVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $serverVariable) {
+        $serverVariableValues[(int)$serverVariable['variable_id']] = (string)($serverVariable['variable_value'] ?? '');
+    }
+
+    $eggStmt = fbgPteroDb()->query('
+        SELECT
+            e.id,
+            e.nest_id,
+            e.name,
+            e.startup,
+            e.docker_images,
+            n.name AS nest_name
+        FROM eggs e
+        LEFT JOIN nests n ON n.id = e.nest_id
+        ORDER BY n.name ASC, e.name ASC
+    ');
+
+    foreach (($eggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
+        $eggId = (int)$eggOption['id'];
+        $eggOptions[] = $eggOption;
+        $startupEggData[$eggId] = [
+            'id' => $eggId,
+            'nest_id' => (int)$eggOption['nest_id'],
+            'name' => (string)($eggOption['name'] ?? ''),
+            'startup' => (string)($eggOption['startup'] ?? ''),
+            'docker_images' => fbgAdminServersDockerImagesMap($eggOption['docker_images'] ?? ''),
+            'variables' => [],
+        ];
+    }
+
+    $eggVariableStmt = fbgPteroDb()->query('
+        SELECT id, egg_id, name, description, env_variable, default_value, user_viewable, user_editable, rules
+        FROM egg_variables
+        ORDER BY name ASC
+    ');
+
+    foreach (($eggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+        $eggId = (int)($variable['egg_id'] ?? 0);
+        if (!isset($startupEggData[$eggId])) {
+            continue;
+        }
+
+        $variableId = (int)$variable['id'];
+        $value = (int)$editingServer['egg_id'] === $eggId && array_key_exists($variableId, $serverVariableValues)
+            ? $serverVariableValues[$variableId]
+            : (string)($variable['default_value'] ?? '');
+
+        $startupEggData[$eggId]['variables'][] = [
+            'id' => $variableId,
+            'name' => (string)($variable['name'] ?? ''),
+            'description' => (string)($variable['description'] ?? ''),
+            'env_variable' => (string)($variable['env_variable'] ?? ''),
+            'default_value' => (string)($variable['default_value'] ?? ''),
+            'value' => $value,
+            'user_viewable' => (int)($variable['user_viewable'] ?? 0) === 1,
+            'user_editable' => (int)($variable['user_editable'] ?? 0) === 1,
+            'rules' => (string)($variable['rules'] ?? ''),
+        ];
+    }
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -1179,7 +1367,95 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </form>
             </section>
 
-            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build']) as $tabKey): ?>
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'startup' ? ' is-active' : '' ?>" data-admin-server-panel="startup" <?= $activeServerTab === 'startup' ? '' : 'hidden' ?>>
+                <form method="POST" class="fbg-admin-form" id="admin-server-startup-form">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="action" value="update_startup">
+                    <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+
+                    <div class="fbg-admin-server-detail-list">
+                        <h3>Startup Command Modification</h3>
+                        <div class="fbg-admin-field">
+                            <label for="server-startup-command">Startup Command</label>
+                            <input id="server-startup-command" name="startup" type="text" required value="<?= htmlspecialchars((string)($editingServer['startup'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-last-default="<?= htmlspecialchars((string)($editingServer['egg_startup'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                            <p class="fbg-admin-help-text">Edit this server's startup command. Common variables include <code>{{SERVER_MEMORY}}</code>, <code>{{SERVER_IP}}</code>, and <code>{{SERVER_PORT}}</code>.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="server-startup-default-command">Default Service Start Command</label>
+                            <input id="server-startup-default-command" type="text" value="<?= htmlspecialchars((string)($editingServer['egg_startup'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" readonly>
+                        </div>
+                    </div>
+
+                    <div class="fbg-admin-server-about-grid" style="margin-top: 16px;">
+                        <div>
+                            <div class="fbg-admin-server-detail-list">
+                                <h3>Service Configuration</h3>
+                                <p class="fbg-admin-help-text" style="color: #ff7777;">Changing the nest or egg can trigger a reinstall workflow and may overwrite server files. Use Skip Egg Install Script only when you know the service scripts should not run.</p>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-startup-nest">Nest</label>
+                                    <select id="server-startup-nest" name="nest_id" required>
+                                        <?php foreach ($nestOptions as $nestOption): ?>
+                                            <option value="<?= (int)$nestOption['id'] ?>" <?= (int)$editingServer['nest_id'] === (int)$nestOption['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars((string)$nestOption['name'], ENT_QUOTES, 'UTF-8') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="fbg-admin-help-text">Select the Nest this server will be grouped into.</p>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-startup-egg">Egg</label>
+                                    <select id="server-startup-egg" name="egg_id" required>
+                                        <?php foreach ($eggOptions as $eggOption): ?>
+                                            <option value="<?= (int)$eggOption['id'] ?>" data-nest-id="<?= (int)$eggOption['nest_id'] ?>" <?= (int)$editingServer['egg_id'] === (int)$eggOption['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars((string)($eggOption['name'] ?? 'Unknown Egg'), ENT_QUOTES, 'UTF-8') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="fbg-admin-help-text">Select the Egg that provides startup variables and processing data.</p>
+                                </div>
+
+                                <label style="display: flex; gap: 10px; align-items: center; margin-top: 18px;">
+                                    <input type="checkbox" name="skip_scripts" value="1">
+                                    <span>Skip Egg Install Script</span>
+                                </label>
+                                <p class="fbg-admin-help-text">If selected, the install script attached to the egg will not run.</p>
+                            </div>
+
+                            <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                                <h3>Docker Image Configuration</h3>
+                                <div class="fbg-admin-field">
+                                    <label for="server-startup-docker-image">Image</label>
+                                    <select id="server-startup-docker-image" name="docker_image"></select>
+                                </div>
+
+                                <div class="fbg-admin-field">
+                                    <label for="server-startup-docker-custom">Custom Image</label>
+                                    <input id="server-startup-docker-custom" name="docker_image_custom" type="text" value="">
+                                    <p class="fbg-admin-help-text">Leave blank to use the selected Docker image above.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div id="admin-server-startup-variables"></div>
+                        </div>
+                    </div>
+
+                    <script type="application/json" id="admin-server-startup-egg-data">
+                        <?= json_encode($startupEggData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                    </script>
+
+                    <div class="fbg-admin-form-actions">
+                        <button type="submit" class="btn">Save Startup Configuration</button>
+                        <a class="btn fbg-neutral-button" href="./page.php?name=admin-servers&edit=<?= (int)$editingServer['id'] ?>&tab=startup">Cancel</a>
+                    </div>
+                </form>
+            </section>
+
+            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
                         <p><?= htmlspecialchars($tabs[$tabKey], ENT_QUOTES, 'UTF-8') ?> controls will be added in the next Admin Server Administration pass.</p>
@@ -1202,6 +1478,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const ownerInput = document.getElementById('server-detail-owner');
     const ownerDatalist = document.getElementById('admin-server-owner-options');
     const ownerSource = document.getElementById('admin-server-owner-source');
+    const startupEggSource = document.getElementById('admin-server-startup-egg-data');
+    const startupNestSelect = document.getElementById('server-startup-nest');
+    const startupEggSelect = document.getElementById('server-startup-egg');
+    const startupCommandInput = document.getElementById('server-startup-command');
+    const startupDefaultInput = document.getElementById('server-startup-default-command');
+    const startupDockerSelect = document.getElementById('server-startup-docker-image');
+    const startupDockerCustom = document.getElementById('server-startup-docker-custom');
+    const startupVariablesWrap = document.getElementById('admin-server-startup-variables');
 
     tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
@@ -1247,6 +1531,164 @@ document.addEventListener('DOMContentLoaded', () => {
                     ownerDatalist.appendChild(option);
                 });
         });
+    }
+
+    if (startupEggSource && startupNestSelect && startupEggSelect && startupVariablesWrap) {
+        let eggData = {};
+
+        try {
+            eggData = JSON.parse(startupEggSource.textContent || '{}');
+        } catch (error) {
+            eggData = {};
+        }
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const isBooleanVariable = (variable) => {
+            const rules = String(variable.rules || '').toLowerCase();
+            return rules.includes('boolean') || rules.includes('bool');
+        };
+
+        const isCheckedValue = (value) => ['1', 'true', 'yes', 'on'].includes(String(value ?? '').toLowerCase());
+
+        const renderStartupVariables = (egg) => {
+            const variables = Array.isArray(egg?.variables) ? egg.variables : [];
+
+            if (!variables.length) {
+                startupVariablesWrap.innerHTML = `
+                    <div class="fbg-admin-server-detail-list">
+                        <h3>Startup Parameters</h3>
+                        <div class="fbg-admin-empty-state">
+                            <p>No startup variables are configured for this egg.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            startupVariablesWrap.innerHTML = `
+                <div class="fbg-admin-server-detail-list">
+                    <h3>Startup Parameters</h3>
+                    ${variables.map((variable) => {
+                        const key = String(variable.env_variable || '');
+                        const name = String(variable.name || key || 'Startup Variable');
+                        const value = String(variable.value ?? variable.default_value ?? '');
+                        const description = String(variable.description || '');
+                        const rules = String(variable.rules || '');
+                        const inputName = `environment[${escapeHtml(key)}]`;
+
+                        return `
+                            <div class="fbg-admin-field" style="margin-bottom: 18px;">
+                                <label>${escapeHtml(name)}</label>
+                                ${
+                                    isBooleanVariable(variable)
+                                        ? `
+                                            <label style="display: flex; align-items: center; gap: 10px;">
+                                                <input type="hidden" name="${inputName}" value="0">
+                                                <input type="checkbox" name="${inputName}" value="1" ${isCheckedValue(value) ? 'checked' : ''}>
+                                                <span>${isCheckedValue(value) ? 'Enabled' : 'Disabled'}</span>
+                                            </label>
+                                        `
+                                        : `<input type="text" name="${inputName}" value="${escapeHtml(value)}">`
+                                }
+                                ${description ? `<p class="fbg-admin-help-text">${escapeHtml(description)}</p>` : ''}
+                                <p class="fbg-admin-help-text">Startup Command Variable: <code>${escapeHtml(key)}</code></p>
+                                ${rules ? `<p class="fbg-admin-help-text">Input Rules: <code>${escapeHtml(rules)}</code></p>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        };
+
+        const syncEggOptions = () => {
+            const nestId = startupNestSelect.value;
+            let selectedVisible = false;
+            let firstVisible = null;
+
+            Array.from(startupEggSelect.options).forEach((option) => {
+                const visible = option.dataset.nestId === nestId;
+                option.hidden = !visible;
+                option.disabled = !visible;
+
+                if (visible && firstVisible === null) {
+                    firstVisible = option;
+                }
+
+                if (visible && option.selected) {
+                    selectedVisible = true;
+                }
+            });
+
+            if (!selectedVisible && firstVisible) {
+                firstVisible.selected = true;
+            }
+        };
+
+        const applyEggData = (replaceStartupCommand = false, preferCurrentImage = false) => {
+            const egg = eggData[startupEggSelect.value] || {};
+            const defaultStartup = String(egg.startup || '');
+
+            if (startupDefaultInput) {
+                startupDefaultInput.value = defaultStartup;
+            }
+
+            if (startupCommandInput) {
+                const previousDefault = startupCommandInput.dataset.lastDefault || '';
+                if (replaceStartupCommand || startupCommandInput.value === '' || startupCommandInput.value === previousDefault) {
+                    startupCommandInput.value = defaultStartup;
+                }
+                startupCommandInput.dataset.lastDefault = defaultStartup;
+            }
+
+            if (startupDockerSelect) {
+                const currentValue = startupDockerSelect.value;
+                startupDockerSelect.replaceChildren();
+
+                const dockerImages = egg.docker_images && typeof egg.docker_images === 'object' ? egg.docker_images : {};
+                Object.entries(dockerImages).forEach(([image, label]) => {
+                    const option = document.createElement('option');
+                    option.value = image;
+                    option.textContent = label || image;
+                    startupDockerSelect.appendChild(option);
+                });
+
+                if (currentValue && Array.from(startupDockerSelect.options).some((option) => option.value === currentValue)) {
+                    startupDockerSelect.value = currentValue;
+                }
+            }
+
+            if (startupDockerCustom && startupDockerSelect && preferCurrentImage) {
+                const hasSelectedCurrentImage = Array.from(startupDockerSelect.options).some((option) => option.value === <?= json_encode((string)($editingServer['image'] ?? '')) ?>);
+                if (hasSelectedCurrentImage) {
+                    startupDockerSelect.value = <?= json_encode((string)($editingServer['image'] ?? '')) ?>;
+                    startupDockerCustom.value = '';
+                } else if (startupDockerCustom.value === '') {
+                    startupDockerCustom.value = <?= json_encode((string)($editingServer['image'] ?? '')) ?>;
+                }
+            } else if (startupDockerCustom) {
+                startupDockerCustom.value = '';
+            }
+
+            renderStartupVariables(egg);
+        };
+
+        startupNestSelect.addEventListener('change', () => {
+            syncEggOptions();
+            applyEggData(true, false);
+        });
+
+        startupEggSelect.addEventListener('change', () => {
+            applyEggData(true, false);
+        });
+
+        syncEggOptions();
+        applyEggData(false, true);
     }
 
     modal.addEventListener('click', (event) => {
