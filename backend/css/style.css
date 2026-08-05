@@ -549,6 +549,11 @@ nav ul li a img {
     color: var(--fbg-brightblue);
 }
 
+.hero-bottom txt {
+    font-size: 0.85rem;
+    color: var(--fbg-off-white);
+}
+
 .hero-content {
     position: relative;
     max-width: 720px;
@@ -566,6 +571,12 @@ nav ul li a img {
 }
 
 .hero-content
+
+.hero-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.75);
+    margin: 1.5rem 0;
+}
 
 /* =========================
    Core - Typography

@@ -6,27 +6,29 @@ require_once __DIR__ . '/../includes/db.php';
 <section class="hero">
     <div class="hero-inner">
         <div class="hero-content">
-            <p class="hero-eyebrow">Frostbyt3 Gaming</p>
+            <p class="hero-eyebrow">Welcome to Frostbyt3 Gaming</p>
 
-            <h1>
-                Powerful Game Servers<br>
-                Built by gamers for gamers
-            </h1>
+            <h2>
+                A community built around games, friendships, hilarious moments,<br>
+                and the people we've met along the way.
+            </h2>
 
-            <p class="hero-subtext">
-                Fast servers, great experiences, and a growing universe of games - all powered by Frostbyt3 Gaming.
-            </p>
+            <hr class="hero-divider"></hr>
 
             <ul class="hero-features">
-                <li>Dedicated game server hosting</li>
+                <li>🎮 Official Game Servers</li>
+                <li>💬 Friendly Discord Community</li>
+                <li>📰 Regular Development Updates</li>
+                <li>⚙️ Custom platform built from the ground up</li>
+                <!-- <li>Dedicated game server hosting</li>
                 <li>Custom Minecraft, Rust, and more</li>
                 <li>Fast hardware and reliable uptime</li>
-                <li>Community-driven support and development</li>
+                <li>Community-driven support and development</li> -->
             </ul>
 
             <div class="hero-actions">
-                <a href="https://panel.frostbyt3gaming.com/" class="btn">Open Panel</a>
-                <a href="#servers" class="btn secondary-button">View Servers</a>
+                <a href="https://frostbyt3gaming.com/discord" class="btn">💬 Join Our Community</a>
+                <a href="./page.php?name=servers" class="btn secondary-button">🚀 Browse Servers</a>
             </div>
             
             <p class="hero-bottom">
@@ -48,7 +50,7 @@ require_once __DIR__ . '/../includes/db.php';
 <?php $servercards = fbgGetServerCards(); ?>
 
 <section id="servers" class="server-cards">
-    <div class="servers"><h2>Our Services</h2></div>
+    <div class="servers"><h2>Host Your Own Adventure</h2></div>
     <div class="cards">
 
         <?php if (empty($servercards)): ?>
