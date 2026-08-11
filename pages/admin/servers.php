@@ -28,7 +28,7 @@ $message = (string)($_SESSION['admin_servers_message'] ?? '');
 $messageType = (string)($_SESSION['admin_servers_message_type'] ?? 'success');
 unset($_SESSION['admin_servers_message'], $_SESSION['admin_servers_message_type']);
 
-function fbgAdminServersRedirect(string $message, string $type = 'success', ?int $editServerId = null, string $tab = 'details'): void
+function fbgAdminServersRedirect(string $message, string $type = 'success', ?int $editServerId = null, string $tab = 'details', bool $openCreate = false): void
 {
     $_SESSION['admin_servers_message'] = $message;
     $_SESSION['admin_servers_message_type'] = $type;
@@ -36,6 +36,8 @@ function fbgAdminServersRedirect(string $message, string $type = 'success', ?int
     $url = '/page.php?name=admin-servers';
     if ($editServerId !== null && $editServerId > 0) {
         $url .= '&edit=' . $editServerId . '&tab=' . urlencode($tab);
+    } elseif ($openCreate) {
+        $url .= '&create=1';
     }
 
     fbgRedirect($url);
@@ -183,6 +185,15 @@ function fbgAdminServersDatabaseApiError(array $result, string $fallback): strin
     return (string)($result['error'] ?? $fallback);
 }
 
+function fbgAdminServersServerApiError(array $result, string $fallback): string
+{
+    if ((int)($result['status'] ?? 0) === 403) {
+        return 'Pterodactyl denied this server action. Check that PTERO_API_KEY has the required server permissions, then try again.';
+    }
+
+    return (string)($result['error'] ?? $fallback);
+}
+
 function fbgAdminServersFormatMb(mixed $value): string
 {
     $megabytes = (int)$value;
@@ -247,6 +258,23 @@ function fbgAdminServersStatusClass(mixed $status): string
         'install_failed' => 'is-error',
         default => 'is-active',
     };
+}
+
+function fbgAdminServersBaseQuery(array $overrides = []): string
+{
+    $query = $_GET;
+    $query['name'] = 'admin-servers';
+
+    foreach ($overrides as $key => $value) {
+        if ($value === null) {
+            unset($query[$key]);
+            continue;
+        }
+
+        $query[$key] = $value;
+    }
+
+    return './page.php?' . http_build_query($query);
 }
 
 function fbgAdminServersSortUrl(string $targetSort, string $currentSort, string $currentDirection): string
@@ -342,6 +370,185 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     fbgAdminServersVerifyCsrf();
 
     $action = trim((string)($_POST['action'] ?? ''));
+
+    if ($action === 'create_server') {
+        $name = trim((string)($_POST['create_name'] ?? ''));
+        $description = trim((string)($_POST['create_description'] ?? ''));
+        $ownerInput = trim((string)($_POST['create_owner_search'] ?? ''));
+        $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
+        $nodeId = max(0, (int)($_POST['create_node_id'] ?? 0));
+        $allocationId = max(0, (int)($_POST['create_allocation_id'] ?? 0));
+        $additionalAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['create_allocation_additional'] ?? [])))));
+        $databaseLimit = max(0, (int)($_POST['create_database_limit'] ?? 0));
+        $allocationLimit = max(0, (int)($_POST['create_allocation_limit'] ?? 0));
+        $backupLimit = max(0, (int)($_POST['create_backup_limit'] ?? 0));
+        $cpu = max(0, (int)($_POST['create_cpu'] ?? 0));
+        $threads = trim((string)($_POST['create_threads'] ?? ''));
+        $memory = max(0, (int)($_POST['create_memory'] ?? 0));
+        $swap = max(-1, (int)($_POST['create_swap'] ?? 0));
+        $disk = max(0, (int)($_POST['create_disk'] ?? 0));
+        $io = (int)($_POST['create_io'] ?? 500);
+        $oomDisabled = !isset($_POST['create_enable_oom_killer']);
+        $nestId = max(0, (int)($_POST['create_nest_id'] ?? 0));
+        $eggId = max(0, (int)($_POST['create_egg_id'] ?? 0));
+        $skipScripts = isset($_POST['create_skip_scripts']);
+        $dockerImage = trim((string)($_POST['create_docker_image'] ?? ''));
+        $customImage = trim((string)($_POST['create_custom_image'] ?? ''));
+        $startup = trim((string)($_POST['create_startup'] ?? ''));
+        $startOnCompletion = isset($_POST['create_start_on_completion']);
+        $environment = $_POST['create_environment'] ?? [];
+
+        if ($name === '') {
+            fbgAdminServersRedirect('Server name is required.', 'error', null, 'details', true);
+        }
+
+        if ($ownerId <= 0) {
+            fbgAdminServersRedirect('Select a valid server owner from the owner search list.', 'error', null, 'details', true);
+        }
+
+        if ($nodeId <= 0) {
+            fbgAdminServersRedirect('Select a valid node.', 'error', null, 'details', true);
+        }
+
+        if ($allocationId <= 0) {
+            fbgAdminServersRedirect('Select a valid default port.', 'error', null, 'details', true);
+        }
+
+        if ($nestId <= 0 || $eggId <= 0) {
+            fbgAdminServersRedirect('Select a valid nest and egg.', 'error', null, 'details', true);
+        }
+
+        if ($startup === '') {
+            fbgAdminServersRedirect('Startup command is required.', 'error', null, 'details', true);
+        }
+
+        if ($io < 10 || $io > 1000) {
+            fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', null, 'details', true);
+        }
+
+        $image = $customImage !== '' ? $customImage : $dockerImage;
+        if ($image === '') {
+            fbgAdminServersRedirect('Select a docker image or provide a custom one.', 'error', null, 'details', true);
+        }
+
+        if (in_array($allocationId, $additionalAllocations, true)) {
+            fbgAdminServersRedirect('The default port does not need to be assigned again as an additional port.', 'error', null, 'details', true);
+        }
+
+        $ownerStmt = fbgPteroDb()->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
+        $ownerStmt->execute(['id' => $ownerId]);
+        if ((int)($ownerStmt->fetchColumn() ?: 0) <= 0) {
+            fbgAdminServersRedirect('Selected server owner could not be found.', 'error', null, 'details', true);
+        }
+
+        $nodeStmt = fbgPteroDb()->prepare('SELECT id FROM nodes WHERE id = :id LIMIT 1');
+        $nodeStmt->execute(['id' => $nodeId]);
+        if ((int)($nodeStmt->fetchColumn() ?: 0) <= 0) {
+            fbgAdminServersRedirect('Selected node could not be found.', 'error', null, 'details', true);
+        }
+
+        $eggStmt = fbgPteroDb()->prepare('
+            SELECT id
+            FROM eggs
+            WHERE id = :egg_id
+              AND nest_id = :nest_id
+            LIMIT 1
+        ');
+        $eggStmt->execute([
+            'egg_id' => $eggId,
+            'nest_id' => $nestId,
+        ]);
+        if ((int)($eggStmt->fetchColumn() ?: 0) <= 0) {
+            fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', null, 'details', true);
+        }
+
+        $allocationStmt = fbgPteroDb()->prepare('
+            SELECT id
+            FROM allocations
+            WHERE id = :id
+              AND node_id = :node_id
+              AND server_id IS NULL
+            LIMIT 1
+        ');
+        $allocationStmt->execute([
+            'id' => $allocationId,
+            'node_id' => $nodeId,
+        ]);
+        if ((int)($allocationStmt->fetchColumn() ?: 0) <= 0) {
+            fbgAdminServersRedirect('Selected default port is not available on the chosen node.', 'error', null, 'details', true);
+        }
+
+        if (!empty($additionalAllocations)) {
+            $placeholders = implode(',', array_fill(0, count($additionalAllocations), '?'));
+            $additionalStmt = fbgPteroDb()->prepare("
+                SELECT id
+                FROM allocations
+                WHERE id IN ({$placeholders})
+                  AND node_id = ?
+                  AND server_id IS NULL
+            ");
+            $additionalStmt->execute([...$additionalAllocations, $nodeId]);
+            $validAdditionalIds = array_map('intval', $additionalStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+            if (count($validAdditionalIds) !== count($additionalAllocations)) {
+                fbgAdminServersRedirect('One or more additional ports are no longer available on the selected node.', 'error', null, 'details', true);
+            }
+        }
+
+        if (!is_array($environment)) {
+            $environment = [];
+        }
+
+        $environment = array_map(static fn($value) => is_scalar($value) ? trim((string)$value) : '', $environment);
+
+        $payload = [
+            'name' => $name,
+            'description' => $description !== '' ? $description : null,
+            'user' => $ownerId,
+            'egg' => $eggId,
+            'docker_image' => $image,
+            'startup' => $startup,
+            'environment' => $environment,
+            'skip_scripts' => $skipScripts,
+            'oom_disabled' => $oomDisabled,
+            'limits' => [
+                'memory' => $memory,
+                'swap' => $swap,
+                'disk' => $disk,
+                'io' => $io,
+                'threads' => $threads !== '' ? $threads : null,
+                'cpu' => $cpu,
+            ],
+            'feature_limits' => [
+                'databases' => $databaseLimit,
+                'allocations' => $allocationLimit,
+                'backups' => $backupLimit,
+            ],
+            'allocation' => [
+                'default' => $allocationId,
+                'additional' => $additionalAllocations,
+            ],
+            'start_on_completion' => $startOnCompletion,
+        ];
+
+        $result = pteroRequest('POST', 'servers', $payload);
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect(
+                fbgAdminServersServerApiError($result, 'Server could not be created.'),
+                'error',
+                null,
+                'details',
+                true
+            );
+        }
+
+        $createdServerId = (int)($result['data']['attributes']['id'] ?? 0);
+        if ($createdServerId <= 0) {
+            fbgAdminServersRedirect('Server was created, but the new server ID was not returned by the API.', 'success');
+        }
+
+        fbgAdminServersRedirect('Server created successfully.', 'success', $createdServerId, 'about');
+    }
+
     $serverId = (int)($_POST['server_id'] ?? 0);
     $server = fbgAdminServersFind($serverId);
 
@@ -835,10 +1042,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Transfer execution has not been reconnected yet. The transfer modal UI is available, but the backend workflow still needs to be wired back in.', 'error', $serverId, 'manage');
     }
 
+    if ($action === 'delete_server') {
+        $result = pteroRequest('DELETE', "servers/{$serverId}");
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect(
+                fbgAdminServersServerApiError($result, 'The server could not be safely deleted.'),
+                'error',
+                $serverId,
+                'delete'
+            );
+        }
+
+        fbgAdminServersRedirect('Server deleted successfully.', 'success');
+    }
+
+    if ($action === 'force_delete_server') {
+        $result = pteroRequest('DELETE', "servers/{$serverId}/force");
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect(
+                fbgAdminServersServerApiError($result, 'The server could not be forcibly deleted.'),
+                'error',
+                $serverId,
+                'delete'
+            );
+        }
+
+        fbgAdminServersRedirect('Server force deleted successfully.', 'success');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
 $editServerId = max(0, (int)($_GET['edit'] ?? 0));
+$createMode = max(0, (int)($_GET['create'] ?? 0)) === 1;
 $editingServer = $editServerId > 0 ? fbgAdminServersFind($editServerId) : null;
 $activeServerTab = strtolower(trim((string)($_GET['tab'] ?? 'about')));
 
@@ -1076,6 +1312,111 @@ if ($editingServer) {
     }
 }
 
+$createOwnerOptions = [];
+$createNestOptions = [];
+$createEggOptions = [];
+$createStartupEggData = [];
+$createNodeOptions = [];
+$createAllocationMap = [];
+
+$createOwnerStmt = fbgPteroDb()->query("
+    SELECT id, username, email, name_first, name_last
+    FROM users
+    ORDER BY name_first ASC, name_last ASC, username ASC
+");
+$createOwnerOptions = $createOwnerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$createNestStmt = fbgPteroDb()->query('
+    SELECT id, name
+    FROM nests
+    ORDER BY name ASC
+');
+$createNestOptions = $createNestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$createEggStmt = fbgPteroDb()->query('
+    SELECT
+        e.id,
+        e.nest_id,
+        e.name,
+        e.startup,
+        e.docker_images
+    FROM eggs e
+    ORDER BY e.nest_id ASC, e.name ASC
+');
+
+foreach (($createEggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
+    $eggId = (int)$eggOption['id'];
+    $createEggOptions[] = $eggOption;
+    $createStartupEggData[$eggId] = [
+        'id' => $eggId,
+        'nest_id' => (int)$eggOption['nest_id'],
+        'name' => (string)($eggOption['name'] ?? ''),
+        'startup' => (string)($eggOption['startup'] ?? ''),
+        'docker_images' => fbgAdminServersDockerImagesMap($eggOption['docker_images'] ?? ''),
+        'variables' => [],
+    ];
+}
+
+$createEggVariableStmt = fbgPteroDb()->query('
+    SELECT id, egg_id, name, description, env_variable, default_value, user_viewable, user_editable, rules
+    FROM egg_variables
+    ORDER BY egg_id ASC, name ASC
+');
+
+foreach (($createEggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+    $eggId = (int)($variable['egg_id'] ?? 0);
+    if (!isset($createStartupEggData[$eggId])) {
+        continue;
+    }
+
+    $createStartupEggData[$eggId]['variables'][] = [
+        'id' => (int)$variable['id'],
+        'name' => (string)($variable['name'] ?? ''),
+        'description' => (string)($variable['description'] ?? ''),
+        'env_variable' => (string)($variable['env_variable'] ?? ''),
+        'default_value' => (string)($variable['default_value'] ?? ''),
+        'value' => (string)($variable['default_value'] ?? ''),
+        'user_viewable' => (int)($variable['user_viewable'] ?? 0) === 1,
+        'user_editable' => (int)($variable['user_editable'] ?? 0) === 1,
+        'rules' => (string)($variable['rules'] ?? ''),
+    ];
+}
+
+$createNodeStmt = fbgPteroDb()->query("
+    SELECT
+        n.id,
+        n.name,
+        COUNT(a.id) AS allocation_count
+    FROM nodes n
+    LEFT JOIN allocations a
+        ON a.node_id = n.id
+       AND a.server_id IS NULL
+    GROUP BY n.id, n.name
+    HAVING allocation_count > 0
+    ORDER BY n.name ASC
+");
+$createNodeOptions = $createNodeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+if (!empty($createNodeOptions)) {
+    $createAllocationStmt = fbgPteroDb()->prepare('
+        SELECT id, node_id, ip, ip_alias, port, notes
+        FROM allocations
+        WHERE node_id = :node_id
+          AND server_id IS NULL
+        ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
+    ');
+
+    foreach ($createNodeOptions as $createNode) {
+        $createNodeId = (int)($createNode['id'] ?? 0);
+        if ($createNodeId <= 0) {
+            continue;
+        }
+
+        $createAllocationStmt->execute(['node_id' => $createNodeId]);
+        $createAllocationMap[$createNodeId] = $createAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+}
+
 $search = trim((string)($_GET['q'] ?? ''));
 $statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $nodeFilter = max(0, (int)($_GET['node_id'] ?? 0));
@@ -1215,8 +1556,9 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         <div class="fbg-admin-grid">
             <section class="fbg-admin-panel fbg-admin-panel-full">
-                <div class="fbg-admin-panel-header">
+                <div class="fbg-admin-panel-header" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
                     <h2>Servers</h2>
+                    <a class="btn" href="<?= htmlspecialchars(fbgAdminServersBaseQuery(['create' => 1, 'edit' => null, 'tab' => null]), ENT_QUOTES, 'UTF-8') ?>">Create Server</a>
                 </div>
 
                 <form method="GET" class="fbg-admin-form" action="./page.php">
@@ -1377,6 +1719,249 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         </div>
     </div>
 </section>
+
+<?php if ($createMode): ?>
+    <div class="fbg-modal-overlay" id="admin-server-create-modal">
+        <div class="fbg-modal-card fbg-admin-server-modal" role="dialog" aria-modal="true" aria-labelledby="admin-server-create-title">
+            <a class="fbg-modal-close fbg-admin-user-modal-close" href="<?= htmlspecialchars(fbgAdminServersBaseQuery(['create' => null, 'edit' => null, 'tab' => null]), ENT_QUOTES, 'UTF-8') ?>" aria-label="Close">X</a>
+
+            <div class="fbg-modal-header">
+                <h3 id="admin-server-create-title">Create Server</h3>
+                <p>Add a new server to the panel with Pterodactyl-managed resources, startup settings, and service variables.</p>
+            </div>
+
+            <?php if ($message !== ''): ?>
+                <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 18px;">
+                    <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="POST" class="fbg-admin-form" id="admin-server-create-form">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="action" value="create_server">
+
+                <div class="fbg-admin-server-detail-list">
+                    <h3>Core Details</h3>
+                    <div class="fbg-admin-form-grid">
+                        <div class="fbg-admin-field">
+                            <label for="create-server-name">Server Name</label>
+                            <input id="create-server-name" name="create_name" type="text" required maxlength="191" placeholder="Server Name">
+                            <p class="fbg-admin-help-text">Character limits are handled by Pterodactyl. Keep the name clear and user-friendly.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-description">Server Description</label>
+                            <textarea id="create-server-description" name="create_description" rows="4" placeholder="A short description of this server."></textarea>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-owner">Server Owner</label>
+                            <input id="create-server-owner" name="create_owner_search" type="text" list="admin-server-create-owner-options" autocomplete="off" required placeholder="Start typing a name, username, or email">
+                            <datalist id="admin-server-create-owner-options"></datalist>
+                            <script type="application/json" id="admin-server-create-owner-source">
+                                <?= json_encode(array_map(static fn(array $owner): array => [
+                                    'label' => fbgAdminServersOwnerOptionLabel($owner),
+                                    'terms' => [
+                                        strtolower((string)($owner['username'] ?? '')),
+                                        strtolower((string)($owner['email'] ?? '')),
+                                        strtolower((string)($owner['name_first'] ?? '')),
+                                        strtolower((string)($owner['name_last'] ?? '')),
+                                        strtolower(trim((string)($owner['name_first'] ?? '') . ' ' . (string)($owner['name_last'] ?? ''))),
+                                    ],
+                                ], $createOwnerOptions), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                            </script>
+                            <p class="fbg-admin-help-text">Start typing at least 2 characters, then pick the owner from the list.</p>
+                        </div>
+
+                        <div class="fbg-admin-field" style="justify-content: flex-end;">
+                            <label class="fbg-admin-checkbox" style="margin-top: 24px;">
+                                <input type="checkbox" name="create_start_on_completion" value="1" checked>
+                                <span>Start Server when Installed</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                    <h3>Allocation Management</h3>
+                    <div class="fbg-admin-form-grid">
+                        <div class="fbg-admin-field">
+                            <label for="create-server-node">Node</label>
+                            <select id="create-server-node" name="create_node_id" required>
+                                <option value="">Select a node</option>
+                                <?php foreach ($createNodeOptions as $nodeOption): ?>
+                                    <option value="<?= (int)$nodeOption['id'] ?>">
+                                        <?= htmlspecialchars((string)$nodeOption['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="fbg-admin-help-text">Only nodes with at least one unassigned port are listed here.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-allocation">Default Port</label>
+                            <select id="create-server-allocation" name="create_allocation_id" required disabled>
+                                <option value="">Select a default port</option>
+                            </select>
+                            <p class="fbg-admin-help-text">This is the main allocation that will be assigned to the server.</p>
+                        </div>
+
+                        <div class="fbg-admin-field fbg-admin-field-full">
+                            <label for="create-server-additional-allocations">Additional Port(s)</label>
+                            <select id="create-server-additional-allocations" name="create_allocation_additional[]" multiple size="8" disabled></select>
+                            <p class="fbg-admin-help-text">Optional additional ports to assign during creation. Hold Ctrl to select more than one.</p>
+                        </div>
+                    </div>
+
+                    <script type="application/json" id="admin-server-create-allocation-map">
+                        <?= json_encode($createAllocationMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                    </script>
+                </div>
+
+                <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                    <h3>Application Feature Limits</h3>
+                    <div class="fbg-admin-form-grid">
+                        <div class="fbg-admin-field">
+                            <label for="create-server-database-limit">Database Limit</label>
+                            <input id="create-server-database-limit" name="create_database_limit" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">The total number of databases a user is allowed to create for this server.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-allocation-limit">Port Limit</label>
+                            <input id="create-server-allocation-limit" name="create_allocation_limit" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">The total number of allocations a user is allowed to create for this server.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-backup-limit">Backup Limit</label>
+                            <input id="create-server-backup-limit" name="create_backup_limit" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">The total number of backups that can be created for this server.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                    <h3>Resource Management</h3>
+                    <div class="fbg-admin-form-grid">
+                        <div class="fbg-admin-field">
+                            <label for="create-server-cpu">CPU Limit (%)</label>
+                            <input id="create-server-cpu" name="create_cpu" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">Set to 0 for unlimited CPU time.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-threads">CPU Pinning</label>
+                            <input id="create-server-threads" name="create_threads" type="text" placeholder="0-3,8">
+                            <p class="fbg-admin-help-text">Leave blank to allow all cores, or enter a comma-separated list / range.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-memory">Memory (MiB)</label>
+                            <input id="create-server-memory" name="create_memory" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">Set to 0 for unlimited memory.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-swap">Swap (MiB)</label>
+                            <input id="create-server-swap" name="create_swap" type="number" min="-1" required value="0">
+                            <p class="fbg-admin-help-text">0 disables swap. -1 allows unlimited swap.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-disk">Disk Space (MiB)</label>
+                            <input id="create-server-disk" name="create_disk" type="number" min="0" required value="0">
+                            <p class="fbg-admin-help-text">Set to 0 for unlimited disk usage.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-io">Block IO Weight</label>
+                            <input id="create-server-io" name="create_io" type="number" min="10" max="1000" required value="500">
+                            <p class="fbg-admin-help-text">Advanced. Value should be between 10 and 1000.</p>
+                        </div>
+
+                        <div class="fbg-admin-field fbg-admin-field-full">
+                            <label class="fbg-admin-checkbox fbg-admin-checkbox-block">
+                                <input type="checkbox" name="create_enable_oom_killer" value="1" checked>
+                                <span>Enable OOM Killer</span>
+                            </label>
+                            <p class="fbg-admin-help-text">When enabled, the server may be stopped automatically if it exceeds its memory limit.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fbg-admin-server-about-grid" style="margin-top: 16px;">
+                    <div class="fbg-admin-server-detail-list">
+                        <h3>Nest Configuration</h3>
+                        <div class="fbg-admin-field">
+                            <label for="create-server-nest">Nest</label>
+                            <select id="create-server-nest" name="create_nest_id" required>
+                                <option value="">Select a nest</option>
+                                <?php foreach ($createNestOptions as $nestOption): ?>
+                                    <option value="<?= (int)$nestOption['id'] ?>"><?= htmlspecialchars((string)$nestOption['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="fbg-admin-help-text">Select the Nest that this server will be grouped under.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-egg">Egg</label>
+                            <select id="create-server-egg" name="create_egg_id" required disabled>
+                                <option value="">Select an egg</option>
+                            </select>
+                            <p class="fbg-admin-help-text">Select the Egg that defines how this server should operate.</p>
+                        </div>
+
+                        <label class="fbg-admin-checkbox fbg-admin-checkbox-block" style="margin-top: 18px;">
+                            <input type="checkbox" name="create_skip_scripts" value="1">
+                            <span>Skip Egg Install Script</span>
+                        </label>
+                        <p class="fbg-admin-help-text">If selected, the install script attached to the egg will not run during installation.</p>
+                    </div>
+
+                    <div class="fbg-admin-server-detail-list">
+                        <h3>Docker Configuration</h3>
+                        <div class="fbg-admin-field">
+                            <label for="create-server-docker-image">Docker Image</label>
+                            <select id="create-server-docker-image" name="create_docker_image" disabled>
+                                <option value="">Select a docker image</option>
+                            </select>
+                            <p class="fbg-admin-help-text">This is the default docker image used to run the server.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="create-server-custom-image">Custom Docker Image</label>
+                            <input id="create-server-custom-image" name="create_custom_image" type="text" placeholder="Or enter a custom image...">
+                            <p class="fbg-admin-help-text">If provided, this overrides the selected docker image.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fbg-admin-server-detail-list" style="margin-top: 16px;">
+                    <h3>Startup Configuration</h3>
+                    <div class="fbg-admin-field">
+                        <label for="create-server-startup">Startup Command</label>
+                        <input id="create-server-startup" name="create_startup" type="text" required>
+                        <p class="fbg-admin-help-text">The selected egg will populate this automatically. You can adjust it before creation if needed.</p>
+                    </div>
+
+                    <div id="admin-server-create-startup-variables" class="fbg-admin-form-grid" style="margin-top: 18px;"></div>
+                    <script type="application/json" id="admin-server-create-egg-options">
+                        <?= json_encode($createEggOptions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                    </script>
+                    <script type="application/json" id="admin-server-create-egg-data">
+                        <?= json_encode($createStartupEggData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                    </script>
+                </div>
+
+                <div class="fbg-admin-form-actions" style="margin-top: 24px;">
+                    <a class="btn fbg-neutral-button" href="<?= htmlspecialchars(fbgAdminServersBaseQuery(['create' => null, 'edit' => null, 'tab' => null]), ENT_QUOTES, 'UTF-8') ?>">Cancel</a>
+                    <button type="submit" class="btn">Create Server</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?php if ($editingServer): ?>
     <?php
@@ -1646,9 +2231,9 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                                 </div>
 
                                 <div class="fbg-admin-field fbg-admin-field-full">
-                                    <label>
+                                    <label class="fbg-admin-checkbox fbg-admin-checkbox-block">
                                         <input type="checkbox" name="oom_disabled" value="1" <?= (int)($editingServer['oom_disabled'] ?? 0) === 1 ? 'checked' : '' ?>>
-                                        Disable OOM Killer
+                                        <span>Disable OOM Killer</span>
                                     </label>
                                     <p class="fbg-admin-help-text">When enabled, the server process is less likely to be killed automatically if it exceeds memory limits.</p>
                                 </div>
@@ -1779,7 +2364,7 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                                     <p class="fbg-admin-help-text">Select the Egg that provides startup variables and processing data.</p>
                                 </div>
 
-                                <label style="display: flex; gap: 10px; align-items: center; margin-top: 18px;">
+                                <label class="fbg-admin-checkbox fbg-admin-checkbox-block" style="margin-top: 18px;">
                                     <input type="checkbox" name="skip_scripts" value="1">
                                     <span>Skip Egg Install Script</span>
                                 </label>
@@ -2043,7 +2628,7 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 <div class="fbg-admin-server-about-grid">
                     <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
                         <h3>Reinstall Server</h3>
-                        <p>This will reinstall the server with the assigned service scripts. <bita><warning>Danger!</warning> This could overwrite server data</bita>.</p>
+                        <p>This will reinstall the server with the assigned service scripts. Danger! This could overwrite server data.</p>
                         <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
                             <button type="button" class="btn danger-action" id="admin-server-open-reinstall-modal">Reinstall Server</button>
                         </div>
@@ -2078,18 +2663,36 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
                 <div class="fbg-admin-server-detail-list" style="margin-top: 16px; border-top: 2px solid #22c55e;">
                     <h3>Transfer Server</h3>
-                    <p>Transfer this server to another node connected to this panel. <bita><warning>Warning!</warning> This feature has not been fully tested and may have bugs.</bita></p>
-                    <p><bita><warning>Server transfer is not current implemented.</warning></bita></p>
+                    <p>Transfer this server to another node connected to this panel. Warning! This feature has not been fully tested and may have bugs.</p>
                     <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
-                        <!-- <button type="button" class="btn" id="admin-server-open-transfer-modal" style="background:#16a34a;">Transfer Server</button> -->
-                         <button type="button" class="btn" style="background: #555555; color: #777777;"><bita>Unavailable</bita></button>
+                        <button type="button" class="btn" id="admin-server-open-transfer-modal" style="background:#16a34a;">Transfer Server</button>
                     </div>
                 </div>
             </section>
 
             <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'delete' ? ' is-active' : '' ?>" data-admin-server-panel="delete" <?= $activeServerTab === 'delete' ? '' : 'hidden' ?>>
-                <div class="fbg-admin-empty-state">
-                    <p>Delete controls will be added in the next Admin Server Administration pass.</p>
+                <div class="fbg-admin-server-about-grid">
+                    <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
+                        <h3>Safely Delete Server</h3>
+                        <p>This action will attempt to delete the server from both the panel and daemon. If either one reports an error the action will be cancelled.</p>
+                        <div class="fbg-dashboard-alert error is-visible" style="margin: 14px 0 18px;">
+                            Deleting a server is an irreversible action. All server data, including files and users, will be removed from the system.
+                        </div>
+                        <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                            <button type="button" class="btn danger-action" id="admin-server-open-safe-delete-modal">Safely Delete This Server</button>
+                        </div>
+                    </div>
+
+                    <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
+                        <h3>Force Delete Server</h3>
+                        <p>This action will attempt to delete the server from both the panel and daemon. If the daemon does not respond, or reports an error, the deletion will continue.</p>
+                        <div class="fbg-dashboard-alert error is-visible" style="margin: 14px 0 18px;">
+                            Deleting a server is an irreversible action. All server data, including files and users, will be removed from the system. This method may leave dangling files on your daemon if it reports an error.
+                        </div>
+                        <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                            <button type="button" class="btn danger-action" id="admin-server-open-force-delete-modal">Forcibly Delete This Server</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -2109,6 +2712,46 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                         <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
                         <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="reinstall">Cancel</button>
                         <button type="submit" class="btn danger-action">Yes, Reinstall Server</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="fbg-modal-overlay" id="admin-server-safe-delete-modal" hidden>
+                <div class="fbg-modal-card fbg-admin-user-modal fbg-admin-user-delete-confirm" role="dialog" aria-modal="true" aria-labelledby="admin-server-safe-delete-title">
+                    <button type="button" class="fbg-modal-close fbg-admin-user-modal-close" data-close-admin-server-modal="safe-delete" aria-label="Close">X</button>
+                    <div class="fbg-modal-header">
+                        <h3 id="admin-server-safe-delete-title">Safely Delete Server</h3>
+                        <p>This will try to remove the server from both the panel and daemon. If either one fails, the deletion will be cancelled.</p>
+                    </div>
+                    <div class="fbg-admin-warning-box">
+                        This is irreversible. All server files, users, and related data will be removed immediately if the delete succeeds.
+                    </div>
+                    <form method="POST" class="fbg-admin-form-actions fbg-admin-user-delete-confirm-actions">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="action" value="delete_server">
+                        <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                        <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="safe-delete">Cancel</button>
+                        <button type="submit" class="btn danger-action">Delete Server</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="fbg-modal-overlay" id="admin-server-force-delete-modal" hidden>
+                <div class="fbg-modal-card fbg-admin-user-modal fbg-admin-user-delete-confirm" role="dialog" aria-modal="true" aria-labelledby="admin-server-force-delete-title">
+                    <button type="button" class="fbg-modal-close fbg-admin-user-modal-close" data-close-admin-server-modal="force-delete" aria-label="Close">X</button>
+                    <div class="fbg-modal-header">
+                        <h3 id="admin-server-force-delete-title">Force Delete Server</h3>
+                        <p>This will continue deleting the server even if the daemon errors or does not respond.</p>
+                    </div>
+                    <div class="fbg-admin-warning-box">
+                        This is irreversible. All server files, users, and related data will be removed immediately. Force delete may leave dangling files behind on the daemon if it reports an error.
+                    </div>
+                    <form method="POST" class="fbg-admin-form-actions fbg-admin-user-delete-confirm-actions">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="action" value="force_delete_server">
+                        <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                        <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="force-delete">Cancel</button>
+                        <button type="submit" class="btn danger-action">Force Delete Server</button>
                     </form>
                 </div>
             </div>
@@ -2195,8 +2838,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const startupDockerCustom = document.getElementById('server-startup-docker-custom');
     const startupVariablesWrap = document.getElementById('admin-server-startup-variables');
     const reinstallModal = document.getElementById('admin-server-reinstall-modal');
+    const safeDeleteModal = document.getElementById('admin-server-safe-delete-modal');
+    const forceDeleteModal = document.getElementById('admin-server-force-delete-modal');
     const transferModal = document.getElementById('admin-server-transfer-modal');
     const openReinstallModalButton = document.getElementById('admin-server-open-reinstall-modal');
+    const openSafeDeleteModalButton = document.getElementById('admin-server-open-safe-delete-modal');
+    const openForceDeleteModalButton = document.getElementById('admin-server-open-force-delete-modal');
     const openTransferModalButton = document.getElementById('admin-server-open-transfer-modal');
     const transferNodeSelect = document.getElementById('admin-server-transfer-node');
     const transferAllocationSelect = document.getElementById('admin-server-transfer-allocation');
@@ -2236,6 +2883,14 @@ document.addEventListener('DOMContentLoaded', () => {
         openReinstallModalButton.addEventListener('click', () => openOverlay(reinstallModal));
     }
 
+    if (openSafeDeleteModalButton && safeDeleteModal) {
+        openSafeDeleteModalButton.addEventListener('click', () => openOverlay(safeDeleteModal));
+    }
+
+    if (openForceDeleteModalButton && forceDeleteModal) {
+        openForceDeleteModalButton.addEventListener('click', () => openOverlay(forceDeleteModal));
+    }
+
     if (openTransferModalButton && transferModal) {
         openTransferModalButton.addEventListener('click', () => openOverlay(transferModal));
     }
@@ -2244,11 +2899,13 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', () => {
             const target = button.getAttribute('data-close-admin-server-modal');
             if (target === 'reinstall') closeOverlay(reinstallModal);
+            if (target === 'safe-delete') closeOverlay(safeDeleteModal);
+            if (target === 'force-delete') closeOverlay(forceDeleteModal);
             if (target === 'transfer') closeOverlay(transferModal);
         });
     });
 
-    [reinstallModal, transferModal].forEach((overlay) => {
+    [reinstallModal, safeDeleteModal, forceDeleteModal, transferModal].forEach((overlay) => {
         if (!overlay) return;
         overlay.addEventListener('click', (event) => {
             if (event.target === overlay) {
@@ -2517,6 +3174,277 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             window.location.href = './page.php?name=admin-servers';
+        }
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const createModal = document.getElementById('admin-server-create-modal');
+    if (!createModal) return;
+
+    document.body.classList.add('fbg-modal-open');
+
+    const ownerInput = document.getElementById('create-server-owner');
+    const ownerDatalist = document.getElementById('admin-server-create-owner-options');
+    const ownerSource = document.getElementById('admin-server-create-owner-source');
+    const nodeSelect = document.getElementById('create-server-node');
+    const allocationSelect = document.getElementById('create-server-allocation');
+    const additionalAllocationsSelect = document.getElementById('create-server-additional-allocations');
+    const allocationMapSource = document.getElementById('admin-server-create-allocation-map');
+    const nestSelect = document.getElementById('create-server-nest');
+    const eggSelect = document.getElementById('create-server-egg');
+    const eggOptionsSource = document.getElementById('admin-server-create-egg-options');
+    const eggDataSource = document.getElementById('admin-server-create-egg-data');
+    const startupInput = document.getElementById('create-server-startup');
+    const dockerSelect = document.getElementById('create-server-docker-image');
+    const dockerCustomInput = document.getElementById('create-server-custom-image');
+    const variablesWrap = document.getElementById('admin-server-create-startup-variables');
+
+    let owners = [];
+    let allocationMap = {};
+    let eggOptions = [];
+    let eggData = {};
+
+    try {
+        owners = JSON.parse(ownerSource?.textContent || '[]');
+    } catch (error) {
+        owners = [];
+    }
+
+    try {
+        allocationMap = JSON.parse(allocationMapSource?.textContent || '{}');
+    } catch (error) {
+        allocationMap = {};
+    }
+
+    try {
+        eggOptions = JSON.parse(eggOptionsSource?.textContent || '[]');
+    } catch (error) {
+        eggOptions = [];
+    }
+
+    try {
+        eggData = JSON.parse(eggDataSource?.textContent || '{}');
+    } catch (error) {
+        eggData = {};
+    }
+
+    if (ownerInput && ownerDatalist) {
+        const renderOwnerOptions = (query = '') => {
+            const normalized = query.trim().toLowerCase();
+            const matches = normalized.length < 2
+                ? []
+                : owners.filter((owner) => Array.isArray(owner.terms) && owner.terms.some((term) => term.includes(normalized))).slice(0, 25);
+
+            ownerDatalist.innerHTML = '';
+            matches.forEach((owner) => {
+                const option = document.createElement('option');
+                option.value = owner.label || '';
+                ownerDatalist.appendChild(option);
+            });
+        };
+
+        ownerInput.addEventListener('input', () => renderOwnerOptions(ownerInput.value));
+        ownerInput.addEventListener('focus', () => renderOwnerOptions(ownerInput.value));
+    }
+
+    const syncAdditionalAllocationVisibility = () => {
+        if (!allocationSelect || !additionalAllocationsSelect) return;
+
+        const selectedDefault = allocationSelect.value;
+        Array.from(additionalAllocationsSelect.options).forEach((option) => {
+            const isDefault = option.value === selectedDefault;
+            option.hidden = isDefault;
+            if (isDefault) {
+                option.selected = false;
+            }
+        });
+    };
+
+    const syncAllocations = () => {
+        if (!nodeSelect || !allocationSelect || !additionalAllocationsSelect) return;
+
+        const nodeId = nodeSelect.value;
+        const allocations = Array.isArray(allocationMap[nodeId]) ? allocationMap[nodeId] : [];
+
+        allocationSelect.innerHTML = '<option value="">Select a default port</option>';
+        additionalAllocationsSelect.innerHTML = '';
+
+        if (!nodeId || allocations.length === 0) {
+            allocationSelect.disabled = true;
+            additionalAllocationsSelect.disabled = true;
+            return;
+        }
+
+        allocations.forEach((allocation, index) => {
+            const host = String(allocation.ip_alias || allocation.ip || '').trim();
+            const port = String(allocation.port || '').trim();
+            const notes = String(allocation.notes || '').trim();
+            const label = `${host}:${port}${notes ? ' - ' + notes : ''}`;
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = String(allocation.id || '');
+            defaultOption.textContent = label;
+            if (index === 0) {
+                defaultOption.selected = true;
+            }
+            allocationSelect.appendChild(defaultOption);
+
+            const additionalOption = document.createElement('option');
+            additionalOption.value = String(allocation.id || '');
+            additionalOption.textContent = label;
+            additionalAllocationsSelect.appendChild(additionalOption);
+        });
+
+        allocationSelect.disabled = false;
+        additionalAllocationsSelect.disabled = false;
+        syncAdditionalAllocationVisibility();
+    };
+
+    const renderCreateVariables = (egg) => {
+        if (!variablesWrap) return;
+        variablesWrap.innerHTML = '';
+
+        const variables = Array.isArray(egg?.variables) ? egg.variables : [];
+        if (variables.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'fbg-admin-empty-state';
+            emptyState.innerHTML = '<p>This egg does not expose any editable service variables.</p>';
+            variablesWrap.appendChild(emptyState);
+            return;
+        }
+
+        variables.forEach((variable) => {
+            const field = document.createElement('div');
+            field.className = 'fbg-admin-field';
+
+            const label = document.createElement('label');
+            label.textContent = variable.name || variable.env_variable || 'Service Variable';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = `create_environment[${variable.env_variable || ''}]`;
+            input.value = variable.value ?? variable.default_value ?? '';
+
+            const help = document.createElement('p');
+            help.className = 'fbg-admin-help-text';
+
+            const details = [];
+            if (variable.description) {
+                details.push(variable.description);
+            }
+            if (variable.env_variable) {
+                details.push(`Access in Startup: {{${variable.env_variable}}}`);
+            }
+            if (variable.rules) {
+                details.push(`Validation Rules: ${variable.rules}`);
+            }
+            help.textContent = details.join(' ');
+
+            field.appendChild(label);
+            field.appendChild(input);
+            field.appendChild(help);
+            variablesWrap.appendChild(field);
+        });
+    };
+
+    const applyEggData = (resetCustomImage = false) => {
+        if (!eggSelect || !startupInput || !dockerSelect || !variablesWrap) return;
+
+        const eggId = eggSelect.value;
+        const egg = eggData[eggId];
+
+        dockerSelect.innerHTML = '<option value="">Select a docker image</option>';
+
+        if (!egg) {
+            startupInput.value = '';
+            dockerSelect.disabled = true;
+            if (dockerCustomInput) {
+                dockerCustomInput.value = '';
+            }
+            renderCreateVariables(null);
+            return;
+        }
+
+        startupInput.value = egg.startup || '';
+
+        const dockerImages = egg.docker_images && typeof egg.docker_images === 'object' ? egg.docker_images : {};
+        Object.entries(dockerImages).forEach(([image, label], index) => {
+            const option = document.createElement('option');
+            option.value = image;
+            option.textContent = label || image;
+            if (index === 0) {
+                option.selected = true;
+            }
+            dockerSelect.appendChild(option);
+        });
+
+        dockerSelect.disabled = Object.keys(dockerImages).length === 0;
+        if (dockerCustomInput && resetCustomImage) {
+            dockerCustomInput.value = '';
+        }
+
+        renderCreateVariables(egg);
+    };
+
+    const syncEggOptions = () => {
+        if (!nestSelect || !eggSelect) return;
+
+        const selectedNestId = nestSelect.value;
+        eggSelect.innerHTML = '<option value="">Select an egg</option>';
+
+        const matchingEggs = eggOptions.filter((egg) => String(egg.nest_id || '') === selectedNestId);
+        matchingEggs.forEach((egg, index) => {
+            const option = document.createElement('option');
+            option.value = String(egg.id || '');
+            option.textContent = String(egg.name || 'Unknown Egg');
+            if (index === 0) {
+                option.selected = true;
+            }
+            eggSelect.appendChild(option);
+        });
+
+        eggSelect.disabled = matchingEggs.length === 0;
+        applyEggData();
+    };
+
+    if (nodeSelect) {
+        if (!nodeSelect.value && nodeSelect.options.length > 1) {
+            nodeSelect.selectedIndex = 1;
+        }
+        nodeSelect.addEventListener('change', syncAllocations);
+        syncAllocations();
+    }
+
+    if (allocationSelect) {
+        allocationSelect.addEventListener('change', syncAdditionalAllocationVisibility);
+    }
+
+    if (nestSelect) {
+        if (!nestSelect.value && nestSelect.options.length > 1) {
+            nestSelect.selectedIndex = 1;
+        }
+        nestSelect.addEventListener('change', syncEggOptions);
+        syncEggOptions();
+    }
+
+    if (eggSelect) {
+        eggSelect.addEventListener('change', () => applyEggData(true));
+    }
+
+    if (createModal) {
+        createModal.addEventListener('click', (event) => {
+            if (event.target === createModal) {
+                window.location.href = <?= json_encode(fbgAdminServersBaseQuery(['create' => null, 'edit' => null, 'tab' => null])) ?>;
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            window.location.href = <?= json_encode(fbgAdminServersBaseQuery(['create' => null, 'edit' => null, 'tab' => null])) ?>;
         }
     });
 });
