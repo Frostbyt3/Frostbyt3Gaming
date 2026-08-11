@@ -196,20 +196,29 @@ session_write_close();
             <form method="post" class="fbg-server-scope-form">
                 <input type="hidden" name="server_scope_toggle" value="1">
 
-                <label class="fbg-server-scope-toggle">
-                    <span class="fbg-server-scope-label">
-                        <?php echo $showAllServers ? 'Showing all servers' : 'Showing your servers'; ?>
-                    </span>
+                <div class="fbg-dashboard-scope-switch" role="tablist" aria-label="Server scope">
+                    <button
+                        type="submit"
+                        name="server_scope"
+                        value="mine"
+                        class="fbg-dashboard-scope-tab <?php echo !$showAllServers ? 'active' : ''; ?>"
+                        role="tab"
+                        aria-selected="<?php echo !$showAllServers ? 'true' : 'false'; ?>"
+                    >
+                        Personal Servers
+                    </button>
 
-                    <input
-                        type="checkbox"
+                    <button
+                        type="submit"
                         name="server_scope"
                         value="all"
-                        <?php echo $showAllServers ? 'checked' : ''; ?>
-                        onchange="this.form.submit()"
+                        class="fbg-dashboard-scope-tab <?php echo $showAllServers ? 'active' : ''; ?>"
+                        role="tab"
+                        aria-selected="<?php echo $showAllServers ? 'true' : 'false'; ?>"
                     >
-                    <span class="fbg-server-scope-slider" aria-hidden="true"></span>
-                </label>
+                        All Servers
+                    </button>
+                </div>
             </form>
         </div>
     <?php endif; ?>
