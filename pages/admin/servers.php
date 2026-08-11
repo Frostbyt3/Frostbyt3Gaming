@@ -220,6 +220,11 @@ function fbgAdminServersConnection(array $server): string
     return $host . ':' . $port;
 }
 
+function fbgAdminServersMountStatusClass(bool $isMounted): string
+{
+    return $isMounted ? 'is-active' : 'is-installing';
+}
+
 function fbgAdminServersStatusLabel(mixed $status): string
 {
     $status = strtolower(trim((string)$status));
@@ -697,6 +702,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Database deleted successfully.', 'success', $serverId, 'database');
     }
 
+    if ($action === 'attach_mount' || $action === 'detach_mount') {
+        $mountId = max(0, (int)($_POST['mount_id'] ?? 0));
+
+        if ($mountId <= 0) {
+            fbgAdminServersRedirect('Select a valid mount.', 'error', $serverId, 'mounts');
+        }
+
+        $mountStmt = fbgPteroDb()->prepare('
+            SELECT m.id, m.name
+            FROM mounts m
+            INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
+            INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
+            WHERE m.id = :mount_id
+            LIMIT 1
+        ');
+        $mountStmt->execute([
+            'egg_id' => (int)$server['egg_id'],
+            'node_id' => (int)$server['node_id'],
+            'mount_id' => $mountId,
+        ]);
+        $mount = $mountStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$mount) {
+            fbgAdminServersRedirect('Selected mount is not available for this server.', 'error', $serverId, 'mounts');
+        }
+
+        $mountedStmt = fbgPteroDb()->prepare('
+            SELECT 1
+            FROM mount_server
+            WHERE server_id = :server_id
+              AND mount_id = :mount_id
+            LIMIT 1
+        ');
+        $mountedStmt->execute([
+            'server_id' => $serverId,
+            'mount_id' => $mountId,
+        ]);
+        $isMounted = (bool)$mountedStmt->fetchColumn();
+
+        if ($action === 'attach_mount') {
+            if ($isMounted) {
+                fbgAdminServersRedirect('This mount is already attached to the server.', 'error', $serverId, 'mounts');
+            }
+
+            $attachStmt = fbgPteroDb()->prepare('
+                INSERT INTO mount_server (mount_id, server_id)
+                VALUES (:mount_id, :server_id)
+            ');
+            $attachStmt->execute([
+                'mount_id' => $mountId,
+                'server_id' => $serverId,
+            ]);
+
+            fbgAdminServersRedirect('Mount attached successfully.', 'success', $serverId, 'mounts');
+        }
+
+        if (!$isMounted) {
+            fbgAdminServersRedirect('This mount is not currently attached to the server.', 'error', $serverId, 'mounts');
+        }
+
+        $detachStmt = fbgPteroDb()->prepare('
+            DELETE FROM mount_server
+            WHERE mount_id = :mount_id
+              AND server_id = :server_id
+        ');
+        $detachStmt->execute([
+            'mount_id' => $mountId,
+            'server_id' => $serverId,
+        ]);
+
+        fbgAdminServersRedirect('Mount removed successfully.', 'success', $serverId, 'mounts');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
@@ -718,6 +796,7 @@ $eggOptions = [];
 $startupEggData = [];
 $databaseHosts = [];
 $serverDatabases = [];
+$serverMounts = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -877,6 +956,33 @@ if ($editingServer) {
     ');
     $serverDatabasesStmt->execute(['server_id' => (int)$editingServer['id']]);
     $serverDatabases = $serverDatabasesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $mountStmt = fbgPteroDb()->prepare('
+        SELECT
+            m.id,
+            m.name,
+            m.source,
+            m.target,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM mount_server ms
+                    WHERE ms.server_id = :server_id
+                      AND ms.mount_id = m.id
+                ) THEN 1
+                ELSE 0
+            END AS is_mounted
+        FROM mounts m
+        INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
+        INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
+        ORDER BY m.name ASC, m.id ASC
+    ');
+    $mountStmt->execute([
+        'server_id' => (int)$editingServer['id'],
+        'egg_id' => (int)$editingServer['egg_id'],
+        'node_id' => (int)$editingServer['node_id'],
+    ]);
+    $serverMounts = $mountStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -1779,7 +1885,65 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </div>
             </section>
 
-            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database']) as $tabKey): ?>
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'mounts' ? ' is-active' : '' ?>" data-admin-server-panel="mounts" <?= $activeServerTab === 'mounts' ? '' : 'hidden' ?>>
+                <div class="fbg-admin-server-detail-list">
+                    <h3>Available Mounts</h3>
+                    <div class="fbg-admin-table-wrap">
+                        <table class="fbg-admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Source</th>
+                                    <th>Target</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($serverMounts)): ?>
+                                    <tr>
+                                        <td colspan="6">No mounts are available for this server's current egg and node.</td>
+                                    </tr>
+                                <?php endif; ?>
+
+                                <?php foreach ($serverMounts as $mount): ?>
+                                    <?php $isMounted = (int)($mount['is_mounted'] ?? 0) === 1; ?>
+                                    <tr>
+                                        <td><code><?= (int)$mount['id'] ?></code></td>
+                                        <td><?= htmlspecialchars((string)($mount['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><code><?= htmlspecialchars((string)($mount['source'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
+                                        <td><code><?= htmlspecialchars((string)($mount['target'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
+                                        <td>
+                                            <span class="fbg-admin-status-pill <?= fbgAdminServersMountStatusClass($isMounted) ?>">
+                                                <?= $isMounted ? 'Mounted' : 'Unmounted' ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <form method="POST" class="fbg-admin-inline-form">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                                                <input type="hidden" name="mount_id" value="<?= (int)$mount['id'] ?>">
+                                                <input type="hidden" name="action" value="<?= $isMounted ? 'detach_mount' : 'attach_mount' ?>">
+                                                <button
+                                                    type="submit"
+                                                    class="fbg-admin-mount-button <?= $isMounted ? 'is-detach' : 'is-attach' ?>"
+                                                    aria-label="<?= $isMounted ? 'Unmount ' : 'Mount ' ?><?= htmlspecialchars((string)($mount['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                                    title="<?= $isMounted ? 'Unmount' : 'Mount' ?>"
+                                                >
+                                                    <?= $isMounted ? 'Unmount' : 'Mount' ?>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database', 'mounts']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
                         <p><?= htmlspecialchars($tabs[$tabKey], ENT_QUOTES, 'UTF-8') ?> controls will be added in the next Admin Server Administration pass.</p>

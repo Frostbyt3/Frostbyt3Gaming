@@ -7049,7 +7049,7 @@ textarea.startup-variable-input {
     align-items: center;
     min-height: 28px;
     padding: 5px 10px;
-    border-radius: 999px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.055);
     color: var(--fbg-text-main);
     font-size: 0.78rem;
@@ -7247,6 +7247,39 @@ textarea.startup-variable-input {
 
 .fbg-admin-server-detail-list code {
     color: var(--fbg-text-main);
+}
+
+.fbg-admin-inline-form {
+    display: inline-flex;
+}
+
+.fbg-admin-mount-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--fbg-white);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    transition: transform 0.16s ease, filter 0.16s ease, background-color 0.16s ease;
+}
+
+.fbg-admin-mount-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.fbg-admin-mount-button.is-attach {
+    background: rgba(34, 197, 94, 0.88);
+}
+
+.fbg-admin-mount-button.is-detach {
+    background: rgba(255, 59, 59, 0.88);
 }
 
 @media (max-width: 1100px) {
