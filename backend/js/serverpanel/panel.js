@@ -51,6 +51,16 @@ document.addEventListener('click', function (e) {
     const cpuEl = document.querySelector('.stat-cpu-usage');
 
     const addressEl = document.querySelector('.fbg-sidebar-stat .fbg-copyable');
+    const railItems = Array.from(document.querySelectorAll('.fbg-server-rail-item[data-server]'));
+    const railServerMap = new Map(
+        railItems
+            .map((item) => [String(item.dataset.server || '').trim(), item])
+            .filter(([serverId]) => serverId !== '')
+    );
+    const railServerIds = Array.from(railServerMap.keys());
+    const railStatusUrl = railServerIds.length > 1
+        ? '/api/server_status.php?ids=' + encodeURIComponent(railServerIds.join(','))
+        : '';
 
     const detailsMessage = document.getElementById('server-details-message');
     const serverNameText = document.getElementById('server-name-text');
@@ -74,6 +84,10 @@ document.addEventListener('click', function (e) {
     let lastInstallState = isInstalling;
     let burstTimeouts = [];
     let activeRefreshController = null;
+    let railRefreshInFlight = false;
+    let railRefreshTimer = null;
+    let railRefreshController = null;
+    const RAIL_POLL_MS = 30000;
 
     function updateAddress(address) {
         if (!addressEl) return;
@@ -86,6 +100,13 @@ document.addEventListener('click', function (e) {
     function clearBurstRefreshes() {
         burstTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
         burstTimeouts = [];
+    }
+
+    function abortRailRefresh() {
+        if (railRefreshController) {
+            railRefreshController.abort();
+            railRefreshController = null;
+        }
     }
 
     function abortActiveRefresh() {
@@ -107,6 +128,21 @@ document.addEventListener('click', function (e) {
         });
     }
 
+    function scheduleRailRefresh(delay = RAIL_POLL_MS) {
+        if (railRefreshTimer) {
+            clearTimeout(railRefreshTimer);
+            railRefreshTimer = null;
+        }
+
+        if (!pageVisible || !railStatusUrl) {
+            return;
+        }
+
+        railRefreshTimer = setTimeout(() => {
+            refreshRailStatuses();
+        }, delay);
+    }
+
     function scheduleNextPoll(delay = currentPollDelay) {
         if (pollTimer) {
             clearTimeout(pollTimer);
@@ -124,6 +160,7 @@ document.addEventListener('click', function (e) {
 
     function startPolling() {
         scheduleNextPoll(currentPollDelay);
+        scheduleRailRefresh(RAIL_POLL_MS);
     }
 
     function statusToText(status) {
@@ -346,6 +383,26 @@ document.addEventListener('click', function (e) {
         statusIcon.classList.add(statusToClass(status));
     }
 
+    function updateRailStatus(serverId, status) {
+        const item = railServerMap.get(String(serverId || '').trim());
+        if (!item) {
+            return;
+        }
+
+        const dot = item.querySelector('.fbg-server-rail-status-dot');
+        if (!dot) {
+            return;
+        }
+
+        const normalized = statusToClass(normalizeServerStatus(status));
+        dot.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'unknown');
+        dot.classList.add(normalized);
+
+        const label = statusToText(normalized);
+        dot.title = label;
+        dot.setAttribute('aria-label', label);
+    }
+
     function updatePollDelayForStatus(status) {
         if (status === 'installing' || status === 'starting' || status === 'stopping') {
             currentPollDelay = POLL_FAST;
@@ -384,6 +441,7 @@ document.addEventListener('click', function (e) {
         isInstalling = nextInstalling;
 
         updatePollDelayForStatus(displayStatus);
+        updateRailStatus(identifier, displayStatus);
 
         if (shouldLogStatusTransition(displayStatus)) {
             logStatusChange(displayStatus);
@@ -439,6 +497,51 @@ document.addEventListener('click', function (e) {
 
         if (restartBtn) {
             restartBtn.disabled = (displayStatus !== 'running');
+        }
+    }
+
+    async function refreshRailStatuses() {
+        if (!pageVisible || railRefreshInFlight || !railStatusUrl) {
+            return;
+        }
+
+        railRefreshInFlight = true;
+        abortRailRefresh();
+        railRefreshController = new AbortController();
+
+        try {
+            const response = await fetch(railStatusUrl, {
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store',
+                signal: railRefreshController.signal
+            });
+
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+
+            const data = await response.json();
+            const servers = data && typeof data === 'object' && data.servers && typeof data.servers === 'object'
+                ? data.servers
+                : {};
+
+            Object.entries(servers).forEach(([serverId, serverData]) => {
+                const nextStatus = serverData && serverData.is_installing
+                    ? 'installing'
+                    : normalizeServerStatus(serverData && serverData.status);
+
+                updateRailStatus(serverId, nextStatus);
+            });
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                return;
+            }
+
+            console.error('Rail status refresh failed:', err);
+        } finally {
+            railRefreshController = null;
+            railRefreshInFlight = false;
+            scheduleRailRefresh(RAIL_POLL_MS);
         }
     }
 
@@ -757,24 +860,37 @@ document.addEventListener('click', function (e) {
         if (pageVisible) {
             refresh({ force: true, immediate: true }).finally(() => {
                 scheduleNextPoll(INITIAL_POLL_DELAY);
+                scheduleRailRefresh(250);
             });
         } else {
+            abortRailRefresh();
             abortActiveRefresh();
 
             if (pollTimer) {
                 clearTimeout(pollTimer);
                 pollTimer = null;
             }
+
+            if (railRefreshTimer) {
+                clearTimeout(railRefreshTimer);
+                railRefreshTimer = null;
+            }
         }
     });
 
     window.addEventListener('pagehide', function () {
+        abortRailRefresh();
         abortActiveRefresh();
         clearBurstRefreshes();
 
         if (pollTimer) {
             clearTimeout(pollTimer);
             pollTimer = null;
+        }
+
+        if (railRefreshTimer) {
+            clearTimeout(railRefreshTimer);
+            railRefreshTimer = null;
         }
     });
 
@@ -786,5 +902,6 @@ document.addEventListener('click', function (e) {
 
     refresh({ force: true, immediate: true }).finally(() => {
         scheduleNextPoll(INITIAL_POLL_DELAY);
+        scheduleRailRefresh(500);
     });
 })();

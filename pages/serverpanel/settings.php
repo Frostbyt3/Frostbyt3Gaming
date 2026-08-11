@@ -21,6 +21,24 @@ $allocationAlias = trim((string)($selectedServer['allocation_alias'] ?? ''));
 $allocationIp = trim((string)($selectedServer['allocation_ip'] ?? ''));
 $nodeDaemonSftp = trim((string)($selectedServer['node_daemon_sftp'] ?? ''));
 
+if ($nodeId > 0 && ($nodeFqdn === '' || $nodeDaemonSftp === '')) {
+    $nodeResult = pteroGetNode($nodeId);
+
+    if (!empty($nodeResult['ok'])) {
+        $nodeAttributes = $nodeResult['data']['attributes'] ?? $nodeResult['attributes'] ?? [];
+
+        if (is_array($nodeAttributes) && !empty($nodeAttributes)) {
+            if ($nodeFqdn === '') {
+                $nodeFqdn = trim((string)($nodeAttributes['fqdn'] ?? ''));
+            }
+
+            if ($nodeDaemonSftp === '') {
+                $nodeDaemonSftp = trim((string)($nodeAttributes['daemon_sftp'] ?? ''));
+            }
+        }
+    }
+}
+
 // Public-facing node host overrides
 $publicNodeHosts = [
     6 => 'node1.frostbyt3gaming.com',

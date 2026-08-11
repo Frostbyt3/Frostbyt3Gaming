@@ -27,11 +27,22 @@ if (!function_exists('canAccess')) {
     require_once __DIR__ . '/../includes/functions.php';
 }
 
+$canViewAllServers = function_exists('canAccess') ? canAccess(4) : false;
+
+if ($panelUserId > 0 && $canViewAllServers && isset($_POST['server_scope_toggle'])) {
+    $requestedScope = (string)($_POST['server_scope'] ?? 'mine');
+    setShowAllServers($requestedScope === 'all');
+}
+
 /**
  * Session-first access bootstrap.
  * Only force-refresh if the requested server is missing from session access.
  */
-pteroEnsureServerAccessSession(false);
+$showAllServers = $canViewAllServers && function_exists('isShowingAllServers') ? isShowingAllServers() : false;
+$includeAdminAllServers = $canViewAllServers;
+$serverCacheMaxAgeSeconds = $includeAdminAllServers ? 30 : 60;
+
+pteroEnsureServerAccessSession(false, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
 
 $allowedServers = array_values(array_filter(array_map(
     'strval',
@@ -39,7 +50,7 @@ $allowedServers = array_values(array_filter(array_map(
 )));
 
 if (!in_array($serverIdentifier, $allowedServers, true)) {
-    pteroEnsureServerAccessSession(true);
+    pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
 
     $allowedServers = array_values(array_filter(array_map(
         'strval',
@@ -62,13 +73,17 @@ $isServerOwner = !empty($_SESSION['server_is_owner'][$serverIdentifier]);
 $isPanelAdmin = !empty($_SESSION['server_is_panel_admin'][$serverIdentifier]);
 
 $selectedServer = pteroGetSessionServerMeta($serverIdentifier);
+$serverMeta = is_array($_SESSION['server_meta'] ?? null) ? $_SESSION['server_meta'] : [];
+$serverOwnerMap = is_array($_SESSION['server_is_owner'] ?? null) ? $_SESSION['server_is_owner'] : [];
 
 /**
  * If session meta is missing or incomplete, try one forced refresh.
  */
 if (empty($selectedServer) || empty($selectedServer['identifier'])) {
-    pteroEnsureServerAccessSession(true);
+    pteroEnsureServerAccessSession(true, $includeAdminAllServers, $serverCacheMaxAgeSeconds);
     $selectedServer = pteroGetSessionServerMeta($serverIdentifier);
+    $serverMeta = is_array($_SESSION['server_meta'] ?? null) ? $_SESSION['server_meta'] : [];
+    $serverOwnerMap = is_array($_SESSION['server_is_owner'] ?? null) ? $_SESSION['server_is_owner'] : [];
 }
 
 if (empty($selectedServer) || empty($selectedServer['identifier'])) {
@@ -127,6 +142,58 @@ if (!function_exists('fbgStatusClass')) {
     }
 }
 
+if (!function_exists('getGameIcon')) {
+    function getGameIcon(array $server): string
+    {
+        $eggName = strtolower(trim((string)($server['egg_name'] ?? '')));
+        $serverName = strtolower(trim((string)($server['name'] ?? '')));
+        $source = $eggName !== '' && $eggName !== 'unknown' ? $eggName : $serverName;
+
+        if (str_contains($source, 'neoforge')) return '/backend/img/icons/mc-neoforge.png';
+        if (str_contains($source, 'forge')) return '/backend/img/icons/mc-forge.png';
+        if (str_contains($source, 'fabric')) return '/backend/img/icons/mc-fabric.png';
+        if (str_contains($source, 'quilt')) return '/backend/img/icons/mc-quilt.svg';
+        if (str_contains($source, 'sponge')) return '/backend/img/icons/mc-sponge.png';
+        if (str_contains($source, 'paper')) return '/backend/img/icons/mc-paper.svg';
+        if (str_contains($source, 'spigot')) return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'bukkit')) return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'purpur')) return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'vanilla minecraft')) return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'modpack installer')) return '/backend/img/icons/minecraftmodpack.png';
+        if (str_contains($source, 'palworld')) return '/backend/img/icons/palworld.png';
+        if (str_contains($source, 'rust')) return '/backend/img/icons/rust.png';
+        if (str_contains($source, 'ark')) return '/backend/img/icons/ase.png';
+        if (str_contains($source, 'icarus')) return '/backend/img/icons/icarus.png';
+        if (str_contains($source, 'tshock')) return '/backend/img/icons/tshock.png';
+        if (str_contains($source, 'terraria')) return '/backend/img/icons/terraria.png';
+        if (str_contains($source, 'starrupture')) return '/backend/img/icons/starrupture.jpg';
+        if (str_contains($source, 'fivem')) return '/backend/img/icons/fivem.png';
+        if (str_contains($source, 'factorio')) return '/backend/img/icons/factorio.png';
+        if (str_contains($source, 'enshrouded')) return '/backend/img/icons/enshrouded.png';
+
+        return '/backend/img/icons/default.png';
+    }
+}
+
+if (!function_exists('fbgServerRailInitialStatus')) {
+    function fbgServerRailInitialStatus(array $server, string $identifier, string $selectedIdentifier, bool $selectedInstalling): string
+    {
+        if ($identifier === $selectedIdentifier) {
+            return $selectedInstalling ? 'installing' : 'unknown';
+        }
+
+        if (!empty($server['is_installing'])) {
+            return 'installing';
+        }
+
+        if (!empty($server['suspended'])) {
+            return 'offline';
+        }
+
+        return 'unknown';
+    }
+}
+
 $ramLimit  = ((int)($selectedServer['memory'] ?? 0) === 0)
     ? '∞'
     : round(((int)$selectedServer['memory']) / 1024, 1) . ' GB';
@@ -140,6 +207,44 @@ $cpuLimit  = ((int)($selectedServer['cpu'] ?? 0) === 0)
     : number_format((int)$selectedServer['cpu']) . '%';
 
 $serverAddress = pteroGetCurrentServerAddress($serverIdentifier);
+
+$railServers = [];
+
+foreach ($serverMeta as $identifier => $server) {
+    $identifier = trim((string)$identifier);
+
+    if ($identifier === '' || !is_array($server)) {
+        continue;
+    }
+
+    $isOwner = !empty($serverOwnerMap[$identifier]);
+
+    if ($canViewAllServers && !$showAllServers && !$isOwner && $identifier !== $serverIdentifier) {
+        continue;
+    }
+
+    $railServers[] = $server;
+}
+
+usort($railServers, static function (array $a, array $b): int {
+    return strcasecmp(
+        (string)($a['name'] ?? ''),
+        (string)($b['name'] ?? '')
+    );
+});
+
+$hasSelectedServerInRail = false;
+
+foreach ($railServers as $server) {
+    if ((string)($server['identifier'] ?? '') === $serverIdentifier) {
+        $hasSelectedServerInRail = true;
+        break;
+    }
+}
+
+if (!$hasSelectedServerInRail) {
+    array_unshift($railServers, $selectedServer);
+}
 
 /* =============
    TAB SYSTEM
@@ -307,33 +412,94 @@ $csrfTokenForJs = (string)$_SESSION['csrf_token'];
 session_write_close();
 ?>
 
-<section class="fbg-dashboard fbg-server-panel-page">
-    <div class="fbg-dashboard-header">
-        <div>
-            <a href="./page.php?name=dashboard" class="btn fbg-neutral-button" style="margin-bottom: 12px;">← Back to Dashboard</a>
-        </div>
-    </div>
+<section class="fbg-admin-shell fbg-server-panel-shell">
+        <aside class="fbg-admin-sidebar fbg-server-rail">
+            <div class="fbg-admin-sidebar-brand fbg-server-rail-brand">
+                <span class="fbg-admin-sidebar-eyebrow">Server Panel</span>
+                <h2>Servers</h2>
+            </div>
 
-    <div class="fbg-server-view-switch">
-        <?php foreach ($availableTabs as $tabKey => $tabConfig): ?>
-            <?php if ($tabKey === 'admin'): ?>
-                <a href="https://panel.frostbyt3gaming.com/server/<?php echo urlencode($selectedServer['identifier']); ?>" target="_blank" class="fbg-server-view-tab" title="Open in Pterodactyl Panel">
-                    <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
-                    <?php echo htmlspecialchars($tabConfig['label']); ?>
-                    <i class="fas fa-up-right-from-square" style="margin-left: 6px; font-size: 0.75em;"></i>
-                </a>
-            <?php else: ?>
-                <a href="./page.php?name=serverpanel&id=<?php echo urlencode($selectedServer['identifier']); ?>&tab=<?php echo urlencode($tabKey); ?>" class="fbg-server-view-tab <?php echo $serverTab === $tabKey ? 'active' : ''; ?>">
-                    <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
-                    <?php echo htmlspecialchars($tabConfig['label']); ?>
-                </a>
+            <?php if ($canViewAllServers): ?>
+                <form method="post" class="fbg-server-rail-toggle-form">
+                    <input type="hidden" name="server_scope_toggle" value="1">
+
+                    <label class="fbg-server-scope-toggle fbg-server-rail-toggle">
+                        <span class="fbg-server-scope-label">
+                            <?php echo $showAllServers ? 'Showing all servers' : 'Showing your servers'; ?>
+                        </span>
+                        <input
+                            type="checkbox"
+                            name="server_scope"
+                            value="all"
+                            <?php echo $showAllServers ? 'checked' : ''; ?>
+                            onchange="this.form.submit()"
+                        >
+                        <span class="fbg-server-scope-slider" aria-hidden="true"></span>
+                    </label>
+                </form>
             <?php endif; ?>
-        <?php endforeach; ?>
-    </div>
 
-    <div class="fbg-server-shell">
-        <div class="fbg-server-main">
-            <article class="fbg-server-card <?php echo $serverTab === 'console' ? 'fbg-console-panel' : 'fbg-tab-panel'; ?>" data-server="<?php echo htmlspecialchars($selectedServer['identifier']); ?>">
+            <div class="fbg-server-rail-dashboard-link-wrap">
+                <a href="./page.php?name=dashboard" class="fbg-server-rail-item fbg-server-rail-dashboard-link">
+                    <span class="fbg-server-rail-icon-wrap fbg-server-rail-dashboard-icon" aria-hidden="true">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span class="fbg-server-rail-name">Back to Dashboard</span>
+                    <span class="fbg-server-rail-dashboard-spacer" aria-hidden="true"></span>
+                </a>
+            </div>
+
+            <nav class="fbg-server-rail-list" aria-label="Servers">
+                <?php foreach ($railServers as $server): ?>
+                    <?php
+                    $railIdentifier = (string)($server['identifier'] ?? '');
+                    $railName = (string)($server['name'] ?? 'Unnamed Server');
+                    $railIcon = getGameIcon($server);
+                    $railStatus = fbgServerRailInitialStatus($server, $railIdentifier, $serverIdentifier, $isInstalling);
+                    $isActiveRailServer = $railIdentifier === $serverIdentifier;
+                    ?>
+                    <a
+                        href="./page.php?name=serverpanel&id=<?php echo urlencode($railIdentifier); ?>&tab=<?php echo urlencode($serverTab); ?>"
+                        class="fbg-server-rail-item <?php echo $isActiveRailServer ? 'active' : ''; ?>"
+                        data-server="<?php echo htmlspecialchars($railIdentifier); ?>"
+                    >
+                        <span class="fbg-server-rail-icon-wrap" aria-hidden="true">
+                            <img src="<?php echo htmlspecialchars($railIcon); ?>" alt="" class="fbg-dashboard-game-icon">
+                        </span>
+                        <span class="fbg-server-rail-name" title="<?php echo htmlspecialchars($railName); ?>">
+                            <?php echo htmlspecialchars($railName); ?>
+                        </span>
+                        <span
+                            class="fbg-server-rail-status-dot <?php echo htmlspecialchars(fbgStatusClass($railStatus)); ?>"
+                            title="<?php echo htmlspecialchars(fbgStatusText($railStatus)); ?>"
+                            aria-label="<?php echo htmlspecialchars(fbgStatusText($railStatus)); ?>"
+                        ></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+        </aside>
+
+        <div class="fbg-admin-main fbg-server-panel-content">
+            <div class="fbg-server-view-switch">
+                <?php foreach ($availableTabs as $tabKey => $tabConfig): ?>
+                    <?php if ($tabKey === 'admin'): ?>
+                        <a href="./page.php?name=admin-servers&edit=<?php echo (int)($selectedServer['id'] ?? 0); ?>" class="fbg-server-view-tab" title="Open server in admin panel">
+                            <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
+                            <?php echo htmlspecialchars($tabConfig['label']); ?>
+                            <i class="fas fa-up-right-from-square" style="font-size: 0.75em;"></i>
+                        </a>
+                    <?php else: ?>
+                        <a href="./page.php?name=serverpanel&id=<?php echo urlencode($selectedServer['identifier']); ?>&tab=<?php echo urlencode($tabKey); ?>" class="fbg-server-view-tab <?php echo $serverTab === $tabKey ? 'active' : ''; ?>">
+                            <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
+                            <?php echo htmlspecialchars($tabConfig['label']); ?>
+                        </a>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="fbg-server-shell">
+                <div class="fbg-server-main">
+                    <article class="fbg-server-card <?php echo $serverTab === 'console' ? 'fbg-console-panel' : 'fbg-tab-panel'; ?>" data-server="<?php echo htmlspecialchars($selectedServer['identifier']); ?>">
                 <div class="fbg-server-card-header">
                     <div class="fbg-server-heading">
                         <div class="fbg-editable-row" data-field="name">
@@ -407,11 +573,11 @@ session_write_close();
                 <div id="server-tab-content">
                     <?php $renderServerTabContent(); ?>
                 </div>
-            </article>
-        </div>
+                    </article>
+                </div>
 
-        <aside class="fbg-server-sidebar">
-            <article class="fbg-server-card fbg-sidebar-card">
+                <aside class="fbg-server-sidebar">
+                    <article class="fbg-server-card fbg-sidebar-card">
                 <?php if ($canStartServer || $canRestartServer || $canStopServer): ?>
                     <div class="fbg-sidebar-actions-wrap" style="position:relative;">
                         <div class="fbg-sidebar-actions">
@@ -429,7 +595,7 @@ session_write_close();
 
                         </div>
 
-                        <div class="fbg-dashboard-alert fbg-power-action-message" id="power-action-message" style="display:none; position:absolute; left:50%; top:calc(100% + 10px); transform:translate(-50%, -6px); z-index:30; background-color: rgba(255, 255, 255, 0.35); border-color: #22aeff;"></div>
+                        <div class="fbg-dashboard-alert fbg-power-action-message" id="power-action-message" style="display:none; position:absolute; left:50%; top:calc(100% + 10px); transform:translate(-50%, -6px); z-index:30;"></div>
                     </div>
                 <?php endif; ?>
 
@@ -532,9 +698,10 @@ session_write_close();
                         </div>
                     </div>
                 </div>
-            </article>
-        </aside>
-    </div>
+                    </article>
+                </aside>
+            </div>
+        </div>
 </section>
 
 <script src="<?php echo asset('./backend/js/serverpanel/panel.js'); ?>"></script>

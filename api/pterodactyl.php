@@ -463,7 +463,7 @@ if (!function_exists('pteroSanitizeServerForSite')) {
                 $nodeAttrs = $nodeResult['data']['attributes'] ?? $nodeResult['attributes'] ?? [];
 
                 if (is_array($nodeAttrs) && !empty($nodeAttrs)) {
-                    $node = array_merge($nodeAttrs, $node);
+                    $node = array_merge($node, $nodeAttrs);
                 }
             }
         }
