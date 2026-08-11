@@ -30,16 +30,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const STATUS_URL = '/api/server_status.php';
     const POWER_URL = '/api/server/power.php';
 
-    const POLL_FAST = 1500;
-    const POLL_NORMAL = 2500;
-    const POLL_SLOW = 5000;
+    const POLL_FAST = 1250;
+    const POLL_NORMAL = 2250;
+    const POLL_SLOW = 4500;
     const MESSAGE_TIMEOUT = 4000;
+    const MAX_STATUS_IDS_PER_REQUEST = 12;
 
     let pollInProgress = false;
     let pageVisible = document.visibilityState === 'visible';
     let pollTimer = null;
     let currentPollDelay = POLL_NORMAL;
     let burstTimeouts = [];
+    let nextStatusOffset = 0;
+    let activeStatusController = null;
 
     function getCards() {
         return Array.from(document.querySelectorAll('.fbg-server-card'));
@@ -49,6 +52,31 @@ document.addEventListener('DOMContentLoaded', function () {
         return cards
             .map(card => String(card.dataset.server || '').trim())
             .filter(Boolean);
+    }
+
+    function selectStatusIds(ids, options = {}) {
+        const explicitIds = Array.isArray(options.ids)
+            ? options.ids.map(id => String(id || '').trim()).filter(Boolean)
+            : [];
+
+        if (explicitIds.length) {
+            return Array.from(new Set(explicitIds));
+        }
+
+        if (ids.length <= MAX_STATUS_IDS_PER_REQUEST) {
+            nextStatusOffset = 0;
+            return ids;
+        }
+
+        const selected = [];
+
+        for (let i = 0; i < MAX_STATUS_IDS_PER_REQUEST; i++) {
+            selected.push(ids[(nextStatusOffset + i) % ids.length]);
+        }
+
+        nextStatusOffset = (nextStatusOffset + MAX_STATUS_IDS_PER_REQUEST) % ids.length;
+
+        return selected;
     }
 
     function statusToText(status) {
@@ -251,6 +279,13 @@ document.addEventListener('DOMContentLoaded', function () {
         burstTimeouts = [];
     }
 
+    function abortActiveStatusRequest() {
+        if (activeStatusController) {
+            activeStatusController.abort();
+            activeStatusController = null;
+        }
+    }
+
     function scheduleNextPoll(delay = currentPollDelay) {
         if (pollTimer) {
             clearTimeout(pollTimer);
@@ -292,19 +327,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const cards = getCards();
         const ids = getServerIds(cards);
+        const statusIds = selectStatusIds(ids, options);
 
-        if (!ids.length) {
+        if (!statusIds.length) {
             return;
         }
 
         pollInProgress = true;
+        abortActiveStatusRequest();
+        activeStatusController = new AbortController();
 
         try {
             const response = await fetch(
-                STATUS_URL + '?ids=' + encodeURIComponent(ids.join(',')),
+                STATUS_URL + '?ids=' + encodeURIComponent(statusIds.join(',')),
                 {
                     headers: { 'Accept': 'application/json' },
-                    cache: 'no-store'
+                    cache: 'no-store',
+                    signal: activeStatusController.signal
                 }
             );
 
@@ -331,11 +370,20 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             currentPollDelay = calculatePollDelay(servers);
+
+            if (ids.length > MAX_STATUS_IDS_PER_REQUEST && currentPollDelay > POLL_NORMAL) {
+                currentPollDelay = POLL_NORMAL;
+            }
         } catch (err) {
+            if (err && err.name === 'AbortError') {
+                return;
+            }
+
             console.error('[FBG] Batch status check failed:', err);
 
             currentPollDelay = Math.max(currentPollDelay, POLL_SLOW);
         } finally {
+            activeStatusController = null;
             pollInProgress = false;
 
             if (pageVisible) {
@@ -391,12 +439,12 @@ document.addEventListener('DOMContentLoaded', function () {
             showMessage(msgBox, data.message || 'Success', false);
 
             currentPollDelay = POLL_FAST;
-            refreshStatusesBatch({ immediate: true, force: true });
+            refreshStatusesBatch({ immediate: true, force: true, ids: [identifier] });
             queueBurstRefreshes();
         } catch (err) {
             console.error('[FBG] Power action failed:', err);
             showMessage(msgBox, err.message || 'Failed', true);
-            refreshStatusesBatch({ immediate: true, force: true });
+            refreshStatusesBatch({ immediate: true, force: true, ids: [identifier] });
         } finally {
             setButtonsDisabled(container, false);
         }
@@ -452,7 +500,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (pageVisible) {
             refreshStatusesBatch({ immediate: true, force: true });
-        } else if (pollTimer) {
+        } else {
+            abortActiveStatusRequest();
+
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+        }
+    });
+
+    window.addEventListener('pagehide', function () {
+        abortActiveStatusRequest();
+        clearBurstRefreshes();
+
+        if (pollTimer) {
             clearTimeout(pollTimer);
             pollTimer = null;
         }

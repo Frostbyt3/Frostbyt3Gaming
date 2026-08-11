@@ -1,6 +1,8 @@
 <?php
 
-session_start();
+session_start([
+    'read_and_close' => true,
+]);
 
 header('Content-Type: application/json');
 
@@ -31,17 +33,26 @@ if ($rawIds !== '') {
 }
 
 /**
- * Make sure we have session-backed access data loaded.
- * Do not force-refresh unless we truly need to.
+ * Prefer already-loaded session access data for polling.
+ * Avoid rebuilding the full access map on every status request.
  */
-pteroEnsureServerAccessSession(false);
+$allowedServers = $_SESSION['allowed_servers'] ?? [];
+$serverMeta = $_SESSION['server_meta'] ?? [];
+
+if (!is_array($allowedServers) || !is_array($serverMeta)) {
+    session_start();
+    pteroEnsureServerAccessSession(false);
+
+    $allowedServers = $_SESSION['allowed_servers'] ?? [];
+    $serverMeta = $_SESSION['server_meta'] ?? [];
+
+    session_write_close();
+}
 
 $allowedServers = array_values(array_filter(array_map(
     'strval',
-    $_SESSION['allowed_servers'] ?? []
+    is_array($allowedServers) ? $allowedServers : []
 )));
-
-$serverMeta = $_SESSION['server_meta'] ?? [];
 
 $validIds = array_values(array_filter(
     $requestedIds,
@@ -53,6 +64,7 @@ $validIds = array_values(array_filter(
  * This helps if the session is stale, without rebuilding on every poll.
  */
 if (empty($validIds)) {
+    session_start();
     pteroEnsureServerAccessSession(true);
 
     $allowedServers = array_values(array_filter(array_map(
@@ -66,6 +78,8 @@ if (empty($validIds)) {
         $requestedIds,
         static fn($id) => in_array($id, $allowedServers, true)
     ));
+
+    session_write_close();
 }
 
 if (empty($validIds)) {
@@ -80,9 +94,12 @@ if (empty($validIds)) {
 session_write_close();
 
 $results = [];
+$resourceMap = pteroGetMultipleServerResources($validIds);
 
 foreach ($validIds as $identifier) {
-    $resources = pteroGetServerResources($identifier);
+    $resources = is_array($resourceMap[$identifier] ?? null)
+        ? $resourceMap[$identifier]
+        : pteroEmptyServerResources();
 
     $meta = is_array($serverMeta[$identifier] ?? null) ? $serverMeta[$identifier] : [];
     $isInstalling = !empty($meta['is_installing']);

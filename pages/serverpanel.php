@@ -71,20 +71,6 @@ if (empty($selectedServer) || empty($selectedServer['identifier'])) {
     $selectedServer = pteroGetSessionServerMeta($serverIdentifier);
 }
 
-/**
- * Pull fresh server data so sidebar/server meta reflects current allocation state.
- */
-$freshServerId = (int)($selectedServer['id'] ?? 0);
-$freshServer = $freshServerId > 0 ? pteroGetServer($freshServerId) : ['ok' => false];
-
-if (!empty($freshServer['ok']) && !empty($freshServer['data'])) {
-    $freshMeta = pteroSanitizeServerForSite($freshServer['data']);
-
-    if (!empty($freshMeta['identifier'])) {
-        $selectedServer = array_merge($selectedServer, $freshMeta);
-    }
-}
-
 if (empty($selectedServer) || empty($selectedServer['identifier'])) {
     http_response_code(503);
     echo '<section class="fbg-dashboard"><div class="fbg-dashboard-alert error is-visible">Server access was confirmed, but server details could not be loaded right now. Please try again.</div></section>';
@@ -102,17 +88,14 @@ $canRestartServer = $hasServerPermission('control.restart');
 
 $isInstalling = !empty($selectedServer['is_installing']);
 
-$resources = pteroGetServerResources($serverIdentifier);
-
-$status = 'unknown';
-
-if (is_array($resources) && !empty($resources['status'])) {
-    $status = (string)$resources['status'];
-}
-
-if ($isInstalling) {
-    $status = 'installing';
-}
+$resources = [
+    'status' => $isInstalling ? 'installing' : 'unknown',
+    'cpu' => 0,
+    'memory_bytes' => 0,
+    'disk_bytes' => 0,
+    'uptime' => 0,
+];
+$status = (string)$resources['status'];
 
 if (!function_exists('fbgFormatBytesToGb')) {
     function fbgFormatBytesToGb(int $bytes): string
@@ -430,7 +413,8 @@ session_write_close();
         <aside class="fbg-server-sidebar">
             <article class="fbg-server-card fbg-sidebar-card">
                 <?php if ($canStartServer || $canRestartServer || $canStopServer): ?>
-                    <div class="fbg-sidebar-actions">
+                    <div class="fbg-sidebar-actions-wrap" style="position:relative;">
+                        <div class="fbg-sidebar-actions">
                         <?php if ($canStartServer): ?>
                             <button type="button" class="btn fbg-neutral-button btn-start">Start</button>
                         <?php endif; ?>
@@ -442,9 +426,11 @@ session_write_close();
                         <?php if ($canStopServer): ?>
                             <button type="button" class="btn danger-action btn-stop">Stop</button>
                         <?php endif; ?>
-                    </div>
 
-                    <div class="fbg-dashboard-alert" id="power-action-message" style="display:none; margin-top: 16px;"></div>
+                        </div>
+
+                        <div class="fbg-dashboard-alert fbg-power-action-message" id="power-action-message" style="display:none; position:absolute; left:50%; top:calc(100% + 10px); transform:translate(-50%, -6px); z-index:30; background-color: rgba(255, 255, 255, 0.35); border-color: #22aeff;"></div>
+                    </div>
                 <?php endif; ?>
 
                 <div class="fbg-sidebar-stats">

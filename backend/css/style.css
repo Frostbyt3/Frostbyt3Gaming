@@ -2932,6 +2932,10 @@ a.button {
     gap: 18px;
 }
 
+.fbg-sidebar-actions-wrap {
+    position: relative;
+}
+
 .fbg-sidebar-actions {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -2942,6 +2946,25 @@ a.button {
     min-height: 54px;
     font-weight: 700;
     border-radius: 14px;
+}
+
+.fbg-power-action-message {
+    background: rgba(30, 30, 30, 0.96);
+    border: 1px solid var(--fbg-brightblue-hover-glow);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+    left: 0;
+    margin: 0;
+    max-width: none;
+    padding: 14px 18px;
+    position: absolute;
+    top: calc(100% + 10px);
+    transform: translateY(-6px);
+    width: 100%;
+    z-index: 30;
+}
+
+.fbg-power-action-message.is-visible {
+    transform: translateY(0);
 }
 
 .fbg-sidebar-stats {

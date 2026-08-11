@@ -1,19 +1,22 @@
 (function () {
     const config = window.FBG_SERVER_PANEL || {};
-    const panelApi = window.FBG_SERVER_PANEL_API || {};
 
-    const identifier = config.identifier;
-    const csrfToken = config.csrfToken;
+    const identifier = String(config.identifier || '').trim();
+    const csrfToken = String(config.csrfToken || '').trim();
 
     if (!identifier || !csrfToken) return;
 
-    const COMMAND_URL = '/api/server/command.php';
     const CONSOLE_URL = '/api/server/console.php?server_identifier=' + encodeURIComponent(identifier);
+    const TOKEN_REFRESH_FALLBACK_MS = 12 * 60 * 1000;
+    const RECONNECT_MIN_MS = 1000;
+    const RECONNECT_MAX_MS = 15000;
+    const MAX_TEXT_LENGTH = 300000;
+    const TRIM_TO_TEXT_LENGTH = 150000;
+    const COMMAND_HISTORY_LIMIT = 50;
 
     const commandInput = document.getElementById('server-command-input');
     const commandButton = document.getElementById('send-command-button');
     const commandMessage = document.getElementById('command-message');
-
     const consoleOutput = document.getElementById('server-console-output');
     const consoleMessage = document.getElementById('console-message');
     const consoleClearButton = document.getElementById('console-clear-button');
@@ -21,14 +24,20 @@
 
     if (!consoleOutput) return;
 
+    let socket = null;
+    let socketToken = '';
+    let socketUrl = '';
+    let authenticated = false;
+    let connecting = false;
+    let manuallyClosed = false;
+    let ignoredCloseSocket = null;
+    let reconnectTimer = null;
+    let tokenTimer = null;
+    let reconnectDelay = RECONNECT_MIN_MS;
+    let activeConnectionId = 0;
     let consoleAutoscrollEnabled = true;
-    let consoleSocket = null;
-    let consoleReconnectTimer = null;
-    let consoleHasAuthenticated = false;
-
     let commandHistory = [];
     let commandHistoryIndex = -1;
-
     let commandMessageTimeout = null;
     let consoleMessageTimeout = null;
 
@@ -44,30 +53,34 @@
         }
     }
 
-    function showCommandMessage(message, isError) {
-        if (!commandMessage) return;
+    function showTimedMessage(element, message, isError, name) {
+        if (!element) return;
 
-        clearNamedTimeout('command');
-        commandMessage.textContent = message;
-        commandMessage.className = 'fbg-dashboard-alert is-visible ' + (isError ? 'error' : 'success');
-        commandMessage.style.display = 'block';
+        clearNamedTimeout(name);
 
-        commandMessageTimeout = setTimeout(() => {
-            commandMessage.style.display = 'none';
+        element.textContent = message;
+        element.className = 'fbg-dashboard-alert is-visible ' + (isError ? 'error' : 'success');
+        element.style.display = 'block';
+
+        const timeoutId = setTimeout(() => {
+            element.style.display = 'none';
         }, isError ? 7000 : 4000);
+
+        if (name === 'command') commandMessageTimeout = timeoutId;
+        if (name === 'console') consoleMessageTimeout = timeoutId;
+    }
+
+    function showCommandMessage(message, isError) {
+        showTimedMessage(commandMessage, message, isError, 'command');
     }
 
     function showConsoleMessage(message, isError) {
-        if (!consoleMessage) return;
+        showTimedMessage(consoleMessage, message, isError, 'console');
+    }
 
-        clearNamedTimeout('console');
-        consoleMessage.textContent = message;
-        consoleMessage.className = 'fbg-dashboard-alert is-visible ' + (isError ? 'error' : 'success');
-        consoleMessage.style.display = 'block';
-
-        consoleMessageTimeout = setTimeout(() => {
-            consoleMessage.style.display = 'none';
-        }, isError ? 7000 : 4000);
+    function setCommandEnabled(enabled) {
+        if (commandInput) commandInput.disabled = !enabled;
+        if (commandButton) commandButton.disabled = !enabled;
     }
 
     function scrollConsoleToBottom() {
@@ -83,15 +96,9 @@
     }
 
     function highlightLogLine(line) {
-        if (line.includes('[WARN]')) {
-            return '<span class="log-warn">' + line + '</span>';
-        }
-        if (line.includes('[ERROR]')) {
-            return '<span class="log-error">' + line + '</span>';
-        }
-        if (line.includes('[INFO]')) {
-            return '<span class="log-info">' + line + '</span>';
-        }
+        if (line.includes('[WARN]')) return '<span class="log-warn">' + line + '</span>';
+        if (line.includes('[ERROR]')) return '<span class="log-error">' + line + '</span>';
+        if (line.includes('[INFO]')) return '<span class="log-info">' + line + '</span>';
         return line;
     }
 
@@ -116,36 +123,20 @@
             '97': '<span class="ansi-fg-bright-white">'
         };
 
-        let html = escapeHtml(text);
+        return escapeHtml(text).replace(/\x1b\[([0-9;]*)m/g, function (_, codes) {
+            if (!codes || codes === '0') return '</span>';
 
-        html = html.replace(/\x1b\[([0-9;]*)m/g, function (_, codes) {
-            if (!codes || codes === '0') {
-                return '</span>';
-            }
-
-            const parts = codes.split(';');
-            let out = '';
-
-            for (const code of parts) {
-                if (code === '' || code === '0') {
-                    out += '</span>';
-                } else if (ansiMap[code]) {
-                    out += ansiMap[code];
-                }
-            }
-
-            return out;
+            return codes.split(';').map((code) => {
+                if (!code || code === '0') return '</span>';
+                return ansiMap[code] || '';
+            }).join('');
         });
-
-        return html;
     }
 
     function appendConsoleText(text) {
         if (!consoleOutput || !text) return;
 
-        let normalized = String(text)
-            .replace(/\r\n/g, '\n')
-            .replace(/\r/g, '\n');
+        let normalized = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
         if (consoleOutput.textContent === 'Connecting to console...') {
             consoleOutput.innerHTML = '';
@@ -158,277 +149,363 @@
         const lines = normalized.split('\n').map(highlightLogLine).join('\n');
         consoleOutput.innerHTML += ansiToHtml(lines);
 
-        const maxTextLength = 300000;
-        const trimToTextLength = 150000;
-
-        if (consoleOutput.textContent.length > maxTextLength) {
-            const plain = consoleOutput.textContent.slice(-trimToTextLength);
-            consoleOutput.textContent = plain;
+        if (consoleOutput.textContent.length > MAX_TEXT_LENGTH) {
+            consoleOutput.textContent = consoleOutput.textContent.slice(-TRIM_TO_TEXT_LENGTH);
         }
 
         scrollConsoleToBottom();
     }
 
-    async function sendCommand() {
+    function sendSocketEvent(event, args = [null]) {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !authenticated) {
+            return false;
+        }
+
+        socket.send(JSON.stringify({
+            event,
+            args: Array.isArray(args) ? args : [args]
+        }));
+
+        return true;
+    }
+
+    function requestLogs() {
+        sendSocketEvent('send logs');
+    }
+
+    function requestStats() {
+        sendSocketEvent('send stats');
+    }
+
+    function clearReconnectTimer() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+    }
+
+    function clearTokenTimer() {
+        if (tokenTimer) {
+            clearTimeout(tokenTimer);
+            tokenTimer = null;
+        }
+    }
+
+    function scheduleTokenRefresh() {
+        clearTokenTimer();
+
+        tokenTimer = setTimeout(() => {
+            refreshToken();
+        }, TOKEN_REFRESH_FALLBACK_MS);
+    }
+
+    function closeSocket(ignoreCloseEvent = false) {
+        authenticated = false;
+
+        if (!socket) return;
+
+        if (ignoreCloseEvent) {
+            ignoredCloseSocket = socket;
+        }
+
+        try {
+            socket.close();
+        } catch (error) {
+            console.error('Error closing console socket:', error);
+        }
+
+        socket = null;
+    }
+
+    function scheduleReconnect(reason) {
+        if (manuallyClosed) return;
+
+        closeSocket(true);
+        clearReconnectTimer();
+        setCommandEnabled(false);
+
+        if (reason) {
+            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91m' + reason + '\x1b[0m \x1b[93mReconnecting...');
+        }
+
+        const delay = reconnectDelay;
+        reconnectDelay = Math.min(reconnectDelay + 1500, RECONNECT_MAX_MS);
+
+        reconnectTimer = setTimeout(() => {
+            connectConsole();
+        }, delay);
+    }
+
+    async function getConnectionDetails() {
+        const response = await fetch(CONSOLE_URL, {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        });
+
+        const rawText = await response.text();
+        let data;
+
+        try {
+            data = JSON.parse(rawText);
+        } catch (error) {
+            console.error('Non-JSON response from console endpoint:', rawText);
+            throw new Error('Console endpoint returned invalid response. Check PHP error logs.');
+        }
+
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'Failed to get console connection details.');
+        }
+
+        if (!data.socket || !data.token) {
+            throw new Error('Console connection details were incomplete.');
+        }
+
+        return {
+            socket: String(data.socket),
+            token: String(data.token)
+        };
+    }
+
+    async function refreshToken() {
+        if (manuallyClosed) return;
+
+        try {
+            const details = await getConnectionDetails();
+            socketToken = details.token;
+
+            if (details.socket && details.socket !== socketUrl) {
+                socketUrl = details.socket;
+                scheduleReconnect('Console endpoint changed.');
+                return;
+            }
+
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    event: 'auth',
+                    args: [socketToken]
+                }));
+            }
+
+            scheduleTokenRefresh();
+        } catch (error) {
+            console.error('Console token refresh failed:', error);
+            scheduleReconnect('Console token refresh failed.');
+        }
+    }
+
+    function normalizeStatus(status) {
+        const value = String(status || '').trim().toLowerCase();
+        if (value === 'off') return 'offline';
+        if (value === 'killed') return 'offline';
+        return value || undefined;
+    }
+
+    function getPanelApi() {
+        return window.FBG_SERVER_PANEL_API || {};
+    }
+
+    function updatePanelStatus(status) {
+        const panelApi = getPanelApi();
+
+        if (typeof panelApi.updateUI !== 'function') return;
+
+        const normalized = normalizeStatus(status);
+        if (!normalized) return;
+
+        panelApi.updateUI({ status: normalized });
+    }
+
+    function updatePanelStats(rawStats) {
+        const panelApi = getPanelApi();
+
+        if (typeof panelApi.updateUI !== 'function') return;
+
+        let stats = rawStats;
+
+        if (typeof rawStats === 'string') {
+            try {
+                stats = JSON.parse(rawStats);
+            } catch (error) {
+                console.error('Failed to parse stats payload:', error, rawStats);
+                return;
+            }
+        }
+
+        if (!stats || typeof stats !== 'object') return;
+
+        const resources = stats.resources && typeof stats.resources === 'object'
+            ? stats.resources
+            : stats;
+
+        panelApi.updateUI({
+            status: normalizeStatus(stats.state || stats.current_state),
+            memory_bytes: resources.memory_bytes,
+            disk_bytes: resources.disk_bytes,
+            cpu: resources.cpu_absolute,
+            uptime: resources.uptime
+        });
+    }
+
+    function handleSocketMessage(message) {
+        if (!message || typeof message !== 'object') return;
+
+        const args = Array.isArray(message.args) ? message.args : [];
+
+        switch (message.event) {
+            case 'auth success':
+                authenticated = true;
+                reconnectDelay = RECONNECT_MIN_MS;
+                setCommandEnabled(true);
+                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConsole connected!');
+                requestLogs();
+                requestStats();
+                scheduleTokenRefresh();
+                return;
+
+            case 'console output':
+            case 'install output':
+            case 'transfer logs':
+                appendConsoleText(args.join('\n'));
+                return;
+
+            case 'status':
+                updatePanelStatus(args[0]);
+                return;
+
+            case 'stats':
+                updatePanelStats(args[0] || {});
+                return;
+
+            case 'daemon message':
+                appendConsoleText('\n[daemon] ' + args.join(' ') + '\n');
+                return;
+
+            case 'daemon error':
+                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91m' + args.join(' ') + '\x1b[0m');
+                return;
+
+            case 'token expiring':
+            case 'token expired':
+                refreshToken();
+                return;
+
+            case 'jwt error':
+                console.warn('Console JWT error:', args[0] || '');
+                refreshToken();
+                return;
+
+            case 'transfer status':
+                if (args[0] && args[0] !== 'starting' && args[0] !== 'success') {
+                    scheduleReconnect('Server transfer state changed.');
+                }
+                return;
+
+            default:
+                return;
+        }
+    }
+
+    async function connectConsole() {
+        if (connecting || manuallyClosed) return;
+
+        connecting = true;
+        clearReconnectTimer();
+        clearTokenTimer();
+        closeSocket(true);
+        setCommandEnabled(false);
+        appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConnecting to console...');
+
+        const connectionId = ++activeConnectionId;
+
+        try {
+            const details = await getConnectionDetails();
+
+            if (connectionId !== activeConnectionId || manuallyClosed) {
+                return;
+            }
+
+            socketUrl = details.socket;
+            socketToken = details.token;
+            socket = new WebSocket(socketUrl);
+            const activeSocket = socket;
+
+            activeSocket.addEventListener('open', () => {
+                activeSocket.send(JSON.stringify({
+                    event: 'auth',
+                    args: [socketToken]
+                }));
+            });
+
+            activeSocket.addEventListener('message', (event) => {
+                try {
+                    handleSocketMessage(JSON.parse(event.data));
+                } catch (error) {
+                    console.warn('Failed to parse console socket message:', error, event.data);
+                }
+            });
+
+            activeSocket.addEventListener('close', (event) => {
+                if (manuallyClosed) return;
+                if (ignoredCloseSocket === activeSocket) {
+                    ignoredCloseSocket = null;
+                    return;
+                }
+
+                console.warn('Console socket closed:', {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                    authenticated
+                });
+
+                scheduleReconnect('Console disconnected.');
+            });
+
+            activeSocket.addEventListener('error', (event) => {
+                console.error('Console socket error:', event);
+                scheduleReconnect('Console connection error.');
+            });
+        } catch (error) {
+            console.error('Console connection failed:', error);
+            showConsoleMessage(error.message || 'Failed to connect to console.', true);
+            scheduleReconnect('Failed to connect to console.');
+        } finally {
+            connecting = false;
+        }
+    }
+
+    function sendCommand() {
         if (!commandInput || !commandButton) return;
 
         const command = commandInput.value.trim();
 
         if (!command) {
-            //showCommandMessage('Enter a command first.', true);
             return;
         }
 
-        commandInput.value = '';
-        commandInput.disabled = true;
-        commandButton.disabled = true;
-
-        //showCommandMessage('Sending command...', false);
-
-        try {
-            const response = await fetch(COMMAND_URL, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    id: identifier,
-                    command: command
-                })
-            });
-
-            const rawText = await response.text();
-
-            let data;
-            try {
-                data = JSON.parse(rawText);
-            } catch (parseError) {
-                console.error('Non-JSON response from command endpoint:', rawText);
-                throw new Error('Command endpoint returned invalid response. Check PHP error logs.');
-            }
-
-            if (!response.ok || !data.ok) {
-                throw new Error(data.error || 'Command failed');
-            }
-
-            //showCommandMessage(data.message || 'Command sent.', false);
-
-            commandHistory.push(command);
-            commandHistoryIndex = commandHistory.length;
-        } catch (err) {
-            console.error('Command error:', err);
-            showCommandMessage(err.message || 'Failed to send command.', true);
-            commandInput.value = command;
-        } finally {
-            commandInput.disabled = false;
-            commandButton.disabled = false;
+        if (!sendSocketEvent('send command', command)) {
+            showCommandMessage('Console is still connecting. Try again in a moment.', true);
             commandInput.focus();
-        }
-    }
-
-    function requestConsoleLogsAndStats() {
-        if (!consoleSocket || consoleSocket.readyState !== WebSocket.OPEN) return;
-
-        consoleSocket.send(JSON.stringify({
-            event: 'send logs',
-            args: [null]
-        }));
-
-        consoleSocket.send(JSON.stringify({
-            event: 'send stats',
-            args: [null]
-        }));
-    }
-
-    function handleConsoleSocketMessage(message) {
-        if (!message || typeof message !== 'object') return;
-
-        console.log('Console socket message:', message);
-
-        if (message.event === 'auth success') {
-            consoleHasAuthenticated = true;
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConsole connected!');
-            requestConsoleLogsAndStats();
             return;
         }
 
-        if (message.event === 'console output') {
-            const chunk = Array.isArray(message.args) ? message.args.join('\n') : '';
-            appendConsoleText(chunk);
-            return;
-        }
-
-        if (message.event === 'status') {
-            const status = Array.isArray(message.args) ? message.args[0] : 'unknown';
-
-            if (typeof panelApi.updateUI === 'function') {
-                panelApi.updateUI({ status: status });
-            }
-
-            return;
-        }
-
-        if (message.event === 'stats') {
-            try {
-                const rawStats = Array.isArray(message.args) ? message.args[0] : '{}';
-                const stats = typeof rawStats === 'string' ? JSON.parse(rawStats) : rawStats;
-
-                if (typeof panelApi.updateUI === 'function') {
-                    panelApi.updateUI({
-                        status: stats.state || undefined,
-                        memory_bytes: stats.memory_bytes,
-                        disk_bytes: stats.disk_bytes,
-                        cpu: stats.cpu_absolute
-                    });
-                }
-            } catch (err) {
-                console.error('Failed to parse stats payload:', err, message);
-            }
-
-            return;
-        }
-
-        if (message.event === 'daemon message') {
-            const text = Array.isArray(message.args) ? message.args.join(' ') : 'Daemon message received.';
-            appendConsoleText('\n[daemon] ' + text + '\n');
-            return;
-        }
-
-        if (message.event === 'jwt error') {
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mConsole session expired.\x1b[0m \x1b[93mReconnecting...');
-            reconnectConsoleSoon();
-            return;
-        }
-
-        if (message.event === 'token expiring') {
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mConsole token expiring.\x1b[0m \x1b[93mReconnecting...');
-            reconnectConsoleSoon();
-            return;
-        }
-
-        if (message.event === 'token expired') {
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mConsole token expired.\x1b[0m \x1b[93mReconnecting...');
-            reconnectConsoleSoon();
-        }
-    }
-
-    function reconnectConsoleSoon() {
-        if (consoleReconnectTimer) {
-            clearTimeout(consoleReconnectTimer);
-        }
-
-        if (consoleSocket) {
-            try {
-                consoleSocket.close();
-            } catch (e) {
-                console.error('Error closing console socket during reconnect:', e);
-            }
-            consoleSocket = null;
-        }
-
-        consoleReconnectTimer = setTimeout(() => {
-            connectConsole();
-        }, 2000);
-    }
-
-    async function connectConsole() {
-        try {
-            if (consoleReconnectTimer) {
-                clearTimeout(consoleReconnectTimer);
-                consoleReconnectTimer = null;
-            }
-
-            if (consoleSocket) {
-                try {
-                    consoleSocket.close();
-                } catch (e) {
-                    console.error('Error closing existing console socket:', e);
-                }
-                consoleSocket = null;
-            }
-
-            consoleHasAuthenticated = false;
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConnecting to console...');
-
-            const response = await fetch(CONSOLE_URL, {
-                headers: { 'Accept': 'application/json' },
-                cache: 'no-store'
-            });
-
-            const rawText = await response.text();
-
-            let data;
-            try {
-                data = JSON.parse(rawText);
-            } catch (parseError) {
-                console.error('Non-JSON response from console endpoint:', rawText);
-                throw new Error('Console endpoint returned invalid response. Check PHP error logs.');
-            }
-
-            if (!response.ok || !data.ok) {
-                throw new Error(data.error || 'Failed to get console connection details.');
-            }
-
-            const socketUrl = data.socket;
-            const token = data.token;
-
-            if (!socketUrl || !token) {
-                throw new Error('Console connection details were incomplete.');
-            }
-
-            consoleSocket = new WebSocket(socketUrl);
-
-            consoleSocket.addEventListener('open', function () {
-                consoleSocket.send(JSON.stringify({
-                    event: 'auth',
-                    args: [token]
-                }));
-            });
-
-            consoleSocket.addEventListener('message', function (event) {
-                try {
-                    const message = JSON.parse(event.data);
-                    handleConsoleSocketMessage(message);
-                } catch (err) {
-                    console.error('Failed to parse console socket message:', err, event.data);
-                }
-            });
-
-            consoleSocket.addEventListener('close', function (event) {
-                console.warn('Console socket closed:', {
-                    code: event.code,
-                    reason: event.reason,
-                    wasClean: event.wasClean,
-                    authenticated: consoleHasAuthenticated
-                });
-
-                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mConsole disconnected (code ' + event.code + ')\x1b[0m. \x1b[93mReconnecting...');
-                reconnectConsoleSoon();
-            });
-
-            consoleSocket.addEventListener('error', function (event) {
-                console.error('Console socket error:', event);
-                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mConsole connection error\x1b[0m. \x1b[93mReconnecting...');
-                reconnectConsoleSoon();
-            });
-        } catch (err) {
-            console.error('Console connection failed:', err);
-            //showConsoleMessage(err.message || 'Failed to connect to console.', true);
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91mFailed to connect to console.');
-            reconnectConsoleSoon();
-        }
+        commandHistory.unshift(command);
+        commandHistory = commandHistory.slice(0, COMMAND_HISTORY_LIMIT);
+        commandHistoryIndex = -1;
+        commandInput.value = '';
+        commandInput.focus();
     }
 
     window.FBG_SERVER_PANEL_CONSOLE = {
-        appendConsoleText
+        appendConsoleText,
+        requestStats,
+        reconnect: () => scheduleReconnect('Manual reconnect requested.')
     };
 
     if (consoleClearButton) {
         consoleClearButton.addEventListener('click', function () {
             consoleOutput.textContent = '';
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[93mConsole Cleared.');
+            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[93mConsole cleared.');
         });
     }
 
@@ -449,43 +526,41 @@
     }
 
     if (commandInput) {
-        commandInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
+        commandInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
                 sendCommand();
+                return;
             }
 
-            if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (commandHistory.length > 0) {
-                    commandHistoryIndex = Math.max(0, commandHistoryIndex - 1);
-                    commandInput.value = commandHistory[commandHistoryIndex];
-                }
-            }
+            if (event.key === 'ArrowUp') {
+                event.preventDefault();
 
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
                 if (commandHistory.length > 0) {
-                    commandHistoryIndex = Math.min(commandHistory.length - 1, commandHistoryIndex + 1);
+                    commandHistoryIndex = Math.min(commandHistoryIndex + 1, commandHistory.length - 1);
                     commandInput.value = commandHistory[commandHistoryIndex] || '';
+                }
+
+                return;
+            }
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+
+                if (commandHistory.length > 0) {
+                    commandHistoryIndex = Math.max(commandHistoryIndex - 1, -1);
+                    commandInput.value = commandHistoryIndex >= 0 ? commandHistory[commandHistoryIndex] : '';
                 }
             }
         });
     }
 
-    connectConsole();
-
     window.addEventListener('beforeunload', function () {
-        if (consoleReconnectTimer) {
-            clearTimeout(consoleReconnectTimer);
-        }
-
-        if (consoleSocket) {
-            try {
-                consoleSocket.close();
-            } catch (e) {
-                console.error('Error closing console socket on unload:', e);
-            }
-        }
+        manuallyClosed = true;
+        clearReconnectTimer();
+        clearTokenTimer();
+        closeSocket();
     });
+
+    connectConsole();
 })();

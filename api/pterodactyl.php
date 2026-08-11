@@ -544,6 +544,274 @@ if (!function_exists('pteroSanitizeServerForSite')) {
     }
 }
 
+if (!function_exists('pteroBuildClientApiUrl')) {
+    function pteroBuildClientApiUrl(string $endpoint): string
+    {
+        return rtrim(PTERO_BASE_URL, '/') . '/api/client/' . ltrim($endpoint, '/');
+    }
+}
+
+if (!function_exists('pteroClientApiHeaders')) {
+    function pteroClientApiHeaders(): array
+    {
+        return [
+            'Accept: Application/vnd.pterodactyl.v1+json',
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . PTERO_CLIENT_API_KEY,
+        ];
+    }
+}
+
+if (!function_exists('pteroEmptyServerResources')) {
+    function pteroEmptyServerResources(): array
+    {
+        return [
+            'status' => 'unknown',
+            'cpu' => 0,
+            'memory_bytes' => 0,
+            'disk_bytes' => 0,
+            'uptime' => 0,
+        ];
+    }
+}
+
+if (!function_exists('pteroServerResourceCacheTtl')) {
+    function pteroServerResourceCacheTtl(): int
+    {
+        return 3;
+    }
+}
+
+if (!function_exists('pteroServerResourceCacheStaleTtl')) {
+    function pteroServerResourceCacheStaleTtl(): int
+    {
+        return 15;
+    }
+}
+
+if (!function_exists('pteroServerResourceCacheDir')) {
+    function pteroServerResourceCacheDir(): string
+    {
+        return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'fbg-ptero-resource-cache';
+    }
+}
+
+if (!function_exists('pteroServerResourceCacheKey')) {
+    function pteroServerResourceCacheKey(string $identifier): string
+    {
+        return 'fbg_ptero_resources_' . sha1(trim($identifier));
+    }
+}
+
+if (!function_exists('pteroReadCachedServerResources')) {
+    function pteroReadCachedServerResources(string $identifier, bool $allowStale = false): ?array
+    {
+        $identifier = trim($identifier);
+        if ($identifier === '') {
+            return null;
+        }
+
+        $ttl = $allowStale ? pteroServerResourceCacheStaleTtl() : pteroServerResourceCacheTtl();
+        $cacheKey = pteroServerResourceCacheKey($identifier);
+
+        if (function_exists('apcu_fetch') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOL)) {
+            $success = false;
+            $payload = apcu_fetch($cacheKey, $success);
+
+            if ($success && is_array($payload)) {
+                $cachedAt = (int)($payload['cached_at'] ?? 0);
+                $resources = $payload['resources'] ?? null;
+
+                if ($cachedAt > 0 && (time() - $cachedAt) <= $ttl && is_array($resources)) {
+                    return $resources;
+                }
+            }
+        }
+
+        $cacheFile = pteroServerResourceCacheDir() . DIRECTORY_SEPARATOR . sha1($identifier) . '.json';
+
+        if (!is_file($cacheFile)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($cacheFile);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $cachedAt = (int)($payload['cached_at'] ?? 0);
+        $resources = $payload['resources'] ?? null;
+
+        if ($cachedAt <= 0 || !is_array($resources)) {
+            return null;
+        }
+
+        if ((time() - $cachedAt) > $ttl) {
+            return null;
+        }
+
+        return $resources;
+    }
+}
+
+if (!function_exists('pteroWriteCachedServerResources')) {
+    function pteroWriteCachedServerResources(string $identifier, array $resources): void
+    {
+        $identifier = trim($identifier);
+        if ($identifier === '') {
+            return;
+        }
+
+        $payload = [
+            'cached_at' => time(),
+            'resources' => $resources,
+        ];
+
+        if (function_exists('apcu_store') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOL)) {
+            @apcu_store(pteroServerResourceCacheKey($identifier), $payload, pteroServerResourceCacheStaleTtl());
+        }
+
+        $cacheDir = pteroServerResourceCacheDir();
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0775, true);
+        }
+
+        if (is_dir($cacheDir)) {
+            $cacheFile = $cacheDir . DIRECTORY_SEPARATOR . sha1($identifier) . '.json';
+            @file_put_contents($cacheFile, json_encode($payload, JSON_UNESCAPED_SLASHES));
+        }
+    }
+}
+
+if (!function_exists('pteroNormalizeServerResources')) {
+    function pteroNormalizeServerResources(array $payload): array
+    {
+        $attributes = $payload['attributes'] ?? [];
+        $resources = $attributes['resources'] ?? [];
+
+        return [
+            'status' => (string)($attributes['current_state'] ?? 'unknown'),
+            'cpu' => (float)($resources['cpu_absolute'] ?? 0),
+            'memory_bytes' => (int)($resources['memory_bytes'] ?? 0),
+            'disk_bytes' => (int)($resources['disk_bytes'] ?? 0),
+            'uptime' => (int)($resources['uptime'] ?? 0),
+        ];
+    }
+}
+
+if (!function_exists('pteroGetMultipleServerResources')) {
+    function pteroGetMultipleServerResources(array $identifiers): array
+    {
+        $identifiers = array_values(array_unique(array_filter(array_map(
+            static fn($identifier) => trim((string)$identifier),
+            $identifiers
+        ))));
+
+        if (empty($identifiers)) {
+            return [];
+        }
+
+        $results = [];
+        $uncachedIdentifiers = [];
+
+        foreach ($identifiers as $identifier) {
+            $cached = pteroReadCachedServerResources($identifier, false);
+
+            if (is_array($cached)) {
+                $results[$identifier] = $cached;
+                continue;
+            }
+
+            $uncachedIdentifiers[] = $identifier;
+        }
+
+        if (empty($uncachedIdentifiers)) {
+            return $results;
+        }
+
+        if (
+            !defined('PTERO_CLIENT_API_KEY') ||
+            PTERO_CLIENT_API_KEY === '' ||
+            !function_exists('curl_multi_init')
+        ) {
+            foreach ($uncachedIdentifiers as $identifier) {
+                $results[$identifier] = pteroGetServerResources($identifier);
+            }
+
+            return $results;
+        }
+
+        $multiHandle = curl_multi_init();
+        $headers = pteroClientApiHeaders();
+        $handles = [];
+
+        foreach ($uncachedIdentifiers as $identifier) {
+            $handle = curl_init(pteroBuildClientApiUrl("servers/{$identifier}/resources"));
+
+            curl_setopt_array($handle, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CUSTOMREQUEST => 'GET',
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_TIMEOUT_MS => 1800,
+                CURLOPT_CONNECTTIMEOUT_MS => 750,
+                CURLOPT_NOSIGNAL => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+            ]);
+
+            curl_multi_add_handle($multiHandle, $handle);
+            $handles[$identifier] = $handle;
+        }
+
+        $active = null;
+
+        do {
+            $multiStatus = curl_multi_exec($multiHandle, $active);
+
+            if ($active) {
+                curl_multi_select($multiHandle, 0.1);
+            }
+        } while ($active && $multiStatus === CURLM_OK);
+
+        foreach ($handles as $identifier => $handle) {
+            $response = curl_multi_getcontent($handle);
+            $httpCode = (int)curl_getinfo($handle, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($handle);
+            $decoded = null;
+
+            if ($response !== '' && $response !== null) {
+                $decoded = json_decode($response, true);
+            }
+
+            if ($curlError === '' && $httpCode >= 200 && $httpCode < 300 && is_array($decoded)) {
+                $results[$identifier] = pteroNormalizeServerResources($decoded);
+                pteroWriteCachedServerResources($identifier, $results[$identifier]);
+            } else {
+                $stale = pteroReadCachedServerResources($identifier, true);
+                $results[$identifier] = is_array($stale) ? $stale : pteroEmptyServerResources();
+            }
+
+            curl_multi_remove_handle($multiHandle, $handle);
+            curl_close($handle);
+        }
+
+        curl_multi_close($multiHandle);
+
+        foreach ($identifiers as $identifier) {
+            if (!isset($results[$identifier])) {
+                $results[$identifier] = pteroEmptyServerResources();
+            }
+        }
+
+        return $results;
+    }
+}
+
 if (!function_exists('pteroGetServerStatus')) {
     function pteroGetServerStatus(string $identifier): ?string
     {
@@ -555,28 +823,22 @@ if (!function_exists('pteroGetServerStatus')) {
 if (!function_exists('pteroGetServerResources')) {
     function pteroGetServerResources(string $identifier): array
     {
+        $cached = pteroReadCachedServerResources($identifier, false);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         $result = pteroClientRequest('GET', "servers/{$identifier}/resources");
 
         if (!$result['ok']) {
-            return [
-                'status' => 'unknown',
-                'cpu' => 0,
-                'memory_bytes' => 0,
-                'disk_bytes' => 0,
-                'uptime' => 0,
-            ];
+            $stale = pteroReadCachedServerResources($identifier, true);
+            return is_array($stale) ? $stale : pteroEmptyServerResources();
         }
 
-        $attributes = $result['data']['attributes'] ?? [];
-        $resources  = $attributes['resources'] ?? [];
+        $resources = pteroNormalizeServerResources(is_array($result['data'] ?? null) ? $result['data'] : []);
+        pteroWriteCachedServerResources($identifier, $resources);
 
-        return [
-            'status' => $attributes['current_state'] ?? 'unknown',
-            'cpu' => (float) ($resources['cpu_absolute'] ?? 0),
-            'memory_bytes' => (int) ($resources['memory_bytes'] ?? 0),
-            'disk_bytes' => (int) ($resources['disk_bytes'] ?? 0),
-            'uptime' => (int) ($resources['uptime'] ?? 0),
-        ];
+        return $resources;
     }
 }
 
@@ -1566,16 +1828,30 @@ if (!function_exists('pteroDecodeSubuserPermissions')) {
 }
 
 if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
-    function pteroGetServerAccessMapForUserFromDatabase(int $panelUserId, bool $isPanelAdmin = false): ?array
+    function pteroGetServerAccessMapForUserFromDatabase(
+        int $panelUserId,
+        bool $isPanelAdmin = false,
+        bool $includeAdminAllServers = false
+    ): ?array
     {
         if ($panelUserId <= 0) {
             return [];
         }
 
         try {
-            $whereSql = $isPanelAdmin
+            $showAllForAdmin = $isPanelAdmin && $includeAdminAllServers;
+            $whereSql = $showAllForAdmin
+                ? '1 = 1'
+                : ($isPanelAdmin
                 ? 's.owner_id = :owner_id'
-                : '(s.owner_id = :owner_id OR su.id IS NOT NULL)';
+                : '(s.owner_id = :owner_id OR su.id IS NOT NULL)');
+            $queryParams = [
+                'subuser_id' => $panelUserId,
+            ];
+
+            if (!$showAllForAdmin) {
+                $queryParams['owner_id'] = $panelUserId;
+            }
 
             $stmt = fbgPteroDb()->prepare("
                 SELECT
@@ -1591,6 +1867,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                     s.disk,
                     s.cpu,
                     s.allocation_limit,
+                    s.database_limit,
                     s.nest_id,
                     s.egg_id,
                     s.expired_at,
@@ -1613,10 +1890,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                 WHERE {$whereSql}
                 ORDER BY s.name ASC
             ");
-            $stmt->execute([
-                'subuser_id' => $panelUserId,
-                'owner_id' => $panelUserId,
-            ]);
+            $stmt->execute($queryParams);
         } catch (Throwable $e) {
             error_log('Unable to load dashboard server access from database: ' . $e->getMessage());
             return null;
@@ -1636,6 +1910,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
             $rawStatus = strtolower(trim((string)($row['status'] ?? '')));
             $isOwner = $ownerId === $panelUserId;
             $expiredAt = $row['expired_at'] ?? null;
+            $isPanelAdminForServer = $isPanelAdmin && ($showAllForAdmin || $isOwner);
 
             $server = [
                 'id' => $serverDbId,
@@ -1658,6 +1933,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                 'disk' => (int)($row['disk'] ?? 0),
                 'cpu' => (int)($row['cpu'] ?? 0),
                 'feature_allocations' => (int)($row['allocation_limit'] ?? 0),
+                'feature_databases' => (int)($row['database_limit'] ?? 0),
                 'created_at' => (string)($row['created_at'] ?? ''),
                 'updated_at' => (string)($row['updated_at'] ?? ''),
                 'expired_at' => $expiredAt,
@@ -1670,8 +1946,8 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
             $accessMap[$identifier] = [
                 'server' => $server,
                 'is_owner' => $isOwner,
-                'is_panel_admin' => $isPanelAdmin && $isOwner,
-                'permissions' => $isOwner
+                'is_panel_admin' => $isPanelAdminForServer,
+                'permissions' => ($isOwner || $isPanelAdminForServer)
                     ? pteroGetOwnerPermissionSet()
                     : pteroDecodeSubuserPermissions($row['subuser_permissions'] ?? null),
             ];
@@ -1748,12 +2024,14 @@ if (!function_exists('pteroGetServerAccessMapForUser')) {
 
         $isPanelAdmin = pteroUserIsPanelAdmin($panelUserId);
 
-        if (!$includeAdminAllServers || !$isPanelAdmin) {
-            $databaseAccessMap = pteroGetServerAccessMapForUserFromDatabase($panelUserId, $isPanelAdmin);
+        $databaseAccessMap = pteroGetServerAccessMapForUserFromDatabase(
+            $panelUserId,
+            $isPanelAdmin,
+            $includeAdminAllServers
+        );
 
-            if (is_array($databaseAccessMap)) {
-                return $databaseAccessMap;
-            }
+        if (is_array($databaseAccessMap)) {
+            return $databaseAccessMap;
         }
 
         $servers = ($isPanelAdmin && !$includeAdminAllServers)
@@ -1876,6 +2154,7 @@ if (!function_exists('pteroSyncServerAccessSession')) {
                 'memory' => (int)($server['memory'] ?? 0),
                 'disk' => (int)($server['disk'] ?? 0),
                 'cpu' => (int)($server['cpu'] ?? 0),
+                'feature_databases' => (int)($server['feature_databases'] ?? 0),
                 'node_id' => (int)($server['node_id'] ?? 0),
                 'node_name' => (string)($server['node_name'] ?? ''),
                 'egg_name' => (string)($server['egg_name'] ?? ''),
@@ -1914,10 +2193,10 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
 
         $isPanelAdmin = pteroUserIsPanelAdmin($panelUserId);
         $allowedServers = $_SESSION['allowed_servers'] ?? [];
+        $requestedIncludesAdminAll = $includeAdminAllServers && $isPanelAdmin;
         $cachedIncludesAdminAll = !empty($_SESSION['server_access_includes_admin_all']);
         $lastSync = (int)($_SESSION['server_access_last_sync'] ?? 0);
         $cacheIsFresh = $maxAgeSeconds <= 0 || ($lastSync > 0 && (time() - $lastSync) < $maxAgeSeconds);
-        $canUseCachedAccess = $includeAdminAllServers && $isPanelAdmin;
         $hasAccessCache =
             $lastSync > 0 &&
             is_array($allowedServers) &&
@@ -1931,12 +2210,12 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
             is_array($_SESSION['server_is_owner']) &&
             is_array($_SESSION['server_is_panel_admin']) &&
             is_array($_SESSION['server_meta']);
+        $cacheScopeMatches = $cachedIncludesAdminAll === $requestedIncludesAdminAll;
 
         if (
             !$forceRefresh &&
-            $canUseCachedAccess &&
             $hasAccessCache &&
-            (!$includeAdminAllServers || $cachedIncludesAdminAll) &&
+            $cacheScopeMatches &&
             $cacheIsFresh
         ) {
             return [
@@ -1952,7 +2231,7 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
         }
 
         $GLOBALS['ptero_last_application_error'] = null;
-        $accessMap = pteroGetServerAccessMapForUser($panelUserId, $includeAdminAllServers);
+        $accessMap = pteroGetServerAccessMapForUser($panelUserId, $requestedIncludesAdminAll);
         $accessError = $GLOBALS['ptero_last_application_error'] ?? null;
 
         if (is_string($accessError) && trim($accessError) !== '') {
@@ -1968,7 +2247,7 @@ if (!function_exists('pteroEnsureServerAccessSession')) {
             ];
         }
 
-        pteroSyncServerAccessSession($accessMap, $includeAdminAllServers);
+        pteroSyncServerAccessSession($accessMap, $requestedIncludesAdminAll);
 
         return [
             'allowed_servers' => $_SESSION['allowed_servers'] ?? [],

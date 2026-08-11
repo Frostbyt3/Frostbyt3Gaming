@@ -22,6 +22,8 @@ document.addEventListener('click', function (e) {
     const config = window.FBG_SERVER_PANEL || {};
     const identifier = config.identifier;
     const csrfToken = config.csrfToken;
+    const currentTab = String(config.currentTab || '').toLowerCase();
+    const isConsoleTab = currentTab === 'console';
     let isInstalling = !!config.isInstalling;
 
     if (!identifier || !csrfToken) return;
@@ -30,9 +32,10 @@ document.addEventListener('click', function (e) {
     const POWER_URL = '/api/server/power.php';
     const UPDATE_DETAILS_URL = '/api/server/update-details.php';
 
-    const POLL_FAST = 1000;
-    const POLL_NORMAL = 2000;
-    const POLL_SLOW = 4000;
+    const POLL_FAST = isConsoleTab ? 1000 : 2000;
+    const POLL_NORMAL = isConsoleTab ? 2000 : 3000;
+    const POLL_SLOW = isConsoleTab ? 2500 : 4000;
+    const INITIAL_POLL_DELAY = isConsoleTab ? 100 : 250;
     const POWER_BURST_DELAYS = [500, 1500, 3000, 5000];
     const POWER_ACTION_WINDOW_MS = 30000;
 
@@ -70,6 +73,7 @@ document.addEventListener('click', function (e) {
     let currentPollDelay = POLL_NORMAL;
     let lastInstallState = isInstalling;
     let burstTimeouts = [];
+    let activeRefreshController = null;
 
     function updateAddress(address) {
         if (!addressEl) return;
@@ -82,6 +86,13 @@ document.addEventListener('click', function (e) {
     function clearBurstRefreshes() {
         burstTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
         burstTimeouts = [];
+    }
+
+    function abortActiveRefresh() {
+        if (activeRefreshController) {
+            activeRefreshController.abort();
+            activeRefreshController = null;
+        }
     }
 
     function queueBurstRefreshes() {
@@ -232,6 +243,54 @@ document.addEventListener('click', function (e) {
         return true;
     }
 
+    function normalizeServerStatus(status) {
+        const value = String(status || '').trim().toLowerCase();
+
+        if (value === 'off' || value === 'killed') {
+            return 'offline';
+        }
+
+        return value || 'unknown';
+    }
+
+    function getIncomingStatus(data) {
+        if (data && data.status) {
+            return normalizeServerStatus(data.status);
+        }
+
+        if (data && data.resource_status) {
+            return normalizeServerStatus(data.resource_status);
+        }
+
+        return normalizeServerStatus(lastKnownStatus || getCurrentDisplayStatus());
+    }
+
+    function shouldPreservePowerStatus(incomingStatus, currentStatus) {
+        const now = Date.now();
+
+        if (!pendingPowerAction || pendingPowerUntil <= now) {
+            return false;
+        }
+
+        if (pendingPowerAction === 'start') {
+            return currentStatus === 'starting' && ['offline', 'unknown'].includes(incomingStatus);
+        }
+
+        if (pendingPowerAction === 'restart') {
+            if (currentStatus === 'stopping' && ['running', 'unknown'].includes(incomingStatus)) {
+                return true;
+            }
+
+            return currentStatus === 'starting' && ['offline', 'unknown'].includes(incomingStatus);
+        }
+
+        if (pendingPowerAction === 'stop') {
+            return currentStatus === 'stopping' && ['running', 'unknown'].includes(incomingStatus);
+        }
+
+        return false;
+    }
+
     function clearNamedTimeout(name) {
         if (name === 'power' && powerMessageTimeout) {
             clearTimeout(powerMessageTimeout);
@@ -298,9 +357,16 @@ document.addEventListener('click', function (e) {
     }
 
     function updateUI(data) {
-        const status = data && data.status ? data.status : 'unknown';
-        const nextInstalling = !!(data && data.is_installing);
-        const displayStatus = nextInstalling ? 'installing' : status;
+        const incomingStatus = getIncomingStatus(data);
+        const currentStatus = getCurrentDisplayStatus();
+        const nextInstalling = data && Object.prototype.hasOwnProperty.call(data, 'is_installing')
+            ? !!data.is_installing
+            : isInstalling;
+        let displayStatus = nextInstalling ? 'installing' : incomingStatus;
+
+        if (!nextInstalling && shouldPreservePowerStatus(displayStatus, currentStatus)) {
+            displayStatus = currentStatus;
+        }
 
         if (nextInstalling !== lastInstallState) {
             lastInstallState = nextInstalling;
@@ -376,6 +442,15 @@ document.addEventListener('click', function (e) {
         }
     }
 
+    function getCurrentDisplayStatus() {
+        if (!statusBadge) {
+            return 'unknown';
+        }
+
+        const states = ['running', 'offline', 'starting', 'stopping', 'installing', 'unknown'];
+        return states.find((state) => statusBadge.classList.contains(state)) || 'unknown';
+    }
+
     async function refresh(options = {}) {
         const force = !!options.force;
         const immediate = !!options.immediate;
@@ -389,11 +464,14 @@ document.addEventListener('click', function (e) {
         }
 
         refreshInFlight = true;
+        abortActiveRefresh();
+        activeRefreshController = new AbortController();
 
         try {
             const response = await fetch(STATUS_URL, {
                 headers: { 'Accept': 'application/json' },
-                cache: 'no-store'
+                cache: 'no-store',
+                signal: activeRefreshController.signal
             });
 
             if (!response.ok) {
@@ -403,9 +481,14 @@ document.addEventListener('click', function (e) {
             const data = await response.json();
             updateUI(data);
         } catch (err) {
+            if (err && err.name === 'AbortError') {
+                return;
+            }
+
             console.error('Panel refresh failed:', err);
             currentPollDelay = Math.max(currentPollDelay, POLL_SLOW);
         } finally {
+            activeRefreshController = null;
             refreshInFlight = false;
 
             if (!immediate && pageVisible) {
@@ -673,13 +756,25 @@ document.addEventListener('click', function (e) {
 
         if (pageVisible) {
             refresh({ force: true, immediate: true }).finally(() => {
-                scheduleNextPoll(250);
+                scheduleNextPoll(INITIAL_POLL_DELAY);
             });
         } else {
+            abortActiveRefresh();
+
             if (pollTimer) {
                 clearTimeout(pollTimer);
                 pollTimer = null;
             }
+        }
+    });
+
+    window.addEventListener('pagehide', function () {
+        abortActiveRefresh();
+        clearBurstRefreshes();
+
+        if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
         }
     });
 
@@ -690,6 +785,6 @@ document.addEventListener('click', function (e) {
     };
 
     refresh({ force: true, immediate: true }).finally(() => {
-        startPolling();
+        scheduleNextPoll(INITIAL_POLL_DELAY);
     });
 })();
