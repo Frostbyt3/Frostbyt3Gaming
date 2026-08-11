@@ -1,29 +1,21 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const cards = document.querySelectorAll('.fbg-server-card[data-href]');
+    const cards = Array.from(document.querySelectorAll('.fbg-server-card[data-href]'));
+    const shell = document.querySelector('.fbg-dashboard-shell');
+    const searchInput = document.getElementById('fbg-dashboard-search');
+    const viewButtons = Array.from(document.querySelectorAll('.fbg-dashboard-view-button[data-view-mode]'));
+    const collection = document.querySelector('[data-dashboard-collection]');
+    const summaryNodes = {
+        totalServers: document.querySelector('[data-summary="total-servers"]'),
+        running: document.querySelector('[data-summary="running"]'),
+        stopped: document.querySelector('[data-summary="stopped"]'),
+        starting: document.querySelector('[data-summary="starting"]'),
+        memoryTotal: document.querySelector('[data-summary="memory-total"]'),
+        cpuTotal: document.querySelector('[data-summary="cpu-total"]'),
+        runningPercent: document.querySelector('[data-summary-percent="running"]'),
+        stoppedPercent: document.querySelector('[data-summary-percent="stopped"]'),
+        startingPercent: document.querySelector('[data-summary-percent="starting"]')
+    };
 
-    cards.forEach(function (card) {
-        card.addEventListener('click', function (event) {
-            const interactive = event.target.closest('button, a, input, select, textarea, .fbg-server-actions');
-
-            if (interactive) {
-                return;
-            }
-
-            const href = card.dataset.href;
-            if (href) {
-                window.location.href = href;
-            }
-        });
-    });
-
-    document.querySelectorAll('.fbg-server-actions .btn').forEach(function (button) {
-        button.addEventListener('click', function (event) {
-            event.stopPropagation();
-        });
-    });
-});
-
-(function () {
     const config = window.FBG_DASHBOARD || {};
     const csrfToken = config.csrfToken;
 
@@ -34,7 +26,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const POLL_NORMAL = 2250;
     const POLL_SLOW = 4500;
     const MESSAGE_TIMEOUT = 4000;
-    const MAX_STATUS_IDS_PER_REQUEST = 12;
+    const MAX_STATUS_IDS_PER_REQUEST = 24;
+    const VIEW_MODE_KEY = 'fbg.dashboard.viewMode';
 
     let pollInProgress = false;
     let pageVisible = document.visibilityState === 'visible';
@@ -44,12 +37,71 @@ document.addEventListener('DOMContentLoaded', function () {
     let nextStatusOffset = 0;
     let activeStatusController = null;
 
-    function getCards() {
-        return Array.from(document.querySelectorAll('.fbg-server-card'));
+    function formatBytes(bytes) {
+        const value = Number(bytes || 0);
+
+        if (!Number.isFinite(value) || value <= 0) {
+            return '0 Bytes';
+        }
+
+        const units = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'];
+        const power = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+        const size = value / Math.pow(1024, power);
+
+        return size.toFixed(power === 0 ? 0 : 2) + ' ' + units[power];
     }
 
-    function getServerIds(cards) {
-        return cards
+    function formatPercent(value) {
+        const numeric = Number(value || 0);
+        return (Number.isFinite(numeric) ? numeric : 0).toFixed(2) + '%';
+    }
+
+    function statusToText(status) {
+        switch (status) {
+            case 'installing': return 'Installing';
+            case 'suspended': return 'Suspended';
+            case 'running': return 'Running';
+            case 'offline': return 'Stopped';
+            case 'starting': return 'Starting';
+            case 'stopping': return 'Stopping';
+            default: return 'Unknown';
+        }
+    }
+
+    function statusToClass(status) {
+        switch (status) {
+            case 'installing':
+            case 'suspended':
+            case 'running':
+            case 'offline':
+            case 'starting':
+            case 'stopping':
+                return status;
+            default:
+                return 'unknown';
+        }
+    }
+
+    function getCardStatus(card) {
+        if (!card) {
+            return 'unknown';
+        }
+
+        return String(card.dataset.status || 'unknown');
+    }
+
+    function getCards() {
+        return Array.from(document.querySelectorAll('.fbg-dashboard-item[data-server]'));
+    }
+
+    function getVisibleCards() {
+        return getCards().filter(function (card) {
+            return !card.hasAttribute('hidden') && card.style.display !== 'none';
+        });
+    }
+
+    function getServerIds(cardsList) {
+        return cardsList
             .map(card => String(card.dataset.server || '').trim())
             .filter(Boolean);
     }
@@ -79,44 +131,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return selected;
     }
 
-    function statusToText(status) {
-        switch (status) {
-            case 'installing': return 'Installing';
-            case 'running': return 'Running';
-            case 'offline': return 'Stopped';
-            case 'starting': return 'Starting';
-            case 'stopping': return 'Stopping';
-            default: return 'Unknown';
-        }
-    }
-
-    function statusToClass(status) {
-        switch (status) {
-            case 'installing':
-            case 'running':
-            case 'offline':
-            case 'starting':
-            case 'stopping':
-                return status;
-            default:
-                return 'unknown';
-        }
-    }
-
-    function getCardStatus(card) {
-        const badge = card ? card.querySelector('.server-status') : null;
-
-        if (!badge) {
-            return 'unknown';
-        }
-
-        const knownStates = ['running', 'offline', 'starting', 'stopping', 'installing'];
-
-        return knownStates.find(state => badge.classList.contains(state)) || 'unknown';
-    }
-
     function clearMessageTimer(container) {
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         if (container._hideTimer) {
             clearTimeout(container._hideTimer);
@@ -125,32 +143,43 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showMessage(container, message, isError) {
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         clearMessageTimer(container);
-
         container.textContent = message;
         container.className = 'fbg-dashboard-alert power-msg ' + (isError ? 'error' : 'success');
         container.style.display = 'block';
+        container.classList.add('is-visible');
 
-        container._hideTimer = setTimeout(() => {
+        container._hideTimer = setTimeout(function () {
+            container.classList.remove('is-visible');
             container.style.display = 'none';
             container._hideTimer = null;
         }, MESSAGE_TIMEOUT);
     }
 
-    function formatBytes(bytes) {
-        const value = Number(bytes || 0);
+    function calculateBarWidth(usedValue, limitValue) {
+        const limit = Number(limitValue || 0);
+        const used = Number(usedValue || 0);
 
-        if (!Number.isFinite(value) || value <= 0) {
-            return '0 Bytes';
+        if (!Number.isFinite(limit) || limit <= 0) {
+            return '100%';
         }
 
-        const units = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'];
-        const power = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-        const size = value / Math.pow(1024, power);
+        if (!Number.isFinite(used) || used <= 0) {
+            return '0%';
+        }
 
-        return size.toFixed(power === 0 ? 0 : 2) + ' ' + units[power];
+        return Math.max(0, Math.min((used / limit) * 100, 100)).toFixed(2) + '%';
+    }
+
+    function updateMetricBar(card, selector, width) {
+        const fill = card.querySelector(selector);
+        if (fill) {
+            fill.style.width = width;
+        }
     }
 
     function updateCardResources(card, data) {
@@ -158,18 +187,33 @@ document.addEventListener('DOMContentLoaded', function () {
         const disk = card.querySelector('.stat-disk-usage');
         const cpu = card.querySelector('.stat-cpu-usage');
 
-        if (ram && data.memory_bytes !== undefined) {
-            ram.textContent = formatBytes(data.memory_bytes);
+        const memoryBytes = Number(data.memory_bytes || 0);
+        const diskBytes = Number(data.disk_bytes || 0);
+        const cpuValue = Number(data.cpu || 0);
+
+        if (ram) {
+            ram.textContent = formatBytes(memoryBytes);
         }
 
-        if (disk && data.disk_bytes !== undefined) {
-            disk.textContent = formatBytes(data.disk_bytes);
+        if (disk) {
+            disk.textContent = formatBytes(diskBytes);
         }
 
-        if (cpu && data.cpu !== undefined) {
-            const cpuValue = Number(data.cpu);
-            cpu.textContent = (Number.isFinite(cpuValue) ? cpuValue : 0).toFixed(2) + '%';
+        if (cpu) {
+            cpu.textContent = formatPercent(cpuValue);
         }
+
+        const memoryLimitMiB = Number(card.dataset.memoryLimitMib || 0);
+        const diskLimitMiB = Number(card.dataset.diskLimitMib || 0);
+        const cpuLimit = Number(card.dataset.cpuLimit || 0);
+
+        updateMetricBar(card, '.stat-ram-fill', calculateBarWidth(memoryBytes, memoryLimitMiB * 1024 * 1024));
+        updateMetricBar(card, '.stat-disk-fill', calculateBarWidth(diskBytes, diskLimitMiB * 1024 * 1024));
+        updateMetricBar(card, '.stat-cpu-fill', calculateBarWidth(cpuValue, cpuLimit));
+
+        card.dataset.memoryBytes = String(memoryBytes);
+        card.dataset.diskBytes = String(diskBytes);
+        card.dataset.cpuValue = String(Number.isFinite(cpuValue) ? cpuValue : 0);
     }
 
     function applyStatusToCard(card, status, options = {}) {
@@ -177,16 +221,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const start = card.querySelector('.btn-start');
         const stop = card.querySelector('.btn-stop');
         const restart = card.querySelector('.btn-restart');
+        const nextStatus = statusToClass(status);
+
+        card.dataset.status = nextStatus;
 
         if (!badge) {
             return;
         }
 
-        badge.className = `fbg-status-badge ${statusToClass(status)} server-status`;
+        badge.className = 'fbg-status-badge server-status ' + nextStatus;
         badge.textContent = statusToText(status);
         badge.classList.toggle('is-updating', !!options.updating);
 
-        if (status === 'installing') {
+        if (nextStatus === 'installing' || nextStatus === 'suspended') {
             if (start) start.disabled = true;
             if (stop) stop.disabled = true;
             if (restart) restart.disabled = true;
@@ -204,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (stop) {
             stop.disabled = false;
 
-            if (status === 'stopping') {
+            if (nextStatus === 'stopping') {
                 stop.dataset.action = 'kill';
                 stop.textContent = 'Kill';
                 stop.classList.remove('danger-action');
@@ -221,37 +268,156 @@ document.addEventListener('DOMContentLoaded', function () {
             restart.disabled = false;
         }
 
-        if (status === 'running') {
+        if (nextStatus === 'running') {
             if (start) start.disabled = true;
-        } else if (status === 'offline') {
+        } else if (nextStatus === 'offline') {
             if (stop) stop.disabled = true;
             if (restart) restart.disabled = true;
-        } else if (status === 'starting') {
+        } else if (nextStatus === 'starting') {
             if (start) start.disabled = true;
             if (stop) stop.disabled = true;
             if (restart) restart.disabled = true;
-        } else if (status === 'stopping') {
+        } else if (nextStatus === 'stopping') {
             if (start) start.disabled = true;
             if (restart) restart.disabled = true;
         }
     }
 
     function setButtonsDisabled(container, disabled) {
-        const buttons = container.querySelectorAll('button');
-
-        buttons.forEach(function (btn) {
+        container.querySelectorAll('button').forEach(function (btn) {
             btn.disabled = disabled;
         });
     }
 
+    function updateSummary() {
+        const visibleCards = getVisibleCards();
+        const total = visibleCards.length;
+        let running = 0;
+        let stopped = 0;
+        let starting = 0;
+        let memoryBytes = 0;
+        let cpuTotal = 0;
+
+        visibleCards.forEach(function (card) {
+            const status = getCardStatus(card);
+
+            if (status === 'running') {
+                running += 1;
+            } else if (status === 'installing' || status === 'starting' || status === 'stopping') {
+                starting += 1;
+            } else {
+                stopped += 1;
+            }
+
+            memoryBytes += Number(card.dataset.memoryBytes || 0);
+            cpuTotal += Number(card.dataset.cpuValue || 0);
+        });
+
+        if (summaryNodes.totalServers) {
+            summaryNodes.totalServers.textContent = String(total);
+        }
+
+        if (summaryNodes.running) {
+            summaryNodes.running.textContent = String(running);
+        }
+
+        if (summaryNodes.stopped) {
+            summaryNodes.stopped.textContent = String(stopped);
+        }
+
+        if (summaryNodes.starting) {
+            summaryNodes.starting.textContent = String(starting);
+        }
+
+        if (summaryNodes.memoryTotal) {
+            summaryNodes.memoryTotal.textContent = formatBytes(memoryBytes);
+        }
+
+        if (summaryNodes.cpuTotal) {
+            summaryNodes.cpuTotal.textContent = formatPercent(cpuTotal);
+        }
+
+        const percent = function (value) {
+            if (total <= 0) {
+                return '0.0% of total';
+            }
+
+            return ((value / total) * 100).toFixed(1) + '% of total';
+        };
+
+        if (summaryNodes.runningPercent) {
+            summaryNodes.runningPercent.textContent = percent(running);
+        }
+
+        if (summaryNodes.stoppedPercent) {
+            summaryNodes.stoppedPercent.textContent = percent(stopped);
+        }
+
+        if (summaryNodes.startingPercent) {
+            summaryNodes.startingPercent.textContent = percent(starting);
+        }
+    }
+
+    function applySearchFilter() {
+        const query = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+
+        getCards().forEach(function (card) {
+            const haystack = String(card.dataset.search || '');
+            const matches = query === '' || haystack.includes(query);
+            card.hidden = !matches;
+            card.style.display = matches ? '' : 'none';
+            card.setAttribute('aria-hidden', matches ? 'false' : 'true');
+        });
+
+        if (collection) {
+            collection.dataset.empty = getVisibleCards().length === 0 ? 'true' : 'false';
+        }
+
+        updateSummary();
+    }
+
+    function setViewMode(mode) {
+        const normalized = mode === 'cards' ? 'cards' : 'list';
+
+        if (shell) {
+            shell.dataset.dashboardView = normalized;
+        }
+
+        viewButtons.forEach(function (button) {
+            const isActive = button.dataset.viewMode === normalized;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        try {
+            window.localStorage.setItem(VIEW_MODE_KEY, normalized);
+        } catch (error) {
+            console.warn('[FBG] Unable to persist dashboard view mode.', error);
+        }
+    }
+
+    function restoreViewMode() {
+        let savedMode = 'list';
+
+        try {
+            savedMode = window.localStorage.getItem(VIEW_MODE_KEY) || 'list';
+        } catch (error) {
+            savedMode = 'list';
+        }
+
+        setViewMode(savedMode);
+    }
+
     function calculatePollDelay(servers) {
         const values = Object.values(servers || {});
-
         let hasTransitional = false;
         let hasRunning = false;
 
         values.forEach(function (server) {
-            const status = server && server.is_installing ? 'installing' : String(server?.status || 'unknown');
+            const resourceStatus = String(server?.status || 'unknown');
+            const status = server?.is_suspended
+                ? 'suspended'
+                : (server?.is_installing ? 'installing' : resourceStatus);
 
             if (status === 'installing' || status === 'starting' || status === 'stopping') {
                 hasTransitional = true;
@@ -325,11 +491,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const cards = getCards();
-        const ids = getServerIds(cards);
+        const cardsList = getCards();
+        const ids = getServerIds(cardsList);
         const statusIds = selectStatusIds(ids, options);
 
         if (!statusIds.length) {
+            updateSummary();
             return;
         }
 
@@ -354,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await response.json();
             const servers = payload && payload.servers ? payload.servers : {};
 
-            cards.forEach(function (card) {
+            cardsList.forEach(function (card) {
                 const id = String(card.dataset.server || '').trim();
 
                 if (!id || !servers[id]) {
@@ -362,13 +529,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 const data = servers[id];
-                const rawStatus = String(data.status || 'unknown');
-                const displayStatus = data.is_installing ? 'installing' : rawStatus;
+                const resourceStatus = String(data.status || 'unknown');
+                const displayStatus = data.is_suspended
+                    ? 'suspended'
+                    : (data.is_installing ? 'installing' : resourceStatus);
 
                 applyStatusToCard(card, displayStatus);
                 updateCardResources(card, data);
             });
 
+            updateSummary();
             currentPollDelay = calculatePollDelay(servers);
 
             if (ids.length > MAX_STATUS_IDS_PER_REQUEST && currentPollDelay > POLL_NORMAL) {
@@ -380,7 +550,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             console.error('[FBG] Batch status check failed:', err);
-
             currentPollDelay = Math.max(currentPollDelay, POLL_SLOW);
         } finally {
             activeStatusController = null;
@@ -397,8 +566,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const msgBox = card ? card.querySelector('.power-msg') : null;
         const currentStatus = card ? getCardStatus(card) : 'unknown';
 
-        if (currentStatus === 'installing') {
-            showMessage(msgBox, 'This server is still installing. Power actions are temporarily disabled.', true);
+        if (currentStatus === 'installing' || currentStatus === 'suspended') {
+            showMessage(msgBox, 'This server cannot accept power actions right now.', true);
             return;
         }
 
@@ -416,6 +585,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 updating: true,
                 preserveButtons: true
             });
+            updateSummary();
         }
 
         try {
@@ -437,7 +607,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             showMessage(msgBox, data.message || 'Success', false);
-
             currentPollDelay = POLL_FAST;
             refreshStatusesBatch({ immediate: true, force: true, ids: [identifier] });
             queueBurstRefreshes();
@@ -448,6 +617,29 @@ document.addEventListener('DOMContentLoaded', function () {
         } finally {
             setButtonsDisabled(container, false);
         }
+    }
+
+    function bindCardNavigation() {
+        cards.forEach(function (card) {
+            card.addEventListener('click', function (event) {
+                const interactive = event.target.closest('button, a, input, select, textarea, .fbg-server-actions');
+
+                if (interactive) {
+                    return;
+                }
+
+                const href = card.dataset.href;
+                if (href) {
+                    window.location.href = href;
+                }
+            });
+        });
+
+        document.querySelectorAll('.fbg-server-actions .btn').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+        });
     }
 
     function bindPowerButtons() {
@@ -477,10 +669,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 stopBtn.addEventListener('click', function () {
                     const action = stopBtn.dataset.action || 'stop';
 
-                    if (action === 'kill') {
-                        if (!confirm('Force kill this server? This may cause data loss.')) {
-                            return;
-                        }
+                    if (action === 'kill' && !window.confirm('Force kill this server? This may cause data loss.')) {
+                        return;
                     }
 
                     sendPower(container, identifier, action);
@@ -493,6 +683,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
         });
+    }
+
+    function bindViewButtons() {
+        viewButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setViewMode(button.dataset.viewMode || 'list');
+            });
+        });
+    }
+
+    function bindSearch() {
+        if (!searchInput) {
+            return;
+        }
+
+        searchInput.addEventListener('input', applySearchFilter);
     }
 
     document.addEventListener('visibilitychange', function () {
@@ -520,11 +726,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    bindCardNavigation();
     bindPowerButtons();
+    bindViewButtons();
+    bindSearch();
+    restoreViewMode();
+    applySearchFilter();
 
     if (!csrfToken) {
         return;
     }
 
     refreshStatusesBatch({ immediate: true, force: true });
-})();
+});
