@@ -197,25 +197,11 @@ session_write_close();
                 <input type="hidden" name="server_scope_toggle" value="1">
 
                 <div class="fbg-dashboard-scope-switch" role="tablist" aria-label="Server scope">
-                    <button
-                        type="submit"
-                        name="server_scope"
-                        value="mine"
-                        class="fbg-dashboard-scope-tab <?php echo !$showAllServers ? 'active' : ''; ?>"
-                        role="tab"
-                        aria-selected="<?php echo !$showAllServers ? 'true' : 'false'; ?>"
-                    >
+                    <button type="submit" name="server_scope" value="mine" class="fbg-dashboard-scope-tab <?php echo !$showAllServers ? 'active' : ''; ?>" role="tab" aria-selected="<?php echo !$showAllServers ? 'true' : 'false'; ?>">
                         Personal Servers
                     </button>
 
-                    <button
-                        type="submit"
-                        name="server_scope"
-                        value="all"
-                        class="fbg-dashboard-scope-tab <?php echo $showAllServers ? 'active' : ''; ?>"
-                        role="tab"
-                        aria-selected="<?php echo $showAllServers ? 'true' : 'false'; ?>"
-                    >
+                    <button type="submit" name="server_scope" value="all" class="fbg-dashboard-scope-tab <?php echo $showAllServers ? 'active' : ''; ?>" role="tab" aria-selected="<?php echo $showAllServers ? 'true' : 'false'; ?>">
                         All Servers
                     </button>
                 </div>
