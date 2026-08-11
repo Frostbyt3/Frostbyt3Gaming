@@ -25,6 +25,8 @@ document.addEventListener('click', function (e) {
     const currentTab = String(config.currentTab || '').toLowerCase();
     const isConsoleTab = currentTab === 'console';
     let isInstalling = !!config.isInstalling;
+    let isSuspended = !!config.isSuspended;
+    const allowConsoleWhileInstalling = !!config.allowConsoleWhileInstalling;
 
     if (!identifier || !csrfToken) return;
 
@@ -88,6 +90,27 @@ document.addEventListener('click', function (e) {
     let railRefreshTimer = null;
     let railRefreshController = null;
     const RAIL_POLL_MS = 30000;
+    const POWER_SETTLE_WINDOW_MS = 8000;
+    let settledStatus = null;
+    let settledStatusUntil = 0;
+
+    function isPowerWindowActive() {
+        return !!pendingPowerAction && pendingPowerUntil > Date.now();
+    }
+
+    function isSettledStatusActive() {
+        return !!settledStatus && settledStatusUntil > Date.now();
+    }
+
+    function setSettledStatus(status) {
+        settledStatus = status;
+        settledStatusUntil = Date.now() + POWER_SETTLE_WINDOW_MS;
+    }
+
+    function clearSettledStatus() {
+        settledStatus = null;
+        settledStatusUntil = 0;
+    }
 
     function updateAddress(address) {
         if (!addressEl) return;
@@ -169,13 +192,14 @@ document.addEventListener('click', function (e) {
             case 'offline': return 'Stopped';
             case 'starting': return 'Starting';
             case 'stopping': return 'Stopping';
+            case 'suspended': return 'Suspended';
             case 'installing': return 'Installing';
             default: return 'Unknown';
         }
     }
 
     function statusToClass(status) {
-        return ['running', 'offline', 'starting', 'stopping', 'installing'].includes(status)
+        return ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended'].includes(status)
             ? status
             : 'unknown';
     }
@@ -220,6 +244,9 @@ document.addEventListener('click', function (e) {
             case 'installing':
                 consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[91mINSTALLING\x1b[36m.');
                 break;
+            case 'suspended':
+                consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[91mSUSPENDED\x1b[36m.');
+                break;
             default:
                 consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[91mUNKNOWN\x1b[36m.');
                 break;
@@ -233,8 +260,7 @@ document.addEventListener('click', function (e) {
             return false;
         }
 
-        const now = Date.now();
-        const inPowerWindow = pendingPowerAction && pendingPowerUntil > now;
+        const inPowerWindow = isPowerWindowActive();
 
         if (!inPowerWindow) {
             if (nextStatus === lastKnownStatus) {
@@ -272,6 +298,7 @@ document.addEventListener('click', function (e) {
             (pendingPowerAction === 'restart' && nextStatus === 'running');
 
         if (actionCompleted) {
+            setSettledStatus(nextStatus);
             pendingPowerAction = null;
             pendingPowerUntil = 0;
             loggedStatusesForAction.clear();
@@ -285,6 +312,10 @@ document.addEventListener('click', function (e) {
 
         if (value === 'off' || value === 'killed') {
             return 'offline';
+        }
+
+        if (value === 'suspended') {
+            return 'suspended';
         }
 
         return value || 'unknown';
@@ -303,9 +334,7 @@ document.addEventListener('click', function (e) {
     }
 
     function shouldPreservePowerStatus(incomingStatus, currentStatus) {
-        const now = Date.now();
-
-        if (!pendingPowerAction || pendingPowerUntil <= now) {
+        if (!isPowerWindowActive()) {
             return false;
         }
 
@@ -318,11 +347,55 @@ document.addEventListener('click', function (e) {
                 return true;
             }
 
-            return currentStatus === 'starting' && ['offline', 'unknown'].includes(incomingStatus);
+            if (currentStatus === 'starting' && ['offline', 'unknown'].includes(incomingStatus)) {
+                return true;
+            }
+
+            return currentStatus === 'running' && ['offline', 'unknown', 'stopping'].includes(incomingStatus);
         }
 
         if (pendingPowerAction === 'stop') {
-            return currentStatus === 'stopping' && ['running', 'unknown'].includes(incomingStatus);
+            if (currentStatus === 'stopping' && ['running', 'unknown'].includes(incomingStatus)) {
+                return true;
+            }
+
+            return currentStatus === 'offline' && ['running', 'unknown', 'starting'].includes(incomingStatus);
+        }
+
+        if (pendingPowerAction === 'kill') {
+            return currentStatus === 'offline' && ['running', 'unknown', 'starting', 'stopping'].includes(incomingStatus);
+        }
+
+        return false;
+    }
+
+    function shouldPreserveSettledStatus(incomingStatus, currentStatus) {
+        if (!isSettledStatusActive() || currentStatus !== settledStatus) {
+            return false;
+        }
+
+        if (settledStatus === 'offline') {
+            return ['running', 'starting', 'stopping', 'unknown'].includes(incomingStatus);
+        }
+
+        if (settledStatus === 'running') {
+            return ['offline', 'starting', 'stopping', 'unknown'].includes(incomingStatus);
+        }
+
+        return false;
+    }
+
+    function shouldPreserveStableRuntimeStatus(incomingStatus, currentStatus, nextInstalling, nextSuspended) {
+        if (nextInstalling || nextSuspended) {
+            return false;
+        }
+
+        if (currentStatus === 'running' && incomingStatus === 'starting') {
+            return true;
+        }
+
+        if (currentStatus === 'offline' && incomingStatus === 'stopping') {
+            return true;
         }
 
         return false;
@@ -379,7 +452,7 @@ document.addEventListener('click', function (e) {
     function updateStatusIcon(status) {
         if (!statusIcon) return;
 
-        statusIcon.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'unknown');
+        statusIcon.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown');
         statusIcon.classList.add(statusToClass(status));
     }
 
@@ -395,7 +468,7 @@ document.addEventListener('click', function (e) {
         }
 
         const normalized = statusToClass(normalizeServerStatus(status));
-        dot.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'unknown');
+        dot.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown');
         dot.classList.add(normalized);
 
         const label = statusToText(normalized);
@@ -408,20 +481,114 @@ document.addEventListener('click', function (e) {
             currentPollDelay = POLL_FAST;
         } else if (status === 'running') {
             currentPollDelay = POLL_NORMAL;
+        } else if (status === 'suspended') {
+            currentPollDelay = POLL_SLOW;
         } else {
             currentPollDelay = POLL_SLOW;
         }
     }
 
+    function getSpecialMode(status, nextInstalling, nextSuspended) {
+        if (nextSuspended || status === 'suspended') {
+            return 'suspended';
+        }
+
+        if (nextInstalling || status === 'installing') {
+            if (isConsoleTab && allowConsoleWhileInstalling) {
+                return null;
+            }
+
+            return 'installing';
+        }
+
+        return null;
+    }
+
+    async function reloadTabContent() {
+        const container = document.getElementById('server-tab-content');
+        if (!container) {
+            return;
+        }
+
+        try {
+            if (
+                window.FBG_SERVER_PANEL_CONSOLE &&
+                typeof window.FBG_SERVER_PANEL_CONSOLE.disconnect === 'function'
+            ) {
+                window.FBG_SERVER_PANEL_CONSOLE.disconnect();
+            }
+
+            const response = await fetch(
+                '/page.php?name=serverpanel&id=' + encodeURIComponent(identifier) + '&tab=' + encodeURIComponent(currentTab) + '&partial=tab',
+                {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+
+            const html = await response.text();
+            const template = document.createElement('template');
+            template.innerHTML = html;
+
+            const scripts = Array.from(template.content.querySelectorAll('script'));
+            scripts.forEach((script) => script.remove());
+
+            container.innerHTML = '';
+            container.appendChild(template.content.cloneNode(true));
+
+            scripts.forEach((script) => {
+                const nextScript = document.createElement('script');
+                Array.from(script.attributes).forEach((attribute) => {
+                    nextScript.setAttribute(attribute.name, attribute.value);
+                });
+
+                if (script.textContent) {
+                    nextScript.textContent = script.textContent;
+                }
+
+                container.appendChild(nextScript);
+            });
+        } catch (error) {
+            console.error('Failed to reload tab content:', error);
+        }
+    }
+
     function updateUI(data) {
+        if (!isPowerWindowActive() && pendingPowerAction) {
+            pendingPowerAction = null;
+            pendingPowerUntil = 0;
+            loggedStatusesForAction.clear();
+        }
+
+        if (!isSettledStatusActive() && settledStatus) {
+            clearSettledStatus();
+        }
+
         const incomingStatus = getIncomingStatus(data);
         const currentStatus = getCurrentDisplayStatus();
+        const isOptimisticUpdate = !!(data && data.updating);
         const nextInstalling = data && Object.prototype.hasOwnProperty.call(data, 'is_installing')
             ? !!data.is_installing
             : isInstalling;
-        let displayStatus = nextInstalling ? 'installing' : incomingStatus;
+        const nextSuspended = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended')
+            ? !!data.is_suspended
+            : (incomingStatus === 'suspended' ? true : isSuspended);
+        const previousSpecialMode = getSpecialMode(currentStatus, isInstalling, isSuspended);
+        let displayStatus = nextSuspended ? 'suspended' : (nextInstalling ? 'installing' : incomingStatus);
 
-        if (!nextInstalling && shouldPreservePowerStatus(displayStatus, currentStatus)) {
+        if (!isOptimisticUpdate && !nextInstalling && !nextSuspended && shouldPreservePowerStatus(displayStatus, currentStatus)) {
+            displayStatus = currentStatus;
+        }
+
+        if (!isOptimisticUpdate && !nextInstalling && !nextSuspended && shouldPreserveSettledStatus(displayStatus, currentStatus)) {
+            displayStatus = currentStatus;
+        }
+
+        if (!isOptimisticUpdate && shouldPreserveStableRuntimeStatus(displayStatus, currentStatus, nextInstalling, nextSuspended)) {
             displayStatus = currentStatus;
         }
 
@@ -439,6 +606,27 @@ document.addEventListener('click', function (e) {
 
         lastInstallState = nextInstalling;
         isInstalling = nextInstalling;
+        isSuspended = nextSuspended;
+
+        const nextSpecialMode = getSpecialMode(displayStatus, nextInstalling, nextSuspended);
+
+        if (!nextInstalling && !nextSuspended) {
+            const reachedFinalState =
+                ((pendingPowerAction === 'start' || pendingPowerAction === 'restart') && displayStatus === 'running') ||
+                ((pendingPowerAction === 'stop' || pendingPowerAction === 'kill') && displayStatus === 'offline');
+
+            if (reachedFinalState) {
+                setSettledStatus(displayStatus);
+            } else if (displayStatus !== currentStatus) {
+                clearSettledStatus();
+            }
+        } else {
+            clearSettledStatus();
+        }
+
+        if (previousSpecialMode !== nextSpecialMode) {
+            reloadTabContent();
+        }
 
         updatePollDelayForStatus(displayStatus);
         updateRailStatus(identifier, displayStatus);
@@ -468,11 +656,13 @@ document.addEventListener('click', function (e) {
             cpuEl.textContent = (Number.isFinite(cpuValue) ? cpuValue : 0).toFixed(2) + '%';
         }
 
+        const powerLocked = displayStatus === 'installing' || displayStatus === 'suspended';
+
         if (startBtn) {
             startBtn.disabled = (
                 displayStatus === 'running' ||
                 displayStatus === 'starting' ||
-                displayStatus === 'installing'
+                powerLocked
             );
         }
 
@@ -488,15 +678,12 @@ document.addEventListener('click', function (e) {
                 stopBtn.textContent = 'Stop';
                 stopBtn.classList.remove('btn-delete');
                 stopBtn.classList.add('danger-action');
-                stopBtn.disabled = (
-                    displayStatus === 'offline' ||
-                    displayStatus === 'installing'
-                );
+                stopBtn.disabled = (displayStatus === 'offline' || powerLocked);
             }
         }
 
         if (restartBtn) {
-            restartBtn.disabled = (displayStatus !== 'running');
+            restartBtn.disabled = (displayStatus !== 'running' || powerLocked);
         }
     }
 
@@ -526,9 +713,11 @@ document.addEventListener('click', function (e) {
                 : {};
 
             Object.entries(servers).forEach(([serverId, serverData]) => {
-                const nextStatus = serverData && serverData.is_installing
-                    ? 'installing'
-                    : normalizeServerStatus(serverData && serverData.status);
+                const nextStatus = serverData && serverData.is_suspended
+                    ? 'suspended'
+                    : (serverData && serverData.is_installing
+                        ? 'installing'
+                        : normalizeServerStatus(serverData && serverData.status));
 
                 updateRailStatus(serverId, nextStatus);
             });
@@ -550,7 +739,7 @@ document.addEventListener('click', function (e) {
             return 'unknown';
         }
 
-        const states = ['running', 'offline', 'starting', 'stopping', 'installing', 'unknown'];
+        const states = ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown'];
         return states.find((state) => statusBadge.classList.contains(state)) || 'unknown';
     }
 

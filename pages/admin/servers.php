@@ -775,6 +775,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Mount removed successfully.', 'success', $serverId, 'mounts');
     }
 
+    if ($action === 'reinstall_server') {
+        $result = pteroReinstallServer($serverId);
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect((string)($result['error'] ?? 'Server reinstall could not be started.'), 'error', $serverId, 'manage');
+        }
+
+        fbgAdminServersRedirect('Server reinstall started successfully.', 'success', $serverId, 'manage');
+    }
+
+    if ($action === 'toggle_install_status') {
+        $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
+
+        if ($currentStatus === 'install_failed') {
+            fbgAdminServersRedirect('Install status cannot be toggled while the server is marked as install failed.', 'error', $serverId, 'manage');
+        }
+
+        $nextStatus = $currentStatus === 'installing' ? null : 'installing';
+        $toggleInstallStmt = fbgPteroDb()->prepare('
+            UPDATE servers
+            SET status = :status,
+                updated_at = NOW()
+            WHERE id = :id
+        ');
+        $toggleInstallStmt->bindValue(':status', $nextStatus, $nextStatus === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $toggleInstallStmt->bindValue(':id', $serverId, PDO::PARAM_INT);
+        $toggleInstallStmt->execute();
+
+        fbgAdminServersRedirect(
+            $nextStatus === 'installing'
+                ? 'Server marked as installing.'
+                : 'Server marked as installed.',
+            'success',
+            $serverId,
+            'manage'
+        );
+    }
+
+    if ($action === 'toggle_suspend_server') {
+        $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
+        $isSuspended = $currentStatus === 'suspended';
+        $result = $isSuspended
+            ? pteroUnsuspendServer($serverId)
+            : pteroRequest('POST', "servers/{$serverId}/suspend");
+
+        if (empty($result['ok'])) {
+            fbgAdminServersRedirect((string)($result['error'] ?? 'Suspension state could not be changed.'), 'error', $serverId, 'manage');
+        }
+
+        fbgAdminServersRedirect(
+            $isSuspended ? 'Server unsuspended successfully.' : 'Server suspended successfully.',
+            'success',
+            $serverId,
+            'manage'
+        );
+    }
+
+    if ($action === 'transfer_server') {
+        fbgAdminServersRedirect('Transfer execution has not been reconnected yet. The transfer modal UI is available, but the backend workflow still needs to be wired back in.', 'error', $serverId, 'manage');
+    }
+
     fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
 }
 
@@ -797,6 +857,8 @@ $startupEggData = [];
 $databaseHosts = [];
 $serverDatabases = [];
 $serverMounts = [];
+$transferNodes = [];
+$transferAllocationMap = [];
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -983,6 +1045,35 @@ if ($editingServer) {
         'node_id' => (int)$editingServer['node_id'],
     ]);
     $serverMounts = $mountStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $transferNodesStmt = fbgPteroDb()->prepare('
+        SELECT id, name
+        FROM nodes
+        WHERE id != :node_id
+        ORDER BY name ASC
+    ');
+    $transferNodesStmt->execute(['node_id' => (int)$editingServer['node_id']]);
+    $transferNodes = $transferNodesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    if (!empty($transferNodes)) {
+        $transferAllocationStmt = fbgPteroDb()->prepare('
+            SELECT id, node_id, ip, ip_alias, port, notes
+            FROM allocations
+            WHERE server_id IS NULL
+              AND node_id = :node_id
+            ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
+        ');
+
+        foreach ($transferNodes as $transferNode) {
+            $nodeId = (int)($transferNode['id'] ?? 0);
+            if ($nodeId <= 0) {
+                continue;
+            }
+
+            $transferAllocationStmt->execute(['node_id' => $nodeId]);
+            $transferAllocationMap[$nodeId] = $transferAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        }
+    }
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
@@ -1943,7 +2034,136 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </div>
             </section>
 
-            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database', 'mounts']) as $tabKey): ?>
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'manage' ? ' is-active' : '' ?>" data-admin-server-panel="manage" <?= $activeServerTab === 'manage' ? '' : 'hidden' ?>>
+                <?php
+                $manageStatus = strtolower(trim((string)($editingServer['status'] ?? '')));
+                $manageIsSuspended = $manageStatus === 'suspended';
+                $manageIsInstalling = $manageStatus === 'installing';
+                ?>
+                <div class="fbg-admin-server-about-grid">
+                    <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
+                        <h3>Reinstall Server</h3>
+                        <p>This will reinstall the server with the assigned service scripts. <bita><warning>Danger!</warning> This could overwrite server data</bita>.</p>
+                        <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                            <button type="button" class="btn danger-action" id="admin-server-open-reinstall-modal">Reinstall Server</button>
+                        </div>
+                    </div>
+
+                    <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #1e88ff;">
+                        <h3>Install Status</h3>
+                        <p>If you need to change the install status from uninstalled to installed, or vice versa, you may do so with the button below.</p>
+                        <form method="POST" class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="toggle_install_status">
+                            <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                            <button type="submit" class="btn">
+                                <?= $manageIsInstalling ? 'Mark as Installed' : 'Mark as Installing' ?>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #f59e0b;">
+                        <h3><?= $manageIsSuspended ? 'Unsuspend Server' : 'Suspend Server' ?></h3>
+                        <p>This will <?= $manageIsSuspended ? 'restore access to' : 'suspend' ?> the server<?= $manageIsSuspended ? ' and re-enable panel/API access.' : ', stop any running processes, and immediately block the user from managing it through the panel or API.' ?></p>
+                        <form method="POST" class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="toggle_suspend_server">
+                            <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                            <button type="submit" class="btn warn-action">
+                                <?= $manageIsSuspended ? 'Unsuspend Server' : 'Suspend Server' ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="fbg-admin-server-detail-list" style="margin-top: 16px; border-top: 2px solid #22c55e;">
+                    <h3>Transfer Server</h3>
+                    <p>Transfer this server to another node connected to this panel. <bita><warning>Warning!</warning> This feature has not been fully tested and may have bugs.</bita></p>
+                    <p><bita><warning>Server transfer is not current implemented.</warning></bita></p>
+                    <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
+                        <!-- <button type="button" class="btn" id="admin-server-open-transfer-modal" style="background:#16a34a;">Transfer Server</button> -->
+                         <button type="button" class="btn" style="background: #555555; color: #777777;"><bita>Unavailable</bita></button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'delete' ? ' is-active' : '' ?>" data-admin-server-panel="delete" <?= $activeServerTab === 'delete' ? '' : 'hidden' ?>>
+                <div class="fbg-admin-empty-state">
+                    <p>Delete controls will be added in the next Admin Server Administration pass.</p>
+                </div>
+            </section>
+
+            <div class="fbg-modal-overlay" id="admin-server-reinstall-modal" hidden>
+                <div class="fbg-modal-card fbg-admin-user-modal" role="dialog" aria-modal="true" aria-labelledby="admin-server-reinstall-title">
+                    <button type="button" class="fbg-modal-close fbg-admin-user-modal-close" data-close-admin-server-modal="reinstall" aria-label="Close">X</button>
+                    <div class="fbg-modal-header">
+                        <h3 id="admin-server-reinstall-title">Confirm Reinstall</h3>
+                        <p>This will stop the server and re-run its installation script. Files may be deleted or modified during this process.</p>
+                    </div>
+                    <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                        This is a destructive action. Make sure any needed files are backed up first.
+                    </div>
+                    <form method="POST" class="fbg-admin-form-actions" style="justify-content: flex-end;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="action" value="reinstall_server">
+                        <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                        <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="reinstall">Cancel</button>
+                        <button type="submit" class="btn danger-action">Yes, Reinstall Server</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="fbg-modal-overlay" id="admin-server-transfer-modal" hidden>
+                <div class="fbg-modal-card fbg-admin-user-modal" role="dialog" aria-modal="true" aria-labelledby="admin-server-transfer-title">
+                    <button type="button" class="fbg-modal-close fbg-admin-user-modal-close" data-close-admin-server-modal="transfer" aria-label="Close">X</button>
+                    <div class="fbg-modal-header">
+                        <h3 id="admin-server-transfer-title">Transfer Server</h3>
+                        <p>Select the destination node and ports for this transfer.</p>
+                    </div>
+
+                    <div class="fbg-admin-form">
+                        <div class="fbg-admin-field">
+                            <label for="admin-server-transfer-node">Node</label>
+                            <select id="admin-server-transfer-node">
+                                <option value="">Select a node</option>
+                                <?php foreach ($transferNodes as $transferNode): ?>
+                                    <option value="<?= (int)$transferNode['id'] ?>"><?= htmlspecialchars((string)$transferNode['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="fbg-admin-help-text">The node which this server will be transferred to.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="admin-server-transfer-allocation">Default Port</label>
+                            <select id="admin-server-transfer-allocation" disabled>
+                                <option value="">Select a default port</option>
+                            </select>
+                            <p class="fbg-admin-help-text">The main port that will be assigned to this server.</p>
+                        </div>
+
+                        <div class="fbg-admin-field">
+                            <label for="admin-server-transfer-additional-allocations">Additional Port(s)</label>
+                            <select id="admin-server-transfer-additional-allocations" multiple size="6" disabled></select>
+                            <p class="fbg-admin-help-text">Additional ports to assign to this server on transfer.</p>
+                        </div>
+
+                        <div class="fbg-dashboard-alert" style="display:block; margin-top: 16px;">
+                            Transfer execution has not been reconnected yet. This restores the modal UI so we can finish wiring the backend workflow cleanly next.
+                        </div>
+
+                        <script type="application/json" id="admin-server-transfer-allocations">
+                            <?= json_encode($transferAllocationMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+                        </script>
+
+                        <div class="fbg-admin-form-actions" style="justify-content: flex-end; margin-top: 18px;">
+                            <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="transfer">Cancel</button>
+                            <button type="button" class="btn" disabled>Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database', 'mounts', 'manage', 'delete']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
                         <p><?= htmlspecialchars($tabs[$tabKey], ENT_QUOTES, 'UTF-8') ?> controls will be added in the next Admin Server Administration pass.</p>
@@ -1974,6 +2194,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const startupDockerSelect = document.getElementById('server-startup-docker-image');
     const startupDockerCustom = document.getElementById('server-startup-docker-custom');
     const startupVariablesWrap = document.getElementById('admin-server-startup-variables');
+    const reinstallModal = document.getElementById('admin-server-reinstall-modal');
+    const transferModal = document.getElementById('admin-server-transfer-modal');
+    const openReinstallModalButton = document.getElementById('admin-server-open-reinstall-modal');
+    const openTransferModalButton = document.getElementById('admin-server-open-transfer-modal');
+    const transferNodeSelect = document.getElementById('admin-server-transfer-node');
+    const transferAllocationSelect = document.getElementById('admin-server-transfer-allocation');
+    const transferAdditionalSelect = document.getElementById('admin-server-transfer-additional-allocations');
+    const transferAllocationsSource = document.getElementById('admin-server-transfer-allocations');
 
     tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
@@ -1992,6 +2220,107 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     });
+
+    const openOverlay = (overlay) => {
+        if (!overlay) return;
+        overlay.hidden = false;
+        document.body.classList.add('fbg-modal-open');
+    };
+
+    const closeOverlay = (overlay) => {
+        if (!overlay) return;
+        overlay.hidden = true;
+    };
+
+    if (openReinstallModalButton && reinstallModal) {
+        openReinstallModalButton.addEventListener('click', () => openOverlay(reinstallModal));
+    }
+
+    if (openTransferModalButton && transferModal) {
+        openTransferModalButton.addEventListener('click', () => openOverlay(transferModal));
+    }
+
+    modal.querySelectorAll('[data-close-admin-server-modal]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = button.getAttribute('data-close-admin-server-modal');
+            if (target === 'reinstall') closeOverlay(reinstallModal);
+            if (target === 'transfer') closeOverlay(transferModal);
+        });
+    });
+
+    [reinstallModal, transferModal].forEach((overlay) => {
+        if (!overlay) return;
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) {
+                closeOverlay(overlay);
+            }
+        });
+    });
+
+    if (transferNodeSelect && transferAllocationSelect && transferAdditionalSelect && transferAllocationsSource) {
+        let transferAllocationsByNode = {};
+
+        try {
+            transferAllocationsByNode = JSON.parse(transferAllocationsSource.textContent || '{}');
+        } catch (error) {
+            transferAllocationsByNode = {};
+        }
+
+        const renderTransferAllocations = () => {
+            const nodeId = transferNodeSelect.value;
+            const allocations = Array.isArray(transferAllocationsByNode[nodeId]) ? transferAllocationsByNode[nodeId] : [];
+
+            transferAllocationSelect.innerHTML = '<option value="">Select a default port</option>';
+            transferAdditionalSelect.innerHTML = '';
+
+            if (!nodeId || allocations.length === 0) {
+                transferAllocationSelect.disabled = true;
+                transferAdditionalSelect.disabled = true;
+                return;
+            }
+
+            allocations.forEach((allocation, index) => {
+                const host = String(allocation.ip_alias || allocation.ip || '').trim();
+                const port = String(allocation.port || '').trim();
+                const notes = String(allocation.notes || '').trim();
+                const label = `${host}:${port}${notes ? ' - ' + notes : ''}`;
+
+                const defaultOption = document.createElement('option');
+                defaultOption.value = String(allocation.id || '');
+                defaultOption.textContent = label;
+                if (index === 0) {
+                    defaultOption.selected = true;
+                }
+                transferAllocationSelect.appendChild(defaultOption);
+            });
+
+            allocations.forEach((allocation) => {
+                const host = String(allocation.ip_alias || allocation.ip || '').trim();
+                const port = String(allocation.port || '').trim();
+                const notes = String(allocation.notes || '').trim();
+                const label = `${host}:${port}${notes ? ' - ' + notes : ''}`;
+
+                const option = document.createElement('option');
+                option.value = String(allocation.id || '');
+                option.textContent = label;
+                transferAdditionalSelect.appendChild(option);
+            });
+
+            transferAllocationSelect.disabled = false;
+            transferAdditionalSelect.disabled = false;
+        };
+
+        transferNodeSelect.addEventListener('change', renderTransferAllocations);
+        transferAllocationSelect.addEventListener('change', () => {
+            const selectedDefault = transferAllocationSelect.value;
+            Array.from(transferAdditionalSelect.options).forEach((option) => {
+                option.hidden = option.value === selectedDefault;
+                if (option.value === selectedDefault) {
+                    option.selected = false;
+                }
+            });
+        });
+    }
 
     if (ownerInput && ownerDatalist && ownerSource) {
         let owners = [];

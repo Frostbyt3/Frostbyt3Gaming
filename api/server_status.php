@@ -103,17 +103,20 @@ foreach ($validIds as $identifier) {
 
     $meta = is_array($serverMeta[$identifier] ?? null) ? $serverMeta[$identifier] : [];
     $isInstalling = !empty($meta['is_installing']);
+    $isSuspended = !empty($meta['suspended']) || strtolower(trim((string)($meta['status'] ?? ''))) === 'suspended';
 
     /**
      * Never turn an upstream resource/API issue into fake "Forbidden".
      * Keep the server in the result set with a safe fallback state.
      */
     $resourceStatus = (string)($resources['status'] ?? 'unknown');
+    $effectiveStatus = $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : $resourceStatus);
 
     $results[$identifier] = [
-        'status' => $resourceStatus,
+        'status' => $effectiveStatus,
         'resource_status' => $resourceStatus,
         'is_installing' => $isInstalling,
+        'is_suspended' => $isSuspended,
         'cpu' => (float)($resources['cpu'] ?? 0),
         'memory_bytes' => (int)($resources['memory_bytes'] ?? 0),
         'disk_bytes' => (int)($resources['disk_bytes'] ?? 0),

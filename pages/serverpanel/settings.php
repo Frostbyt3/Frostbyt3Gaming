@@ -249,7 +249,7 @@ try {
                 </div>
             </section>
 
-            <section class="fbg-settings-section">
+            <section class="fbg-settings-section" id="renew">
                 <div class="fbg-settings-section-header">
                     <h3>Renew Server</h3>
                 </div>
@@ -360,11 +360,7 @@ try {
 
                     <div class="fbg-settings-section-footer">
                         <div></div>
-                        <button
-                            type="button"
-                            class="btn danger-action"
-                            id="settings-reinstall-button"
-                        >
+                        <button type="button" class="btn danger-action" id="settings-reinstall-button">
                             Reinstall Server
                         </button>
                     </div>

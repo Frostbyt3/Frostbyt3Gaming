@@ -102,9 +102,10 @@ $canStopServer = $hasServerPermission('control.stop');
 $canRestartServer = $hasServerPermission('control.restart');
 
 $isInstalling = !empty($selectedServer['is_installing']);
+$isSuspended = strtolower(trim((string)($selectedServer['status'] ?? ''))) === 'suspended' || !empty($selectedServer['suspended']);
 
 $resources = [
-    'status' => $isInstalling ? 'installing' : 'unknown',
+    'status' => $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : 'unknown'),
     'cpu' => 0,
     'memory_bytes' => 0,
     'disk_bytes' => 0,
@@ -127,6 +128,7 @@ if (!function_exists('fbgStatusText')) {
             'offline'    => 'Stopped',
             'starting'   => 'Starting',
             'stopping'   => 'Stopping',
+            'suspended'  => 'Suspended',
             'installing' => 'Installing',
             default      => 'Unknown',
         };
@@ -136,7 +138,7 @@ if (!function_exists('fbgStatusText')) {
 if (!function_exists('fbgStatusClass')) {
     function fbgStatusClass(string $status): string
     {
-        return in_array($status, ['running', 'offline', 'starting', 'stopping', 'installing'], true)
+        return in_array($status, ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended'], true)
             ? $status
             : 'unknown';
     }
@@ -179,6 +181,10 @@ if (!function_exists('fbgServerRailInitialStatus')) {
     function fbgServerRailInitialStatus(array $server, string $identifier, string $selectedIdentifier, bool $selectedInstalling): string
     {
         if ($identifier === $selectedIdentifier) {
+            if (!empty($server['suspended']) || strtolower(trim((string)($server['status'] ?? ''))) === 'suspended') {
+                return 'suspended';
+            }
+
             return $selectedInstalling ? 'installing' : 'unknown';
         }
 
@@ -186,8 +192,8 @@ if (!function_exists('fbgServerRailInitialStatus')) {
             return 'installing';
         }
 
-        if (!empty($server['suspended'])) {
-            return 'offline';
+        if (!empty($server['suspended']) || strtolower(trim((string)($server['status'] ?? ''))) === 'suspended') {
+            return 'suspended';
         }
 
         return 'unknown';
@@ -355,6 +361,7 @@ if (!function_exists('fbgRenderTabPlaceholder')) {
 
 $renderServerTabContent = function () use (
     $isInstalling,
+    $isSuspended,
     $serverTab,
     $availableTabs,
     $selectedServer,
@@ -374,7 +381,31 @@ $renderServerTabContent = function () use (
     $cpuLimit,
     $serverAddress
 ): void {
-    if ($isInstalling) {
+    $isSettingsTab = ($serverTab === 'settings');
+    $renderSpecialStateBanner = function (string $mode) use ($serverIdentifier): void {
+        if ($mode === 'suspended') {
+            $renewUrl = './page.php?name=serverpanel&id=' . rawurlencode($serverIdentifier) . '&tab=settings#renew';
+            ?>
+            <div class="fbg-tab-placeholder-panel">
+                <div class="fbg-server-card-header">
+                    <div class="fbg-server-heading-installing fbg-server-heading-suspended">
+                        <br>
+                        <i class="fas fa-ban"></i>
+                        <h1>Suspended</h1>
+                        <p>This server is currently suspended.</p>
+                        <p>Access to normal controls is temporarily unavailable.</p>
+                        <div class="fbg-settings-section-footer" style="margin-top: 18px; justify-content: center;">
+                            <a href="<?php echo htmlspecialchars($renewUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-neutral-button">
+                                Renew Server
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php
+            return;
+        }
+
         ?>
         <div class="fbg-tab-placeholder-panel">
             <div class="fbg-server-card-header">
@@ -388,7 +419,22 @@ $renderServerTabContent = function () use (
             </div>
         </div>
         <?php
-        return;
+    };
+
+    if ($isSuspended) {
+        $renderSpecialStateBanner('suspended');
+
+        if (!$isSettingsTab) {
+            return;
+        }
+    }
+
+    if ($isInstalling && !($isPanelAdmin && $serverTab === 'console')) {
+        $renderSpecialStateBanner('installing');
+
+        if (!$isSettingsTab) {
+            return;
+        }
     }
 
     $tabFile = __DIR__ . '/serverpanel/' . $serverTab . '.php';
@@ -563,6 +609,8 @@ session_write_close();
                         identifier: <?php echo json_encode($selectedServer['identifier']); ?>,
                         csrfToken: <?php echo json_encode($csrfTokenForJs); ?>,
                         isInstalling: <?php echo json_encode($isInstalling); ?>,
+                        isSuspended: <?php echo json_encode($isSuspended); ?>,
+                        allowConsoleWhileInstalling: <?php echo json_encode($isPanelAdmin && $serverTab === 'console'); ?>,
                         currentTab: <?php echo json_encode($serverTab); ?>
                     };
                 </script>

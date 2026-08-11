@@ -59,10 +59,11 @@
         clearNamedTimeout(name);
 
         element.textContent = message;
-        element.className = 'fbg-dashboard-alert is-visible ' + (isError ? 'error' : 'success');
+        element.className = 'fbg-dashboard-alert fbg-console-toolbar-message is-visible ' + (isError ? 'error' : 'success');
         element.style.display = 'block';
 
         const timeoutId = setTimeout(() => {
+            element.classList.remove('is-visible', 'error', 'success');
             element.style.display = 'none';
         }, isError ? 7000 : 4000);
 
@@ -297,6 +298,8 @@
         const value = String(status || '').trim().toLowerCase();
         if (value === 'off') return 'offline';
         if (value === 'killed') return 'offline';
+        if (value === 'suspended') return 'suspended';
+        if (value === 'installing') return 'installing';
         return value || undefined;
     }
 
@@ -494,12 +497,19 @@
         commandHistoryIndex = -1;
         commandInput.value = '';
         commandInput.focus();
+        showCommandMessage('Command sent successfully.', false);
     }
 
     window.FBG_SERVER_PANEL_CONSOLE = {
         appendConsoleText,
         requestStats,
-        reconnect: () => scheduleReconnect('Manual reconnect requested.')
+        reconnect: () => scheduleReconnect('Manual reconnect requested.'),
+        disconnect: () => {
+            manuallyClosed = true;
+            clearReconnectTimer();
+            clearTokenTimer();
+            closeSocket(true);
+        }
     };
 
     if (consoleClearButton) {

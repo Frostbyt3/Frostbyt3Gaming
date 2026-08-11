@@ -2440,15 +2440,16 @@ a.button {
 }
 
 .fbg-dashboard-alert {
-    max-width: 900px;
+    max-width: min(560px, 100%);
     margin: 0 auto 20px;
     padding: 14px 18px;
     border-radius: 6px;
     text-align: center;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.04);
+    /* background: rgba(0, 0, 0, 0.65); */
+    background: var(--fbg-card-bg);
     border: 1px solid var(--fbg-border-medium);
-    box-sizing: border-box;
+    /* box-sizing: border-box; */
     z-index: 99999;
 
     /* Animation setup */
@@ -2750,6 +2751,10 @@ a.button {
     color: #fff1c2;
     /* background: rgba(255, 193, 7, 0.16);
     border-color: rgba(255, 193, 7, 0.4); */
+}
+
+.fbg-status-badge.suspended {
+    color: #ffb86b;
 }
 
 .fbg-status-badge.offline {
@@ -3118,6 +3123,11 @@ a.button {
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
 }
 
+.fbg-server-rail-status-dot.suspended {
+    background: #fb923c;
+    box-shadow: 0 0 10px rgba(251, 146, 60, 0.28);
+}
+
 .fbg-server-rail-status-dot.unknown {
     background: #8b8b8b;
 }
@@ -3164,14 +3174,26 @@ a.button {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
     left: 0;
     margin: 0;
-    max-width: none;
+    max-width: min(480px, 100%);
     padding: 14px 18px;
     position: absolute;
     top: calc(100% + 10px);
     transform: translateY(-6px);
-    width: 100%;
+    /* width: 100%; */
     z-index: 30;
 }
+
+/* .fbg-console-toolbar-message {
+    position: absolute;
+    inset: 0 0 0 auto;
+    margin: 0;
+    max-width: min(700px, 100%);
+    padding: 10px 16px;
+    border: 1px solid var(--fbg-border-medium);
+    background: rgba(30, 30, 30, 0.96);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+    z-index: 5;
+} */
 
 .fbg-power-action-message.is-visible {
     transform: translateY(0);
@@ -3227,6 +3249,10 @@ a.button {
 .fbg-sidebar-stat-icon-status.starting,
 .fbg-sidebar-stat-icon-status.stopping {
     color: #f59e0b;
+}
+
+.fbg-sidebar-stat-icon-status.suspended {
+    color: #fb923c;
 }
 
 .fbg-sidebar-stat-icon-status.unknown {
@@ -3383,9 +3409,9 @@ a.button {
 .fbg-console-toolbar-message {
     position: absolute;
     inset: 0 0 0 auto;
-    width: min(420px, 100%);
+    /* width: min(700px, 100%); */
     margin: 0;
-    max-width: none;
+    max-width: min(700px, 100%);
     padding: 10px 16px;
     border: 1px solid var(--fbg-border-medium);
     background: rgba(30, 30, 30, 0.96);
@@ -7322,6 +7348,15 @@ textarea.startup-variable-input {
 
 .fbg-admin-server-detail-list code {
     color: var(--fbg-text-main);
+}
+
+.fbg-admin-server-detail-list bita {
+    font-weight: bold;
+    font-style: italic;
+}
+
+.fbg-admin-server-detail-list warning {
+    color: var(--fbg-ansi-bright-red);
 }
 
 .fbg-admin-inline-form {
