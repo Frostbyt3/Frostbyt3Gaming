@@ -480,26 +480,27 @@ session_write_close();
         </aside>
 
         <div class="fbg-admin-main fbg-server-panel-content">
-            <div class="fbg-server-view-switch">
-                <?php foreach ($availableTabs as $tabKey => $tabConfig): ?>
-                    <?php if ($tabKey === 'admin'): ?>
-                        <a href="./page.php?name=admin-servers&edit=<?php echo (int)($selectedServer['id'] ?? 0); ?>" class="fbg-server-view-tab" title="Open server in admin panel">
-                            <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
-                            <?php echo htmlspecialchars($tabConfig['label']); ?>
-                            <i class="fas fa-up-right-from-square" style="font-size: 0.75em;"></i>
-                        </a>
-                    <?php else: ?>
-                        <a href="./page.php?name=serverpanel&id=<?php echo urlencode($selectedServer['identifier']); ?>&tab=<?php echo urlencode($tabKey); ?>" class="fbg-server-view-tab <?php echo $serverTab === $tabKey ? 'active' : ''; ?>">
-                            <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
-                            <?php echo htmlspecialchars($tabConfig['label']); ?>
-                        </a>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-            </div>
-
             <div class="fbg-server-shell">
                 <div class="fbg-server-main">
                     <article class="fbg-server-card <?php echo $serverTab === 'console' ? 'fbg-console-panel' : 'fbg-tab-panel'; ?>" data-server="<?php echo htmlspecialchars($selectedServer['identifier']); ?>">
+                <div class="fbg-server-card-tabs">
+                    <nav class="fbg-server-view-switch" aria-label="Server tabs">
+                        <?php foreach ($availableTabs as $tabKey => $tabConfig): ?>
+                            <?php if ($tabKey === 'admin'): ?>
+                                <a href="./page.php?name=admin-servers&edit=<?php echo (int)($selectedServer['id'] ?? 0); ?>" class="fbg-server-view-tab fbg-server-view-tab-admin" title="Open server in admin panel">
+                                    <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
+                                    <span><?php echo htmlspecialchars($tabConfig['label']); ?></span>
+                                    <i class="fas fa-up-right-from-square fbg-server-view-tab-external" aria-hidden="true"></i>
+                                </a>
+                            <?php else: ?>
+                                <a href="./page.php?name=serverpanel&id=<?php echo urlencode($selectedServer['identifier']); ?>&tab=<?php echo urlencode($tabKey); ?>" class="fbg-server-view-tab <?php echo $serverTab === $tabKey ? 'active' : ''; ?>">
+                                    <i class="<?php echo htmlspecialchars($tabConfig['icon']); ?>"></i>
+                                    <span><?php echo htmlspecialchars($tabConfig['label']); ?></span>
+                                </a>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </nav>
+                </div>
                 <div class="fbg-server-card-header">
                     <div class="fbg-server-heading">
                         <div class="fbg-editable-row" data-field="name">
