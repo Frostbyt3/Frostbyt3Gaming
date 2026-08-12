@@ -596,8 +596,20 @@ $where = [];
 $params = [];
 
 if ($search !== '') {
-    $where[] = '(u.email LIKE :search OR u.username LIKE :search OR u.name_first LIKE :search OR u.name_last LIKE :search OR CAST(u.id AS CHAR) = :exact_search)';
-    $params['search'] = '%' . $search . '%';
+    $where[] = '(
+        u.email LIKE :search_email
+        OR u.username LIKE :search_username
+        OR u.name_first LIKE :search_first
+        OR u.name_last LIKE :search_last
+        OR CAST(u.id AS CHAR) = :exact_search
+    )';
+
+    $searchLike = '%' . $search . '%';
+
+    $params['search_email'] = $searchLike;
+    $params['search_username'] = $searchLike;
+    $params['search_first'] = $searchLike;
+    $params['search_last'] = $searchLike;
     $params['exact_search'] = $search;
 }
 
