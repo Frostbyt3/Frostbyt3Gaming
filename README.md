@@ -24,7 +24,8 @@ This repository is the live website codebase. It powers public site pages, user 
 - Public registration flow backed by local pending-registration records
 - Email verification before Pterodactyl account creation
 - Resend verification flow
-- Account management page for logged-in users
+- Shared customer-area sidebar used across dashboard, profile, and balance pages
+- User Profile page for logged-in users
 - Pterodactyl-backed profile updates
 - Password change with current-password verification and strength rules
 - Email change flow with verification sent to the new email before applying the Pterodactyl update
@@ -32,21 +33,27 @@ This repository is the live website codebase. It powers public site pages, user 
 
 ### Pterodactyl Dashboard
 
-- Dashboard display of accessible Pterodactyl servers
-- Admin toggle for showing all Pterodactyl servers
+- Dashboard display of accessible Pterodactyl servers with redesigned customer-area layout
+- Admin Personal Servers / All Servers scope tabs
+- Search filtering across visible dashboard server cards
+- Persisted list-mode and card-mode dashboard layouts
+- Left-rail navigation with support links and account shortcuts
+- Dashboard summary cards for total servers, running, stopped, starting, memory, and CPU usage
 - Session/cache-aware server access syncing to reduce dashboard load time
-- Server cards with status, allocation, CPU, memory, disk, access role, node, and controls
+- Faster server status/stat hydration for both personal and all-server admin views
+- Server cards with status, allocation, CPU, memory, disk, access role, node, controls, and progress bars
 - Stale server metadata refresh support via `refresh_servers=1`
 - Suspended/expired server display handling
 - Server renewal integration
 
 ### Frontend Shop And Balance
 
-- Manage Balance page with current account balance, balance uploads, transaction history, and server purchase history
+- Manage Balance page with current account balance, balance uploads, transaction history, server purchase history, and shared customer-area sidebar
 - Stripe and PayPal add-balance checkout flows using the existing Pterodactyl shop settings model
 - Admin payment settings page for Stripe, PayPal, currency, and deposit limits
 - Public game server catalog driven by Pterodactyl ShopSystem category and game tables
 - Collapsible server plan categories with plan specs, pricing, and balance-aware purchase controls
+- Terms-of-service-aware order confirmation modal before plan purchases
 - Purchase-with-balance flow that provisions Pterodactyl servers through the Application API
 - Shop purchase ledger for recording provisioned server plan name, date, amount, currency, and linked server/game IDs
 - Provisioned shop servers receive `product_id` and 30-day `expired_at` metadata for renewal compatibility
@@ -58,6 +65,9 @@ The server panel includes Pterodactyl-backed tools for:
 
 - Console output and command sending
 - Power controls
+- Real-time-ish status/stat polling tuned closer to the Pterodactyl experience
+- Installing and suspended state handling in the panel
+- Left server rail with quick server switching and admin personal/all scope tabs
 - Server details rename/description updates
 - File manager browsing
 - Database manager for creating/managing server databases
@@ -72,20 +82,24 @@ The server panel includes Pterodactyl-backed tools for:
 - Activity viewing
 - Settings tab for renewal, reinstall, and server diagnostics
 - Install-state status polling without forced full-page reload loops
+- Direct frontend-admin jump link from the server panel for admins
 
 ### Admin Tools
 
 - Admin dashboard
 - Article/news manager
 - Service card manager
-- User manager ***in progress***
-- Server manager ***in progress***
+- User manager with searchable table, modal editor, country selection, access-level controls, associated-server listing, and guarded delete flow
+- Server manager with searchable/filterable server table and modal editor
+- Server editor tabs for about, details, build configuration, startup, database, mounts, manage, and delete workflows
+- Server creation flow with node/allocation, resource, nest/egg, docker image, and startup-variable controls
 - Site settings, including registration and maintenance settings
 - Link shortener management
 - File upload manager
 - Image upload manager
 - WebP-to-PNG conversion tool
 - Payment settings manager for frontend shop checkout configuration
+- TinyMCE-backed terms/settings editing support for admin payment/shop settings
 - Admin sidebar/navigation
 - Access-level based admin visibility
 
@@ -115,6 +129,9 @@ The server panel includes Pterodactyl-backed tools for:
 - `api/pterodactyl.php` - Pterodactyl API integration layer
 - `api/server/` - server panel JSON endpoints
 - `pages/dashboard.php` - customer/admin server dashboard
+- `pages/account.php` - user profile page
+- `pages/credit.php` - balance management page
+- `pages/includes/sidebar.php` - shared customer-area sidebar include
 - `pages/serverpanel.php` - server panel router
 - `pages/serverpanel/` - server panel tab fragments
 - `pages/admin/` - admin tools
@@ -149,9 +166,11 @@ The live folder is deployed directly from the working tree. After testing a chan
 
 ```powershell
 git -C "<directory>" status
-git -C "<directory"> add . or git -C "<directory>" <files> for specific files
+git -C "<directory>" add .
+# or:
+git -C "<directory>" add <files>
 git -C "<directory>" commit -m "Describe the change"
-git -c "<directory>" push origin main
+git -C "<directory>" push origin main
 ```
 
 ## Useful Git Commands
@@ -159,7 +178,7 @@ git -c "<directory>" push origin main
 See commit history:
 
 ```powershell
-git -C "<directory"> log --oneline --graph --decorate -50
+git -C "<directory>" log --oneline --graph --decorate -50
 ```
 
 See exactly what changed before committing:
