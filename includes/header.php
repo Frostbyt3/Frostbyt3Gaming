@@ -69,22 +69,22 @@
                             <div class="nav-user-email"><?php echo htmlspecialchars($email); ?></div>
                             <div class="nav-user-credit">
                                 <span>Account Balance</span>
-                                <strong><?php echo htmlspecialchars(fbgFormatCredit($creditBalance, $shopCurrency)); ?></strong>
+                                <a href="/page.php?name=credit"><strong>$<?php echo htmlspecialchars(fbgFormatCredit($creditBalance, $shopCurrency)); ?></strong></a>
                             </div>
                         </div>
 
                         <hr>
 
-                        <a href="/page.php?name=dashboard">Dashboard</a>
+                        <a href="/page.php?name=dashboard"><i class="fas fa-house"></i> Dashboard</a>
 
                         <?php if (canAccess(4)): ?>
-                            <a href="https://panel.frostbyt3gaming.com/">Backend Panel</a>
+                            <a href="https://panel.frostbyt3gaming.com/"><i class="fas fa-suitcase"></i> Backend Panel</a>
                         <?php endif; ?>
 
                         <hr>
-                        <a href="/page.php?name=account">Manage Account</a>
-                        <a href="/page.php?name=credit">Manage Balance</a>
-                        <a href="/page.php?name=logout" class="danger">Logout</a>
+                        <a href="/page.php?name=account"><i class="fas fa-user"></i> Manage Profile</a>
+                        <a href="/page.php?name=credit"><i class="fas fa-credit-card"></i> Manage Balance</a>
+                        <a href="/page.php?name=logout" class="danger"><i class="fas fa-arrow-right-from-bracket"></i> Logout</a>
                     </div>
                 </li>
 

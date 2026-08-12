@@ -8912,12 +8912,19 @@ textarea.startup-variable-input {
 
 .fbg-account-page {
     min-height: calc(100vh - 180px);
-    padding: 34px 18px 56px;
+    padding: 0;
 }
 
 .fbg-account-shell {
-    width: min(1180px, 100%);
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
+    max-width: none;
+}
+
+.fbg-dashboard-main .fbg-account-shell {
+    width: 100%;
+    margin: 0;
+    max-width: none;
 }
 
 .fbg-account-header {
@@ -8944,6 +8951,20 @@ textarea.startup-variable-input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     margin-top: 18px;
+}
+
+.fbg-account-page .fbg-dashboard-layout {
+    gap: 22px;
+    align-items: stretch;
+}
+
+.fbg-account-page .fbg-dashboard-main {
+    padding: 34px 20px 56px 0;
+    min-width: 0;
+}
+
+.fbg-account-page .fbg-dashboard-sidebar {
+    min-height: calc(100vh - 72px);
 }
 
 .fbg-account-section {

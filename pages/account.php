@@ -231,130 +231,141 @@ $username = (string)($panelUser['username'] ?? $_SESSION['username'] ?? '');
 $email = (string)($panelUser['email'] ?? $_SESSION['email'] ?? '');
 $firstName = (string)($panelUser['first_name'] ?? $panelUser['name_first'] ?? '');
 $lastName = (string)($panelUser['last_name'] ?? $panelUser['name_last'] ?? '');
+$accountPageUrl = './page.php?name=account';
+$dashboardPageUrl = './page.php?name=dashboard';
+$creditPageUrl = './page.php?name=credit';
+$discordUrl = 'https://frostbyt3gaming.com/discord';
+$fbgSidebarCurrent = 'account';
+$fbgSidebarTitle = 'User Profile';
 ?>
 
 <section class="fbg-account-page">
-    <div class="fbg-account-shell">
-        <div class="fbg-account-header">
-            <div>
-                <h1>Manage Account</h1>
-                <p>Update the identity and login details connected to your Pterodactyl account.</p>
-            </div>
-            <a href="./page.php?name=dashboard" class="btn fbg-neutral-button">
-                Dashboard
-            </a>
-        </div>
+    <div class="fbg-dashboard-shell">
+        <div class="fbg-dashboard-layout">
+            <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-        <?php if (!empty($errors)): ?>
-            <div class="fbg-dashboard-alert error is-visible">
-                <?php foreach ($errors as $error): ?>
-                    <div><?php echo htmlspecialchars($error); ?></div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+            <div class="fbg-dashboard-main">
+                <div class="fbg-account-shell">
+                    <div class="fbg-account-header">
+                        <div>
+                            <h1>User Profile</h1>
+                            <p>Update the identity and login details connected to your Pterodactyl account.</p>
+                        </div>
+                    </div>
 
-        <?php if (!empty($success)): ?>
-            <div class="fbg-dashboard-alert success is-visible">
-                <?php foreach ($success as $message): ?>
-                    <div><?php echo htmlspecialchars($message); ?></div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+                    <?php if (!empty($errors)): ?>
+                        <div class="fbg-dashboard-alert error is-visible">
+                            <?php foreach ($errors as $error): ?>
+                                <div><?php echo htmlspecialchars($error); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
 
-        <div class="fbg-account-grid">
-            <section class="fbg-account-section">
-                <div class="fbg-settings-section-header">
-                    <h3>Profile</h3>
+                    <?php if (!empty($success)): ?>
+                        <div class="fbg-dashboard-alert success is-visible">
+                            <?php foreach ($success as $message): ?>
+                                <div><?php echo htmlspecialchars($message); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="fbg-account-grid">
+                        <section class="fbg-account-section">
+                            <div class="fbg-settings-section-header">
+                                <h3>Profile</h3>
+                            </div>
+
+                            <form method="post" action="./page.php?name=account" novalidate>
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="account_action" value="profile">
+
+                                <div class="fbg-settings-field-grid">
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-username">Username</label>
+                                        <input id="account-username" class="fbg-text-input" type="text" name="username" value="<?php echo htmlspecialchars($username); ?>" autocomplete="username" required>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-email-current">Email</label>
+                                        <input id="account-email-current" class="fbg-text-input" type="email" value="<?php echo htmlspecialchars($email); ?>" readonly>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-first-name">First Name</label>
+                                        <input id="account-first-name" class="fbg-text-input" type="text" name="first_name" value="<?php echo htmlspecialchars($firstName); ?>" autocomplete="given-name" required>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-last-name">Last Name</label>
+                                        <input id="account-last-name" class="fbg-text-input" type="text" name="last_name" value="<?php echo htmlspecialchars($lastName); ?>" autocomplete="family-name" required>
+                                    </div>
+                                </div>
+
+                                <div class="fbg-settings-section-footer">
+                                    <button type="submit" class="btn fbg-primary-button">Save Profile</button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <section class="fbg-account-section">
+                            <div class="fbg-settings-section-header">
+                                <h3>Change Email</h3>
+                            </div>
+
+                            <form method="post" action="./page.php?name=account" novalidate>
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="account_action" value="email">
+
+                                <div class="fbg-settings-field-grid">
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-new-email">New Email</label>
+                                        <input id="account-new-email" class="fbg-text-input" type="email" name="new_email" autocomplete="email" required>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-email-password">Current Password</label>
+                                        <input id="account-email-password" class="fbg-text-input" type="password" name="email_current_password" autocomplete="current-password" required>
+                                    </div>
+                                </div>
+
+                                <p class="fbg-settings-note">A verification link will be sent to the new address before it replaces your current email.</p>
+
+                                <div class="fbg-settings-section-footer">
+                                    <button type="submit" class="btn fbg-primary-button">Send Verification</button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <section class="fbg-account-section">
+                            <div class="fbg-settings-section-header">
+                                <h3>Change Password</h3>
+                            </div>
+
+                            <form method="post" action="./page.php?name=account" novalidate>
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="account_action" value="password">
+
+                                <div class="fbg-settings-field-grid">
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-current-password">Current Password</label>
+                                        <input id="account-current-password" class="fbg-text-input" type="password" name="current_password" autocomplete="current-password" required>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-new-password">New Password</label>
+                                        <input id="account-new-password" class="fbg-text-input" type="password" name="new_password" autocomplete="new-password" required>
+                                    </div>
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="account-confirm-password">Confirm Password</label>
+                                        <input id="account-confirm-password" class="fbg-text-input" type="password" name="confirm_password" autocomplete="new-password" required>
+                                    </div>
+                                </div>
+
+                                <p class="fbg-settings-note">Use 10+ characters with uppercase, lowercase, a number, and a special character.</p>
+
+                                <div class="fbg-settings-section-footer">
+                                    <button type="submit" class="btn fbg-primary-button">Update Password</button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
                 </div>
-
-                <form method="post" action="./page.php?name=account" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                    <input type="hidden" name="account_action" value="profile">
-
-                    <div class="fbg-settings-field-grid">
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-username">Username</label>
-                            <input id="account-username" class="fbg-text-input" type="text" name="username" value="<?php echo htmlspecialchars($username); ?>" autocomplete="username" required>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-email-current">Email</label>
-                            <input id="account-email-current" class="fbg-text-input" type="email" value="<?php echo htmlspecialchars($email); ?>" readonly>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-first-name">First Name</label>
-                            <input id="account-first-name" class="fbg-text-input" type="text" name="first_name" value="<?php echo htmlspecialchars($firstName); ?>" autocomplete="given-name" required>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-last-name">Last Name</label>
-                            <input id="account-last-name" class="fbg-text-input" type="text" name="last_name" value="<?php echo htmlspecialchars($lastName); ?>" autocomplete="family-name" required>
-                        </div>
-                    </div>
-
-                    <div class="fbg-settings-section-footer">
-                        <button type="submit" class="btn fbg-primary-button">Save Profile</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="fbg-account-section">
-                <div class="fbg-settings-section-header">
-                    <h3>Change Email</h3>
-                </div>
-
-                <form method="post" action="./page.php?name=account" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                    <input type="hidden" name="account_action" value="email">
-
-                    <div class="fbg-settings-field-grid">
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-new-email">New Email</label>
-                            <input id="account-new-email" class="fbg-text-input" type="email" name="new_email" autocomplete="email" required>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-email-password">Current Password</label>
-                            <input id="account-email-password" class="fbg-text-input" type="password" name="email_current_password" autocomplete="current-password" required>
-                        </div>
-                    </div>
-
-                    <p class="fbg-settings-note">A verification link will be sent to the new address before it replaces your current email.</p>
-
-                    <div class="fbg-settings-section-footer">
-                        <button type="submit" class="btn fbg-primary-button">Send Verification</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="fbg-account-section">
-                <div class="fbg-settings-section-header">
-                    <h3>Change Password</h3>
-                </div>
-
-                <form method="post" action="./page.php?name=account" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                    <input type="hidden" name="account_action" value="password">
-
-                    <div class="fbg-settings-field-grid">
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-current-password">Current Password</label>
-                            <input id="account-current-password" class="fbg-text-input" type="password" name="current_password" autocomplete="current-password" required>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-new-password">New Password</label>
-                            <input id="account-new-password" class="fbg-text-input" type="password" name="new_password" autocomplete="new-password" required>
-                        </div>
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="account-confirm-password">Confirm Password</label>
-                            <input id="account-confirm-password" class="fbg-text-input" type="password" name="confirm_password" autocomplete="new-password" required>
-                        </div>
-                    </div>
-
-                    <p class="fbg-settings-note">Use 10+ characters with uppercase, lowercase, a number, and a special character.</p>
-
-                    <div class="fbg-settings-section-footer">
-                        <button type="submit" class="btn fbg-primary-button">Update Password</button>
-                    </div>
-                </form>
-            </section>
+            </div>
         </div>
     </div>
 </section>

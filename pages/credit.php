@@ -47,6 +47,12 @@ $serverPurchases = fbgGetUserServerPurchaseHistory($userId);
 $showPendingTransactions = (string)($_GET['show_pending'] ?? '') === '1';
 $visibleTransactions = [];
 $hiddenPendingTransactions = 0;
+$dashboardPageUrl = './page.php?name=dashboard';
+$accountPageUrl = './page.php?name=account';
+$creditPageUrl = './page.php?name=credit';
+$discordUrl = 'https://frostbyt3gaming.com/discord';
+$fbgSidebarCurrent = 'credit';
+$fbgSidebarTitle = 'Manage Balance';
 
 foreach ($transactions as $transaction) {
     $completed = (int)($transaction['completed'] ?? 0) === 1;
@@ -68,104 +74,109 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
 ?>
 
 <section class="fbg-account-page fbg-credit-page">
-    <div class="fbg-account-shell">
-        <div class="fbg-account-header">
-            <div>
-                <h1>Manage Balance</h1>
-                <p>Add funds, review account balance, and view completed balance uploads.</p>
-            </div>
-        </div>
+    <div class="fbg-dashboard-shell">
+        <div class="fbg-dashboard-layout">
+            <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-        <?php if (!empty($errors)): ?>
-            <div class="fbg-dashboard-alert error is-visible fbg-auto-dismiss-alert" style="margin-bottom: 16px;">
-                <?php foreach ($errors as $error): ?>
-                    <div><?php echo htmlspecialchars($error); ?></div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!empty($messages)): ?>
-            <div class="fbg-dashboard-alert success is-visible fbg-auto-dismiss-alert" style="margin-bottom: 16px;">
-                <?php foreach ($messages as $message): ?>
-                    <div><?php echo htmlspecialchars($message); ?></div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <section class="fbg-account-section fbg-credit-summary">
-            <div>
-                <span class="fbg-meta-label">Account Balance</span>
-                <strong><?php echo htmlspecialchars(fbgFormatCredit($balance, $currency)); ?></strong>
-            </div>
-            <a href="./page.php?name=servers" class="btn fbg-primary-button">
-                Browse Servers
-            </a>
-        </section>
-
-        <section class="fbg-account-section fbg-credit-add-funds">
-            <div class="fbg-settings-section-header">
-                <h3>Add Balance</h3>
-            </div>
-
-            <?php if (!$hasOnlineBalanceUploads): ?>
-                <div class="fbg-empty-state">
-                    Online balance uploads are not enabled right now.
-                </div>
-            <?php else: ?>
-                <form id="fbg-add-balance-form" class="fbg-credit-form" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$_SESSION['csrf_token']); ?>">
-
-                    <div class="fbg-settings-field-grid">
-                        <div class="fbg-settings-field">
-                            <label class="fbg-meta-label" for="credit-amount">Amount</label>
-                            <div class="fbg-credit-input-row">
-                                <input
-                                    id="credit-amount"
-                                    class="fbg-text-input"
-                                    type="number"
-                                    name="amount"
-                                    min="<?php echo htmlspecialchars(number_format($minAmount, 2, '.', '')); ?>"
-                                    <?php if ($maxAmount > 0): ?>
-                                        max="<?php echo htmlspecialchars(number_format($maxAmount, 2, '.', '')); ?>"
-                                    <?php endif; ?>
-                                    step="0.01"
-                                    value="<?php echo htmlspecialchars(number_format($defaultAmount, 2, '.', '')); ?>"
-                                    required
-                                >
-                                <span><?php echo htmlspecialchars($currency); ?></span>
-                            </div>
+            <div class="fbg-dashboard-main">
+                <div class="fbg-account-shell">
+                    <div class="fbg-account-header">
+                        <div>
+                            <h1>Manage Balance</h1>
+                            <p>Add funds, review account balance, and view completed balance uploads.</p>
                         </div>
                     </div>
 
-                    <p class="fbg-settings-note">
-                        Checkout will open securely. Your account balance updates after payment is verified.
-                    </p>
+                    <?php if (!empty($errors)): ?>
+                        <div class="fbg-dashboard-alert error is-visible fbg-auto-dismiss-alert" style="margin-bottom: 16px;">
+                            <?php foreach ($errors as $error): ?>
+                                <div><?php echo htmlspecialchars($error); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
 
-                    <div id="fbg-add-balance-message" class="fbg-dashboard-alert" style="display:none; margin-top: 12px;"></div>
+                    <?php if (!empty($messages)): ?>
+                        <div class="fbg-dashboard-alert success is-visible fbg-auto-dismiss-alert" style="margin-bottom: 16px;">
+                            <?php foreach ($messages as $message): ?>
+                                <div><?php echo htmlspecialchars($message); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
 
-                    <div class="fbg-settings-section-footer">
-                        <button
-                            type="submit"
-                            class="btn fbg-primary-button"
-                            data-default-text="Add Balance with Stripe"
-                            <?php echo (!$paymentSettings['stripe_enabled'] || !$paymentSettings['stripe_secret_configured']) ? 'disabled' : ''; ?>
-                        >
-                            Add Balance with Stripe
-                        </button>
-                        <button
-                            type="button"
-                            class="btn fbg-paypal-button"
-                            id="fbg-paypal-balance-button"
-                            <?php echo (!$paymentSettings['paypal_enabled'] || !$paymentSettings['paypal_key_configured'] || !$paymentSettings['paypal_secret_configured']) ? 'disabled' : ''; ?>
-                        >
-                            Add Balance with PayPal
-                        </button>
-                    </div>
-                </form>
-            <?php endif; ?>
-        </section>
+                    <section class="fbg-account-section fbg-credit-summary">
+                        <div>
+                            <span class="fbg-meta-label">Account Balance</span>
+                            <strong>$<?php echo htmlspecialchars(fbgFormatCredit($balance, $currency)); ?></strong>
+                        </div>
+                        <a href="./page.php?name=servers" class="btn fbg-primary-button">
+                            Browse Servers
+                        </a>
+                    </section>
 
-        <section class="fbg-account-section fbg-credit-server-purchases">
+                    <section class="fbg-account-section fbg-credit-add-funds">
+                        <div class="fbg-settings-section-header">
+                            <h3>Add Balance</h3>
+                        </div>
+
+                        <?php if (!$hasOnlineBalanceUploads): ?>
+                            <div class="fbg-empty-state">
+                                Online balance uploads are not enabled right now.
+                            </div>
+                        <?php else: ?>
+                            <form id="fbg-add-balance-form" class="fbg-credit-form" novalidate>
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$_SESSION['csrf_token']); ?>">
+
+                                <div class="fbg-settings-field-grid">
+                                    <div class="fbg-settings-field">
+                                        <label class="fbg-meta-label" for="credit-amount">Amount</label>
+                                        <div class="fbg-credit-input-row">
+                                            <input
+                                                id="credit-amount"
+                                                class="fbg-text-input"
+                                                type="number"
+                                                name="amount"
+                                                min="<?php echo htmlspecialchars(number_format($minAmount, 2, '.', '')); ?>"
+                                                <?php if ($maxAmount > 0): ?>
+                                                    max="<?php echo htmlspecialchars(number_format($maxAmount, 2, '.', '')); ?>"
+                                                <?php endif; ?>
+                                                step="0.01"
+                                                value="<?php echo htmlspecialchars(number_format($defaultAmount, 2, '.', '')); ?>"
+                                                required
+                                            >
+                                            <span><?php echo htmlspecialchars($currency); ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p class="fbg-settings-note">
+                                    Checkout will open securely. Your account balance updates after payment is verified.
+                                </p>
+
+                                <div id="fbg-add-balance-message" class="fbg-dashboard-alert" style="display:none; margin-top: 12px;"></div>
+
+                                <div class="fbg-settings-section-footer">
+                                    <button
+                                        type="submit"
+                                        class="btn fbg-primary-button"
+                                        data-default-text="Add Balance with Stripe"
+                                        <?php echo (!$paymentSettings['stripe_enabled'] || !$paymentSettings['stripe_secret_configured']) ? 'disabled' : ''; ?>
+                                    >
+                                        Add Balance with Stripe
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn fbg-paypal-button"
+                                        id="fbg-paypal-balance-button"
+                                        <?php echo (!$paymentSettings['paypal_enabled'] || !$paymentSettings['paypal_key_configured'] || !$paymentSettings['paypal_secret_configured']) ? 'disabled' : ''; ?>
+                                    >
+                                        Add Balance with PayPal
+                                    </button>
+                                </div>
+                            </form>
+                        <?php endif; ?>
+                    </section>
+
+                    <section class="fbg-account-section fbg-credit-server-purchases">
             <div class="fbg-settings-section-header">
                 <div>
                     <h3>Server Purchase History</h3>
@@ -209,9 +220,9 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                     </table>
                 </div>
             <?php endif; ?>
-        </section>
+                    </section>
 
-        <section class="fbg-account-section">
+                    <section class="fbg-account-section">
             <div class="fbg-settings-section-header fbg-credit-transactions-header">
                 <div>
                     <h3>Transaction History</h3>
@@ -281,7 +292,10 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                     </table>
                 </div>
             <?php endif; ?>
-        </section>
+                    </section>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 

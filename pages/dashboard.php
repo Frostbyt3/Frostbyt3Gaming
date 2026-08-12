@@ -187,7 +187,10 @@ unset($_SESSION['dashboard_flash_success'], $_SESSION['dashboard_flash_error']);
 $csrfTokenForJs = (string)($_SESSION['csrf_token'] ?? '');
 $serversPageUrl = './page.php?name=servers';
 $accountPageUrl = './page.php?name=account';
+$creditPageUrl = './page.php?name=credit';
 $discordUrl = 'https://frostbyt3gaming.com/discord';
+$fbgSidebarCurrent = 'dashboard';
+$fbgSidebarTitle = 'Dashboard';
 
 $totalServers = count($userServers);
 $dashboardNodeKeys = [];
@@ -216,39 +219,7 @@ session_write_close();
 
 <section class="fbg-dashboard-shell" data-dashboard-view="list">
     <div class="fbg-dashboard-layout">
-        <aside class="fbg-dashboard-sidebar">
-            <div class="fbg-admin-sidebar-brand">
-                <span class="fbg-admin-sidebar-eyebrow">Server Panel</span>
-                <h2>Dashboard</h2>
-            </div>
-
-            <nav class="fbg-dashboard-sidebar-nav" aria-label="Dashboard navigation">
-                <div class="fbg-dashboard-sidebar-group">
-                    <span class="fbg-admin-sidebar-eyebrow">Server Panel</span>
-                    <a href="./page.php?name=dashboard" class="fbg-admin-nav-link active">
-                        <i class="fas fa-house"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </div>
-
-                <!-- <div class="fbg-dashboard-sidebar-group">
-                    <span class="fbg-admin-sidebar-eyebrow">Account</span>
-                    <a href="<?php echo htmlspecialchars($accountPageUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-admin-nav-link">
-                        <i class="fas fa-user"></i>
-                        <span>User Profile</span>
-                    </a>
-                </div> -->
-            </nav>
-
-            <section class="fbg-dashboard-help-card" aria-labelledby="dashboard-help-title">
-                <h3 id="dashboard-help-title">Need Help?</h3>
-                <p>Join our community Discord for support and updates.</p>
-                <a href="<?php echo htmlspecialchars($discordUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-primary-button" target="_blank" rel="noopener noreferrer">
-                    <i class="fab fa-discord"></i>
-                    <span>Join Discord</span>
-                </a>
-            </section>
-        </aside>
+        <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
         <div class="fbg-dashboard-main">
             <?php if ($actionMessage): ?>
