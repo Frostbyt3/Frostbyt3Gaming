@@ -5261,19 +5261,29 @@ body.fbg-modal-open {
     align-items: center;
     min-height: 28px;
     padding: 0 10px;
-    border-radius: 999px;
+    border-radius: 4px;
     font-size: 0.82rem;
     border: 1px solid var(--fbg-border-medium);
 }
 
-.fbg-server-flag.expired {
+.fbg-server-flag.nonexpired {
+    color: #81ff7d;
+    background: rgba(68, 255, 51, 0.1);
+}
+
+.fbg-server-flag.expiring {
     color: #ffd17d;
+    background: rgba(255, 218, 51, 0.1);
+}
+
+.fbg-server-flag.expired {
+    color: #ff7d7d;
     background: rgba(255, 179, 51, 0.1);
 }
 
 .fbg-server-flag.suspended {
-    color: #ff8e8e;
-    background: rgba(255, 70, 70, 0.1);
+    color: #ffb78e;
+    background: rgba(255, 159, 70, 0.1);
 }
 
 .fbg-dashboard-item-stats {

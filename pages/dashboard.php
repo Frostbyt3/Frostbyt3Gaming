@@ -468,6 +468,20 @@ session_write_close();
                                 : number_format($cpuLimitValue) . '%';
 
                             $nodeDisplay = (string)(($server['node_name'] ?? '') ?: ('Node ID: ' . (string)($server['node_id'] ?? 'Unknown')));
+                            $expiryTimestamp = !empty($server['expired_at']) ? strtotime((string)$server['expired_at']) : false;
+                            $expiryFlagClass = null;
+
+                            if ($expiryTimestamp !== false) {
+                                $secondsUntilExpiry = $expiryTimestamp - time();
+
+                                if ($secondsUntilExpiry < 0) {
+                                    $expiryFlagClass = 'expired';
+                                } elseif ($secondsUntilExpiry <= 7 * 24 * 60 * 60) {
+                                    $expiryFlagClass = 'expiring';
+                                } else {
+                                    $expiryFlagClass = 'nonexpired';
+                                }
+                            }
                             $serverName = (string)($server['name'] ?? 'Unnamed Server');
                             $serverDescription = trim((string)($server['description'] ?? ''));
                             $ownerUsername = (string)($server['owner_username'] ?? '');
@@ -540,9 +554,9 @@ session_write_close();
                                                     </span>
                                                 <?php endif; ?>
 
-                                                <?php if (!empty($server['expired_at'])): ?>
-                                                    <span class="fbg-server-flag expired">
-                                                        Expires <?php echo htmlspecialchars(date('M j, Y g:i A', strtotime((string)$server['expired_at']))); ?>
+                                                <?php if ($expiryTimestamp !== false && $expiryFlagClass !== null): ?>
+                                                    <span class="fbg-server-flag <?php echo htmlspecialchars($expiryFlagClass); ?>">
+                                                        Expires <?php echo htmlspecialchars(date('M j, Y g:i A', $expiryTimestamp)); ?>
                                                     </span>
                                                 <?php endif; ?>
 
