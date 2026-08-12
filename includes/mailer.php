@@ -335,3 +335,249 @@ function fbgSendRegistrationCompletionEmail(array $data): bool
         throw $e;
     }
 }
+
+function fbgSendServerExpiryReminderEmail(array $data): bool
+{
+    $toEmail = trim((string)($data['to_email'] ?? ''));
+    $serverName = trim((string)($data['server_name'] ?? ''));
+    $firstName = trim((string)($data['first_name'] ?? ''));
+    $settingsUrl = trim((string)($data['settings_url'] ?? ''));
+    $daysRemaining = max(0, (int)($data['days_remaining'] ?? 0));
+    $expiresAtDisplay = trim((string)($data['expires_at_display'] ?? ''));
+
+    if ($toEmail === '' || $serverName === '' || $settingsUrl === '') {
+        return false;
+    }
+
+    $greetingName = $firstName !== '' ? $firstName : 'there';
+    $safeName = htmlspecialchars($greetingName, ENT_QUOTES, 'UTF-8');
+    $safeServerName = htmlspecialchars($serverName, ENT_QUOTES, 'UTF-8');
+    $safeSettingsUrl = htmlspecialchars($settingsUrl, ENT_QUOTES, 'UTF-8');
+    $safeExpiryDisplay = htmlspecialchars($expiresAtDisplay, ENT_QUOTES, 'UTF-8');
+
+    if ($daysRemaining <= 0) {
+        $subject = $serverName . ' expires today';
+        $lead = 'Your server expires today.';
+        $body = 'Renew it today to keep it online and avoid service interruption.';
+    } elseif ($daysRemaining === 1) {
+        $subject = $serverName . ' expires in 1 day';
+        $lead = 'Your server expires in 1 day.';
+        $body = 'Renew it now to keep everything running smoothly.';
+    } else {
+        $subject = $serverName . ' expires in ' . $daysRemaining . ' days';
+        $lead = 'Your server expires in ' . $daysRemaining . ' days.';
+        $body = 'Renew it before the expiration date to keep your server and data active.';
+    }
+
+    $expiryLine = $expiresAtDisplay !== ''
+        ? 'Current expiration date: ' . $safeExpiryDisplay . '.'
+        : '';
+
+    $htmlMessage = '
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0;padding:0;background-color:#111;font-family:Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="color:#f2f2f2;background-color:#1c1c1c;padding:20px 0;border:2px solid rgba(255,255,255,0.08);">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
+                        <tr>
+                            <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:16px;padding-bottom:20px;">Hey ' . $safeName . ',</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:14px;padding-bottom:16px;color:#cccccc;">
+                                <strong>' . $safeServerName . '</strong> is getting close to its expiration date.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:14px;padding-bottom:12px;color:#cccccc;">
+                                ' . htmlspecialchars($lead, ENT_QUOTES, 'UTF-8') . ' ' . htmlspecialchars($body, ENT_QUOTES, 'UTF-8') . '
+                            </td>
+                        </tr>
+                        ' . ($expiryLine !== '' ? '
+                        <tr>
+                            <td style="font-size:13px;padding-bottom:12px;color:#9fd39f;">' . $expiryLine . '</td>
+                        </tr>' : '') . '
+                        <tr>
+                            <td align="center" style="padding:20px 0;">
+                                <a href="' . $safeSettingsUrl . '" style="background-color:#0067a3;border-radius:10px;color:#ffffff;display:inline-block;font-size:14px;font-weight:600;line-height:17px;padding:19px 31px;text-align:center;text-transform:uppercase;text-decoration:none;letter-spacing:.05em;">
+                                    Manage Server
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:12px;color:#888888;padding-top:20px;">
+                                If the button does not work, use this link:<br><br>
+                                <a href="' . $safeSettingsUrl . '" style="color:#22aeff;">' . $safeSettingsUrl . '</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>';
+
+    $plainMessage = "Hey {$greetingName},\n\n"
+        . "{$serverName} is getting close to its expiration date.\n"
+        . $lead . ' ' . $body . "\n\n"
+        . ($expiresAtDisplay !== '' ? "Current expiration date: {$expiresAtDisplay}\n\n" : '')
+        . "Manage your server here:\n{$settingsUrl}\n";
+
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->Port = SMTP_PORT;
+
+        $mail->SMTPDebug = fbgIsLocalRequest() ? 2 : 0;
+        $mail->Debugoutput = 'error_log';
+
+        if (defined('SMTP_USE_AUTH') && SMTP_USE_AUTH) {
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+        } else {
+            $mail->SMTPAuth = false;
+        }
+
+        if (defined('SMTP_USE_TLS') && SMTP_USE_TLS) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlMessage;
+        $mail->AltBody = $plainMessage;
+
+        return $mail->send();
+    } catch (Exception $e) {
+        error_log('Server expiry reminder email failed: ' . $e->getMessage());
+        throw $e;
+    }
+}
+
+function fbgSendServerExpiredEmail(array $data): bool
+{
+    $toEmail = trim((string)($data['to_email'] ?? ''));
+    $serverName = trim((string)($data['server_name'] ?? ''));
+    $firstName = trim((string)($data['first_name'] ?? ''));
+    $settingsUrl = trim((string)($data['settings_url'] ?? ''));
+    $deleteDays = max(0, (int)($data['delete_days'] ?? 0));
+    $expiresAtDisplay = trim((string)($data['expires_at_display'] ?? ''));
+
+    if ($toEmail === '' || $serverName === '' || $settingsUrl === '') {
+        return false;
+    }
+
+    $greetingName = $firstName !== '' ? $firstName : 'there';
+    $safeName = htmlspecialchars($greetingName, ENT_QUOTES, 'UTF-8');
+    $safeServerName = htmlspecialchars($serverName, ENT_QUOTES, 'UTF-8');
+    $safeSettingsUrl = htmlspecialchars($settingsUrl, ENT_QUOTES, 'UTF-8');
+    $safeExpiryDisplay = htmlspecialchars($expiresAtDisplay, ENT_QUOTES, 'UTF-8');
+
+    $subject = $serverName . ' has expired';
+
+    if ($deleteDays > 0) {
+        $warningCopy = 'If you do not renew it within ' . $deleteDays . ' day' . ($deleteDays === 1 ? '' : 's') . ', it will be deleted automatically and its data will be lost.';
+    } else {
+        $warningCopy = 'It is now eligible for immediate deletion, and its data may be removed at any time.';
+    }
+
+    $htmlMessage = '
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0;padding:0;background-color:#111;font-family:Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="color:#f2f2f2;background-color:#1c1c1c;padding:20px 0;border:2px solid rgba(255,255,255,0.08);">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
+                        <tr>
+                            <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:16px;padding-bottom:20px;">Hey ' . $safeName . ',</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:14px;padding-bottom:16px;color:#cccccc;">
+                                <strong>' . $safeServerName . '</strong> has expired.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:14px;padding-bottom:12px;color:#ffb0b0;">
+                                ' . htmlspecialchars($warningCopy, ENT_QUOTES, 'UTF-8') . '
+                            </td>
+                        </tr>
+                        ' . ($expiresAtDisplay !== '' ? '
+                        <tr>
+                            <td style="font-size:13px;padding-bottom:12px;color:#cccccc;">Expired on ' . $safeExpiryDisplay . '.</td>
+                        </tr>' : '') . '
+                        <tr>
+                            <td align="center" style="padding:20px 0;">
+                                <a href="' . $safeSettingsUrl . '" style="background-color:#0067a3;border-radius:10px;color:#ffffff;display:inline-block;font-size:14px;font-weight:600;line-height:17px;padding:19px 31px;text-align:center;text-transform:uppercase;text-decoration:none;letter-spacing:.05em;">
+                                    Renew Server
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:12px;color:#888888;padding-top:20px;">
+                                If the button does not work, use this link:<br><br>
+                                <a href="' . $safeSettingsUrl . '" style="color:#22aeff;">' . $safeSettingsUrl . '</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>';
+
+    $plainMessage = "Hey {$greetingName},\n\n"
+        . "{$serverName} has expired.\n"
+        . $warningCopy . "\n\n"
+        . ($expiresAtDisplay !== '' ? "Expired on {$expiresAtDisplay}.\n\n" : '')
+        . "Renew your server here:\n{$settingsUrl}\n";
+
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->Port = SMTP_PORT;
+
+        $mail->SMTPDebug = fbgIsLocalRequest() ? 2 : 0;
+        $mail->Debugoutput = 'error_log';
+
+        if (defined('SMTP_USE_AUTH') && SMTP_USE_AUTH) {
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+        } else {
+            $mail->SMTPAuth = false;
+        }
+
+        if (defined('SMTP_USE_TLS') && SMTP_USE_TLS) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlMessage;
+        $mail->AltBody = $plainMessage;
+
+        return $mail->send();
+    } catch (Exception $e) {
+        error_log('Server expired email failed: ' . $e->getMessage());
+        throw $e;
+    }
+}
