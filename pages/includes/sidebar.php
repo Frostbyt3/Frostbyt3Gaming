@@ -10,7 +10,29 @@ $fbgSidebarAccountUrl = isset($accountPageUrl) ? (string)$accountPageUrl : './pa
 $fbgSidebarCreditUrl = isset($creditPageUrl) ? (string)$creditPageUrl : './page.php?name=credit';
 $fbgSidebarDiscordUrl = isset($discordUrl) ? (string)$discordUrl : 'https://frostbyt3gaming.com/discord';
 ?>
-<aside class="fbg-dashboard-sidebar">
+<button
+    type="button"
+    class="fbg-sidebar-mobile-toggle"
+    id="fbg-sidebar-mobile-toggle"
+    aria-controls="fbg-shared-sidebar"
+    aria-expanded="false"
+    aria-label="Open sidebar"
+>
+    <span aria-hidden="true">&gt;</span>
+</button>
+
+<div class="fbg-sidebar-mobile-backdrop" id="fbg-sidebar-mobile-backdrop" hidden></div>
+
+<aside class="fbg-dashboard-sidebar" id="fbg-shared-sidebar" aria-hidden="false">
+    <button
+        type="button"
+        class="fbg-sidebar-mobile-close"
+        id="fbg-sidebar-mobile-close"
+        aria-label="Close sidebar"
+    >
+        <span aria-hidden="true">&lt;</span>
+    </button>
+
     <div class="fbg-admin-sidebar-brand">
         <span class="fbg-admin-sidebar-eyebrow"><?php echo htmlspecialchars($fbgSidebarEyebrow, ENT_QUOTES, 'UTF-8'); ?></span>
         <h2><?php echo htmlspecialchars($fbgSidebarTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
@@ -51,3 +73,62 @@ $fbgSidebarDiscordUrl = isset($discordUrl) ? (string)$discordUrl : 'https://fros
         </a>
     </section>
 </aside>
+
+<script>
+(() => {
+    if (window.__fbgMobileSidebarBound) {
+        return;
+    }
+
+    window.__fbgMobileSidebarBound = true;
+
+    const body = document.body;
+    const toggle = document.getElementById('fbg-sidebar-mobile-toggle');
+    const close = document.getElementById('fbg-sidebar-mobile-close');
+    const sidebar = document.getElementById('fbg-shared-sidebar');
+    const backdrop = document.getElementById('fbg-sidebar-mobile-backdrop');
+    const mobileQuery = window.matchMedia('(max-width: 900px)');
+
+    if (!toggle || !close || !sidebar || !backdrop) {
+        return;
+    }
+
+    const setOpen = (isOpen) => {
+        const shouldOpen = Boolean(isOpen) && mobileQuery.matches;
+
+        body.classList.toggle('fbg-sidebar-mobile-open', shouldOpen);
+        toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        sidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : (mobileQuery.matches ? 'true' : 'false'));
+        toggle.hidden = shouldOpen && mobileQuery.matches;
+        backdrop.hidden = !shouldOpen;
+    };
+
+    const syncDesktopState = () => {
+        if (!mobileQuery.matches) {
+            body.classList.remove('fbg-sidebar-mobile-open');
+            toggle.hidden = true;
+            backdrop.hidden = true;
+            toggle.setAttribute('aria-expanded', 'false');
+            sidebar.setAttribute('aria-hidden', 'false');
+            return;
+        }
+
+        toggle.hidden = body.classList.contains('fbg-sidebar-mobile-open');
+        backdrop.hidden = !body.classList.contains('fbg-sidebar-mobile-open');
+        sidebar.setAttribute('aria-hidden', body.classList.contains('fbg-sidebar-mobile-open') ? 'false' : 'true');
+    };
+
+    toggle.addEventListener('click', () => setOpen(true));
+    close.addEventListener('click', () => setOpen(false));
+    backdrop.addEventListener('click', () => setOpen(false));
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            setOpen(false);
+        }
+    });
+
+    mobileQuery.addEventListener('change', syncDesktopState);
+    syncDesktopState();
+})();
+</script>

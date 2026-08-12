@@ -1,3 +1,9 @@
+ .fbg-sidebar-mobile-toggle,
+ .fbg-sidebar-mobile-close,
+ .fbg-sidebar-mobile-backdrop {
+    display: none;
+}
+
 @media (max-width: 1400px) {
     /* Dashboard */
     .fbg-dashboard-server-main {
@@ -219,6 +225,95 @@
 }
 
 @media (max-width: 900px) {
+    body.fbg-sidebar-mobile-open {
+        overflow: hidden;
+    }
+
+    .fbg-dashboard-layout {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .fbg-dashboard-sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1200;
+        width: min(320px, 86vw);
+        min-height: 100vh;
+        padding: 76px 18px 20px;
+        overflow-y: auto;
+        transform: translateX(-100%);
+        transition: transform 0.22s ease, box-shadow 0.22s ease;
+        box-shadow: none;
+        border-right: 1px solid var(--fbg-border-medium);
+    }
+
+    body.fbg-sidebar-mobile-open .fbg-dashboard-sidebar {
+        transform: translateX(0);
+        box-shadow: 28px 0 60px rgba(0, 0, 0, 0.42);
+    }
+
+    .fbg-sidebar-mobile-toggle,
+    .fbg-sidebar-mobile-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--fbg-border-medium);
+        background: rgba(24, 24, 24, 0.96);
+        color: var(--fbg-white);
+        cursor: pointer;
+        font-size: 1.05rem;
+        font-weight: 700;
+        line-height: 1;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .fbg-sidebar-mobile-toggle:hover,
+    .fbg-sidebar-mobile-close:hover {
+        background: rgba(34, 34, 34, 0.98);
+        border-color: var(--fbg-brightblue);
+        transform: translateY(-1px);
+    }
+
+    .fbg-sidebar-mobile-toggle {
+        position: fixed;
+        top: 92px;
+        left: 10px;
+        z-index: 1250;
+        width: 38px;
+        height: 64px;
+        border-radius: 0 12px 12px 0;
+    }
+
+    .fbg-sidebar-mobile-close {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+    }
+
+    .fbg-sidebar-mobile-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1190;
+        background: rgba(0, 0, 0, 0.48);
+        backdrop-filter: blur(4px);
+    }
+
+    .fbg-dashboard-main {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .fbg-dashboard-help-card {
+        margin-top: 0;
+    }
+
     /* Schedules */
     .fbg-schedule-cheatsheet-grid {
         grid-template-columns: 1fr;
@@ -325,6 +420,10 @@
 }
 
 @media (max-width: 768px) {
+    .fbg-sidebar-mobile-toggle {
+        top: 86px;
+    }
+
     /* Legal */
     .legal-wrapper {
         margin: 20px auto;
@@ -686,6 +785,18 @@
 }
 
 @media (max-width: 540px) {
+    .fbg-sidebar-mobile-toggle {
+        top: 82px;
+        left: 8px;
+        width: 34px;
+        height: 58px;
+    }
+
+    .fbg-dashboard-sidebar {
+        width: min(300px, 90vw);
+        padding: 72px 16px 18px;
+    }
+
     /* Hard reset the dashboard card body */
     .fbg-dashboard-server-main {
         display: flex;
