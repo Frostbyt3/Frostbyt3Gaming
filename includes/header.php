@@ -11,9 +11,9 @@
     <title>Frostbyt3 Gaming - <?php echo getRandomTitle(); ?></title>
     <link rel="stylesheet" href="<?php echo asset('/backend/css/style.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('/backend/css/mobile.css'); ?>">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
-    <link rel="icon" type="image/png" href="<?php echo asset('./backend/img/favicon.png'); ?>" sizes="16x16">
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"> -->
     <script src="https://kit.fontawesome.com/8cbb51ac38.js" crossorigin="anonymous"></script>
+    <link rel="icon" type="image/png" href="<?php echo asset('./backend/img/favicon.png'); ?>" sizes="16x16">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script>
         function toggleMenu() {
