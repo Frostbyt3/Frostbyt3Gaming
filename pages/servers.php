@@ -16,6 +16,15 @@ $tosUrl = trim((string)fbgGetShopSetting('settings::shop::tos_url', ''));
 $tosLink = $tosUrl !== '' ? $tosUrl : './page.php?name=legal&doc=terms';
 $tosCanFrame = $tosUrl !== '';
 
+$dashboardPageUrl = './page.php?name=dashboard';
+$serversPageUrl = './page.php?name=servers';
+$accountPageUrl = './page.php?name=account';
+$creditPageUrl = './page.php?name=credit';
+$discordUrl = 'https://frostbyt3gaming.com/discord';
+$fbgSidebarCurrent = 'servers';
+$fbgSidebarTitle = 'Game Servers';
+$fbgSidebarEyebrow = 'Server Panel';
+
 function fbgShopFormatMemory(int $megabytes): string
 {
     if ($megabytes > 0 && $megabytes % 1024 === 0) {
@@ -49,31 +58,36 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
 }
 ?>
 
-<section class="fbg-shop-page">
-    <div class="fbg-shop-shell">
-        <div class="fbg-shop-header">
-            <div>
-                <h1>Game Servers</h1>
-                <p>Choose a configured server plan and deploy it automatically with your account balance.</p>
-            </div>
+<section class="fbg-account-page fbg-shop-page">
+    <div class="fbg-dashboard-shell">
+        <div class="fbg-dashboard-layout">
+            <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-            <div class="fbg-shop-balance">
-                <span>Account Balance</span>
-                <strong><?php echo $isLoggedIn ? htmlspecialchars(fbgFormatCredit($balance, $currency)) : 'Login Required'; ?></strong>
-                <a href="./page.php?name=credit">Manage Balance</a>
-            </div>
-        </div>
+            <div class="fbg-dashboard-main">
+                <div class="fbg-shop-shell">
+                    <div class="fbg-shop-header">
+                        <div>
+                            <h1>Game Servers</h1>
+                            <p>Choose a configured server plan and deploy it automatically with your account balance.</p>
+                        </div>
 
-        <div id="fbg-shop-message" class="fbg-dashboard-alert" style="display:none; margin-bottom: 18px;"></div>
+                        <div class="fbg-shop-balance">
+                            <span>Account Balance</span>
+                            <strong>$<?php echo $isLoggedIn ? htmlspecialchars(fbgFormatCredit($balance, $currency)) : 'Login Required'; ?></strong>
+                            <a href="./page.php?name=credit">Manage Balance</a>
+                        </div>
+                    </div>
 
-        <?php if (empty($catalog)): ?>
-            <section class="fbg-account-section">
-                <div class="fbg-empty-state">
-                    No server plans are available right now.
-                </div>
-            </section>
-        <?php else: ?>
-            <div class="fbg-shop-category-list">
+                    <div id="fbg-shop-message" class="fbg-dashboard-alert" style="display:none; margin-bottom: 18px;"></div>
+
+                    <?php if (empty($catalog)): ?>
+                        <section class="fbg-account-section">
+                            <div class="fbg-empty-state">
+                                No server plans are available right now.
+                            </div>
+                        </section>
+                    <?php else: ?>
+                        <div class="fbg-shop-category-list">
             <?php foreach ($catalog as $category): ?>
                 <?php
                 $categoryPanelId = 'shop-category-' . (int)$category['id'];
@@ -171,8 +185,11 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                     </div>
                 </section>
             <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
-        <?php endif; ?>
+        </div>
     </div>
 </section>
 
