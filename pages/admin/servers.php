@@ -44,6 +44,14 @@ function fbgAdminServersRedirect(string $message, string $type = 'success', ?int
     exit;
 }
 
+function fbgAdminServersJsonResponse(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 function fbgAdminServersVerifyCsrf(): void
 {
     $token = (string)($_POST['csrf_token'] ?? '');
@@ -556,6 +564,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminServersRedirect('Server could not be found.', 'error');
     }
 
+    if ($action === 'fetch_expiration_history') {
+        $entries = array_map(static function (array $entry): array {
+            return [
+                'created_at' => fbgAdminServersSafeDate($entry['created_at'] ?? ''),
+                'action' => fbgServerExpirationActionLabel((string)($entry['action'] ?? '')),
+                'previous_expiration' => !empty($entry['old_expired_at']) ? fbgAdminServersSafeDate($entry['old_expired_at']) : 'None',
+                'new_expiration' => !empty($entry['new_expired_at']) ? fbgAdminServersSafeDate($entry['new_expired_at']) : 'None',
+                'source' => fbgServerExpirationSourceLabel((string)($entry['source'] ?? '')),
+                'changed_by' => trim((string)($entry['changed_by_label'] ?? '')) !== '' ? (string)$entry['changed_by_label'] : 'System',
+            ];
+        }, fbgGetServerExpirationHistoryEntries($serverId));
+
+        fbgAdminServersJsonResponse([
+            'ok' => true,
+            'entries' => $entries,
+        ]);
+    }
+
+    if ($action === 'restore_expiration') {
+        $currentExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
+        $lastKnownExpiration = fbgGetServerLastKnownExpiration($serverId, $currentExpiredAt);
+
+        if ($lastKnownExpiration === null) {
+            fbgAdminServersRedirect('No prior expiration date is available to restore.', 'error', $serverId, 'details');
+        }
+
+        $restoreStmt = fbgPteroDb()->prepare('
+            UPDATE servers
+            SET expired_at = :expired_at,
+                updated_at = NOW()
+            WHERE id = :id
+        ');
+        $restoreStmt->execute([
+            'expired_at' => $lastKnownExpiration,
+            'id' => $serverId,
+        ]);
+
+        $actor = fbgCurrentExpirationHistoryActor();
+        fbgTryRecordServerExpirationHistory(
+            $serverId,
+            'admin_restore',
+            'admin_restore_control',
+            $currentExpiredAt,
+            $lastKnownExpiration,
+            $actor['user_id'] ?? null,
+            $actor['label'] ?? null
+        );
+
+        fbgAdminServersRedirect('Expiration date restored from history.', 'success', $serverId, 'details');
+    }
+
     if ($action === 'update_details') {
         $name = trim((string)($_POST['name'] ?? ''));
         $externalId = trim((string)($_POST['external_id'] ?? ''));
@@ -564,6 +623,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ownerInput = trim((string)($_POST['owner_search'] ?? ''));
         $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
         $expiredAt = fbgAdminServersFormatExpirationForDb((string)($_POST['expired_at'] ?? ''));
+        $overrideConfirmed = max(0, (int)($_POST['expiration_override_confirmed'] ?? 0)) === 1;
+        $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
+        $oldProductId = max(0, (int)($server['product_id'] ?? 0));
 
         if ($name === '') {
             fbgAdminServersRedirect('Server name is required.', 'error', $serverId);
@@ -585,6 +647,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ((int)($productStmt->fetchColumn() ?: 0) <= 0) {
                 fbgAdminServersRedirect('Selected server plan could not be found.', 'error', $serverId);
             }
+        }
+
+        if ($productId > 0 && $expiredAt === null && !$overrideConfirmed) {
+            $warningMessage = $oldExpiredAt !== null
+                ? 'You are about to remove the expiration date from a shop-linked server.'
+                : 'This shop-linked server is currently missing an expiration date.';
+
+            fbgAdminServersRedirect($warningMessage . ' Confirm the override to save without an expiration.', 'error', $serverId, 'details');
         }
 
         $detailsPayload = [
@@ -612,6 +682,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'expired_at' => $expiredAt,
             'id' => $serverId,
         ]);
+
+        $actor = fbgCurrentExpirationHistoryActor();
+        $shouldLogExpirationChange =
+            $oldExpiredAt !== $expiredAt
+            || ($productId > 0 && $expiredAt === null && $overrideConfirmed)
+            || ($oldProductId > 0 && $productId === 0 && $oldExpiredAt !== $expiredAt);
+
+        if ($shouldLogExpirationChange) {
+            $historyAction = ($oldExpiredAt !== null && $expiredAt === null)
+                ? 'admin_clear'
+                : 'admin_edit';
+
+            fbgTryRecordServerExpirationHistory(
+                $serverId,
+                $historyAction,
+                'admin_server_editor',
+                $oldExpiredAt,
+                $expiredAt,
+                $actor['user_id'] ?? null,
+                $actor['label'] ?? null
+            );
+        }
 
         fbgAdminServersRedirect('Server details updated successfully.', 'success', $serverId);
     }
@@ -1095,6 +1187,8 @@ $serverDatabases = [];
 $serverMounts = [];
 $transferNodes = [];
 $transferAllocationMap = [];
+$expirationHistoryCount = 0;
+$lastKnownExpiration = null;
 if ($editingServer) {
     $ownerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
@@ -1310,6 +1404,10 @@ if ($editingServer) {
             $transferAllocationMap[$nodeId] = $transferAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         }
     }
+
+    $expirationHistoryCount = fbgGetServerExpirationHistoryCount((int)$editingServer['id']);
+    $currentExpirationValue = fbgNormalizeExpirationHistoryValue((string)($editingServer['expired_at'] ?? ''));
+    $lastKnownExpiration = fbgGetServerLastKnownExpiration((int)$editingServer['id'], $currentExpirationValue);
 }
 
 $createOwnerOptions = [];
@@ -2094,6 +2192,7 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="action" value="update_details">
                     <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                    <input type="hidden" name="expiration_override_confirmed" id="server-detail-expiration-override" value="0">
 
                     <div class="fbg-admin-form-grid">
                         <div class="fbg-admin-field">
@@ -2134,8 +2233,37 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
                         <div class="fbg-admin-field">
                             <label for="server-detail-expiration">Expiration Date</label>
-                            <input id="server-detail-expiration" name="expired_at" type="datetime-local" value="<?= htmlspecialchars(fbgAdminServersDatetimeLocalValue($editingServer['expired_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                            <input
+                                id="server-detail-expiration"
+                                name="expired_at"
+                                type="datetime-local"
+                                data-initial-expiration="<?= htmlspecialchars(fbgAdminServersDatetimeLocalValue($editingServer['expired_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                value="<?= htmlspecialchars(fbgAdminServersDatetimeLocalValue($editingServer['expired_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                            >
                             <p class="fbg-admin-help-text">Saved to the shop/plugin expiration field. Leave blank if the server does not expire.</p>
+                            <?php if ($lastKnownExpiration !== null): ?>
+                                <div class="fbg-admin-help-text" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px;">
+                                    <span>Last known expiration: <strong><?= htmlspecialchars(fbgAdminServersSafeDate($lastKnownExpiration), ENT_QUOTES, 'UTF-8') ?></strong></span>
+                                    <button type="submit" class="btn fbg-neutral-button" name="action" value="restore_expiration">Restore Last Known Expiration</button>
+                                </div>
+                            <?php endif; ?>
+                            <div style="margin-top: 12px;">
+                                <button
+                                    type="button"
+                                    class="btn fbg-neutral-button"
+                                    id="server-expiration-log-toggle"
+                                    data-server-id="<?= (int)$editingServer['id'] ?>"
+                                    aria-expanded="false"
+                                    aria-controls="server-expiration-log-panel"
+                                >
+                                    Expiration Log (<?= (int)$expirationHistoryCount ?>)
+                                </button>
+                            </div>
+                            <div id="server-expiration-log-panel" hidden data-loaded="0" class="fbg-admin-server-detail-list fbg-admin-server-expiration-log-panel" style="margin-top: 16px;">
+                                <div class="fbg-admin-empty-state">
+                                    <p>Loading expiration history...</p>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="fbg-admin-field">
@@ -2806,6 +2934,23 @@ $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </div>
             </div>
 
+            <div class="fbg-modal-overlay" id="admin-server-expiration-confirm-modal" hidden>
+                <div class="fbg-modal-card fbg-admin-user-modal fbg-admin-user-delete-confirm" role="dialog" aria-modal="true" aria-labelledby="admin-server-expiration-confirm-title">
+                    <button type="button" class="fbg-modal-close fbg-admin-user-modal-close" data-close-admin-server-modal="expiration-confirm" aria-label="Close">X</button>
+                    <div class="fbg-modal-header">
+                        <h3 id="admin-server-expiration-confirm-title">Confirm Missing Expiration</h3>
+                        <p id="admin-server-expiration-confirm-message">This shop-linked server is currently missing an expiration date.</p>
+                    </div>
+                    <div class="fbg-admin-warning-box">
+                        Saving a shop-linked server without an expiration date can leave renewal handling in an unsafe state. Cancel if you want to keep or restore a valid expiration.
+                    </div>
+                    <div class="fbg-admin-form-actions fbg-admin-user-delete-confirm-actions">
+                        <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="expiration-confirm">Cancel</button>
+                        <button type="button" class="btn danger-action" id="admin-server-expiration-confirm-save">Save Without Expiration</button>
+                    </div>
+                </div>
+            </div>
+
             <?php foreach (array_diff(array_keys($tabs), ['about', 'details', 'build', 'startup', 'database', 'mounts', 'manage', 'delete']) as $tabKey): ?>
                 <section class="fbg-admin-server-tab-panel" data-admin-server-panel="<?= htmlspecialchars($tabKey, ENT_QUOTES, 'UTF-8') ?>" hidden>
                     <div class="fbg-admin-empty-state">
@@ -2829,6 +2974,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const ownerInput = document.getElementById('server-detail-owner');
     const ownerDatalist = document.getElementById('admin-server-owner-options');
     const ownerSource = document.getElementById('admin-server-owner-source');
+    const detailsForm = modal.querySelector('section[data-admin-server-panel="details"] form');
+    const productSelect = document.getElementById('server-detail-product-id');
+    const expirationInput = document.getElementById('server-detail-expiration');
+    const expirationOverrideInput = document.getElementById('server-detail-expiration-override');
+    const expirationLogToggle = document.getElementById('server-expiration-log-toggle');
+    const expirationLogPanel = document.getElementById('server-expiration-log-panel');
     const startupEggSource = document.getElementById('admin-server-startup-egg-data');
     const startupNestSelect = document.getElementById('server-startup-nest');
     const startupEggSelect = document.getElementById('server-startup-egg');
@@ -2849,6 +3000,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const transferAllocationSelect = document.getElementById('admin-server-transfer-allocation');
     const transferAdditionalSelect = document.getElementById('admin-server-transfer-additional-allocations');
     const transferAllocationsSource = document.getElementById('admin-server-transfer-allocations');
+    const expirationConfirmModal = document.getElementById('admin-server-expiration-confirm-modal');
+    const expirationConfirmMessage = document.getElementById('admin-server-expiration-confirm-message');
+    const expirationConfirmButton = document.getElementById('admin-server-expiration-confirm-save');
+    const csrfToken = '<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>';
+
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 
     tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
@@ -2865,18 +3027,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 panel.hidden = !isActive;
                 panel.classList.toggle('is-active', isActive);
             });
+
+            if (target === 'details' && expirationLogPanel && expirationLogPanel.dataset.prefetched !== '1') {
+                expirationLogPanel.dataset.prefetched = '1';
+            }
         });
     });
+
+    const overlays = [reinstallModal, safeDeleteModal, forceDeleteModal, transferModal, expirationConfirmModal].filter(Boolean);
+    const syncModalOpenState = () => {
+        const hasOpenOverlay = overlays.some((overlay) => !overlay.hidden);
+        document.body.classList.toggle('fbg-modal-open', hasOpenOverlay || !modal.hidden);
+    };
 
     const openOverlay = (overlay) => {
         if (!overlay) return;
         overlay.hidden = false;
-        document.body.classList.add('fbg-modal-open');
+        syncModalOpenState();
     };
 
     const closeOverlay = (overlay) => {
         if (!overlay) return;
         overlay.hidden = true;
+        if (overlay === expirationConfirmModal && expirationOverrideInput) {
+            expirationOverrideInput.value = '0';
+        }
+        syncModalOpenState();
     };
 
     if (openReinstallModalButton && reinstallModal) {
@@ -2902,10 +3078,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target === 'safe-delete') closeOverlay(safeDeleteModal);
             if (target === 'force-delete') closeOverlay(forceDeleteModal);
             if (target === 'transfer') closeOverlay(transferModal);
+            if (target === 'expiration-confirm') closeOverlay(expirationConfirmModal);
         });
     });
 
-    [reinstallModal, safeDeleteModal, forceDeleteModal, transferModal].forEach((overlay) => {
+    overlays.forEach((overlay) => {
         if (!overlay) return;
         overlay.addEventListener('click', (event) => {
             if (event.target === overlay) {
@@ -2913,6 +3090,149 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        const openOverlay = overlays.find((overlay) => !overlay.hidden);
+        if (openOverlay) {
+            event.preventDefault();
+            closeOverlay(openOverlay);
+            return;
+        }
+
+        window.location.href = './page.php?name=admin-servers';
+    });
+
+    const loadExpirationHistory = async () => {
+        if (!expirationLogToggle || !expirationLogPanel) {
+            return;
+        }
+
+        const serverId = expirationLogToggle.dataset.serverId;
+        if (!serverId) {
+            return;
+        }
+
+        if (expirationLogPanel.dataset.loaded === '1') {
+            return;
+        }
+
+        expirationLogPanel.innerHTML = '<div class="fbg-admin-empty-state"><p>Loading expiration history...</p></div>';
+
+        try {
+            const body = new URLSearchParams();
+            body.set('csrf_token', csrfToken);
+            body.set('action', 'fetch_expiration_history');
+            body.set('server_id', serverId);
+
+            const response = await fetch(window.location.pathname + window.location.search, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                },
+                body: body.toString(),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || 'Expiration history could not be loaded.');
+            }
+
+            const entries = Array.isArray(data.entries) ? data.entries : [];
+            if (!entries.length) {
+                expirationLogPanel.innerHTML = '<div class="fbg-admin-empty-state"><p>No expiration history recorded.</p></div>';
+                expirationLogPanel.dataset.loaded = '1';
+                return;
+            }
+
+            expirationLogPanel.innerHTML = `
+                <div class="fbg-admin-table-wrap">
+                    <table class="fbg-admin-table">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Action</th>
+                                <th>Previous Expiration</th>
+                                <th>New Expiration</th>
+                                <th>Source</th>
+                                <th>Changed By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${entries.map((entry) => `
+                                <tr>
+                                    <td>${escapeHtml(entry.created_at || '-')}</td>
+                                    <td>${escapeHtml(entry.action || '-')}</td>
+                                    <td>${escapeHtml(entry.previous_expiration || 'None')}</td>
+                                    <td>${escapeHtml(entry.new_expiration || 'None')}</td>
+                                    <td>${escapeHtml(entry.source || '-')}</td>
+                                    <td>${escapeHtml(entry.changed_by || 'System')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            expirationLogPanel.dataset.loaded = '1';
+        } catch (error) {
+            const errorMessage = error && typeof error.message === 'string'
+                ? error.message
+                : 'Expiration history could not be loaded.';
+            expirationLogPanel.innerHTML = `<div class="fbg-admin-empty-state"><p>${escapeHtml(errorMessage)}</p></div>`;
+        }
+    };
+
+    if (expirationLogToggle && expirationLogPanel) {
+        expirationLogToggle.addEventListener('click', async () => {
+            const isExpanded = expirationLogToggle.getAttribute('aria-expanded') === 'true';
+            expirationLogToggle.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+            expirationLogPanel.hidden = isExpanded;
+
+            if (!isExpanded) {
+                await loadExpirationHistory();
+            }
+        });
+    }
+
+    if (detailsForm && productSelect && expirationInput && expirationOverrideInput && expirationConfirmModal && expirationConfirmMessage) {
+        detailsForm.addEventListener('submit', (event) => {
+            const submitter = event.submitter;
+            if (submitter && submitter.name === 'action' && submitter.value === 'restore_expiration') {
+                return;
+            }
+
+            const productId = parseInt(productSelect.value || '0', 10);
+            const expirationValue = String(expirationInput.value || '').trim();
+            const overrideValue = expirationOverrideInput.value === '1';
+
+            if (productId > 0 && expirationValue === '' && !overrideValue) {
+                event.preventDefault();
+                const hadInitialExpiration = String(expirationInput.dataset.initialExpiration || '').trim() !== '';
+                expirationConfirmMessage.textContent = hadInitialExpiration
+                    ? 'You are about to remove the expiration date from a shop-linked server.'
+                    : 'This shop-linked server is currently missing an expiration date.';
+                openOverlay(expirationConfirmModal);
+            }
+        });
+    }
+
+    if (expirationConfirmButton && detailsForm && expirationOverrideInput) {
+        expirationConfirmButton.addEventListener('click', () => {
+            expirationOverrideInput.value = '1';
+            if (expirationConfirmModal) {
+                expirationConfirmModal.hidden = true;
+                syncModalOpenState();
+            }
+            if (typeof detailsForm.requestSubmit === 'function') {
+                detailsForm.requestSubmit();
+                return;
+            }
+            detailsForm.submit();
+        });
+    }
 
     if (transferNodeSelect && transferAllocationSelect && transferAdditionalSelect && transferAllocationsSource) {
         let transferAllocationsByNode = {};
@@ -3015,13 +3335,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             eggData = {};
         }
-
-        const escapeHtml = (value) => String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
 
         const isBooleanVariable = (variable) => {
             const rules = String(variable.rules || '').toLowerCase();

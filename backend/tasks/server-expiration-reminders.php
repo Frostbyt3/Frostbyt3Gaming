@@ -99,8 +99,8 @@ function fbgGetServerExpirationReminderCandidates(): array
             s.expired_at,
             s.owner_id,
             u.email AS owner_email,
-            u.first_name,
-            u.last_name
+            u.name_first,
+            u.name_last
         FROM servers s
         INNER JOIN users u ON u.id = s.owner_id
         WHERE s.expired_at IS NOT NULL

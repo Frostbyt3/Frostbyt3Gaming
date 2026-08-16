@@ -8161,6 +8161,17 @@ textarea.startup-variable-input {
     color: var(--fbg-text-main);
 }
 
+.fbg-admin-server-expiration-log-panel {
+    max-height: 340px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+}
+
+.fbg-admin-server-expiration-log-panel .fbg-admin-table-wrap {
+    margin-right: 4px;
+}
+
 .fbg-admin-inline-form {
     display: inline-flex;
 }

@@ -62,6 +62,17 @@ if (!array_key_exists($page, $allowed)) {
     $page = '404';
 }
 
+$rawAction = trim((string)($_POST['action'] ?? ''));
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && $page === 'admin-servers'
+    && in_array($rawAction, ['fetch_expiration_history'], true)
+) {
+    include('./pages/' . $allowed[$page]);
+    exit;
+}
+
 include('./includes/header.php');
 
 if (

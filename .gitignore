@@ -31,5 +31,6 @@ wow/
 
 # Runtime/upload logs
 *.log
+phpinfo.php
 backend/uplimg/
 backend/fivem/

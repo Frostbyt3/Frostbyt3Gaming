@@ -172,12 +172,14 @@ try {
     }
 
     $newCredit = $currentCredit - $price;
+    $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($serverRow['expired_at'] ?? ''));
 
     $expiryBase = !empty($serverRow['expired_at'])
         ? new DateTimeImmutable((string)$serverRow['expired_at'])
         : new DateTimeImmutable('today');
 
     $newExpiry = $expiryBase->modify('+30 days');
+    $newExpiryForDb = $newExpiry->format('Y-m-d H:i:s');
 
     $updateUserStmt = $pdo->prepare(
         'UPDATE users
@@ -195,11 +197,22 @@ try {
          WHERE id = :id'
     );
     $updateServerStmt->execute([
-        ':expired_at' => $newExpiry->format('Y-m-d H:i:s'),
+        ':expired_at' => $newExpiryForDb,
         ':id'         => $serverId,
     ]);
 
     $pdo->commit();
+
+    $actor = fbgCurrentExpirationHistoryActor();
+    fbgTryRecordServerExpirationHistory(
+        $serverId,
+        'renewal',
+        'frontend_renewal',
+        $oldExpiredAt,
+        $newExpiryForDb,
+        $actor['user_id'] ?? null,
+        $actor['label'] ?? null
+    );
 
     session_write_close();
 
@@ -222,7 +235,7 @@ try {
         isset($_SESSION['server_meta'][$serverIdentifier]) &&
         is_array($_SESSION['server_meta'][$serverIdentifier])
     ) {
-        $_SESSION['server_meta'][$serverIdentifier]['expired_at'] = $newExpiry->format('Y-m-d H:i:s');
+        $_SESSION['server_meta'][$serverIdentifier]['expired_at'] = $newExpiryForDb;
         $_SESSION['server_meta'][$serverIdentifier]['is_expired'] = false;
 
         if ($unsuspendWarning === null) {

@@ -1781,6 +1781,16 @@ if (!function_exists('fbgApplyShopServerPurchaseMetadata')) {
         if ($stmt->rowCount() < 1) {
             throw new RuntimeException('Server purchase metadata could not be saved.');
         }
+
+        fbgTryRecordServerExpirationHistory(
+            $serverId,
+            'provision',
+            'frontend',
+            null,
+            $expiresAt,
+            !empty($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null,
+            !empty($_SESSION['username']) ? (string)$_SESSION['username'] : 'Frontend Provisioning'
+        );
     }
 }
 
@@ -2053,6 +2063,262 @@ if (!function_exists('fbgPurchaseShopGame')) {
     }
 }
 
+if (!function_exists('fbgNormalizeExpirationHistoryValue')) {
+    function fbgNormalizeExpirationHistoryValue(?string $value): ?string
+    {
+        $trimmed = trim((string)$value);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        try {
+            return (new DateTimeImmutable($trimmed))->format('Y-m-d H:i:s');
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+}
+
+if (!function_exists('fbgCurrentExpirationHistoryActor')) {
+    function fbgCurrentExpirationHistoryActor(): array
+    {
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        $username = trim((string)($_SESSION['username'] ?? ''));
+        $fullName = trim((string)($_SESSION['name'] ?? ''));
+        $email = trim((string)($_SESSION['email'] ?? ''));
+
+        $parts = [];
+        if ($fullName !== '') {
+            $parts[] = $fullName;
+        }
+        if ($username !== '') {
+            $parts[] = '(' . $username . ')';
+        } elseif ($email !== '') {
+            $parts[] = '(' . $email . ')';
+        }
+
+        $label = trim(implode(' ', $parts));
+        if ($label === '') {
+            $label = $username !== '' ? $username : ($email !== '' ? $email : null);
+        }
+
+        return [
+            'user_id' => $userId > 0 ? $userId : null,
+            'label' => $label,
+        ];
+    }
+}
+
+if (!function_exists('fbgEnsureServerExpirationHistoryTable')) {
+    function fbgEnsureServerExpirationHistoryTable(): void
+    {
+        static $ensured = false;
+
+        if ($ensured) {
+            return;
+        }
+
+        db()->exec("
+            CREATE TABLE IF NOT EXISTS server_expiration_history (
+                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                server_id INT UNSIGNED NOT NULL,
+                action VARCHAR(32) NOT NULL,
+                source VARCHAR(64) NOT NULL,
+                old_expired_at DATETIME NULL,
+                new_expired_at DATETIME NULL,
+                changed_by_user_id INT UNSIGNED NULL,
+                changed_by_label VARCHAR(191) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_server_expiration_history_server_id (server_id),
+                KEY idx_server_expiration_history_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $ensured = true;
+    }
+}
+
+if (!function_exists('fbgRecordServerExpirationHistory')) {
+    function fbgRecordServerExpirationHistory(
+        int $serverId,
+        string $action,
+        string $source,
+        ?string $oldExpiredAt,
+        ?string $newExpiredAt,
+        ?int $changedByUserId = null,
+        ?string $changedByLabel = null
+    ): void {
+        if ($serverId <= 0) {
+            return;
+        }
+
+        fbgEnsureServerExpirationHistoryTable();
+
+        $stmt = db()->prepare("
+            INSERT INTO server_expiration_history (
+                server_id,
+                action,
+                source,
+                old_expired_at,
+                new_expired_at,
+                changed_by_user_id,
+                changed_by_label
+            ) VALUES (
+                :server_id,
+                :action,
+                :source,
+                :old_expired_at,
+                :new_expired_at,
+                :changed_by_user_id,
+                :changed_by_label
+            )
+        ");
+        $stmt->execute([
+            ':server_id' => $serverId,
+            ':action' => trim($action),
+            ':source' => trim($source),
+            ':old_expired_at' => fbgNormalizeExpirationHistoryValue($oldExpiredAt),
+            ':new_expired_at' => fbgNormalizeExpirationHistoryValue($newExpiredAt),
+            ':changed_by_user_id' => $changedByUserId,
+            ':changed_by_label' => $changedByLabel !== null && trim($changedByLabel) !== '' ? trim($changedByLabel) : null,
+        ]);
+    }
+}
+
+if (!function_exists('fbgTryRecordServerExpirationHistory')) {
+    function fbgTryRecordServerExpirationHistory(
+        int $serverId,
+        string $action,
+        string $source,
+        ?string $oldExpiredAt,
+        ?string $newExpiredAt,
+        ?int $changedByUserId = null,
+        ?string $changedByLabel = null
+    ): bool {
+        try {
+            fbgRecordServerExpirationHistory(
+                $serverId,
+                $action,
+                $source,
+                $oldExpiredAt,
+                $newExpiredAt,
+                $changedByUserId,
+                $changedByLabel
+            );
+
+            return true;
+        } catch (Throwable $e) {
+            error_log('[FBG] Failed to record server expiration history: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgGetServerExpirationHistoryCount')) {
+    function fbgGetServerExpirationHistoryCount(int $serverId): int
+    {
+        if ($serverId <= 0) {
+            return 0;
+        }
+
+        try {
+            fbgEnsureServerExpirationHistoryTable();
+            $stmt = db()->prepare('SELECT COUNT(*) FROM server_expiration_history WHERE server_id = :server_id');
+            $stmt->execute([':server_id' => $serverId]);
+
+            return (int)($stmt->fetchColumn() ?: 0);
+        } catch (Throwable $e) {
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('fbgGetServerExpirationHistoryEntries')) {
+    function fbgGetServerExpirationHistoryEntries(int $serverId, int $limit = 100): array
+    {
+        if ($serverId <= 0) {
+            return [];
+        }
+
+        try {
+            fbgEnsureServerExpirationHistoryTable();
+            $limit = max(1, min(500, $limit));
+            $stmt = db()->prepare("
+                SELECT
+                    id,
+                    server_id,
+                    action,
+                    source,
+                    old_expired_at,
+                    new_expired_at,
+                    changed_by_user_id,
+                    changed_by_label,
+                    created_at
+                FROM server_expiration_history
+                WHERE server_id = :server_id
+                ORDER BY created_at DESC, id DESC
+                LIMIT {$limit}
+            ");
+            $stmt->execute([':server_id' => $serverId]);
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+}
+
+if (!function_exists('fbgGetServerLastKnownExpiration')) {
+    function fbgGetServerLastKnownExpiration(int $serverId, ?string $excludeCurrent = null): ?string
+    {
+        if ($serverId <= 0) {
+            return null;
+        }
+
+        $excluded = fbgNormalizeExpirationHistoryValue($excludeCurrent);
+
+        foreach (fbgGetServerExpirationHistoryEntries($serverId, 250) as $entry) {
+            $candidate = fbgNormalizeExpirationHistoryValue((string)($entry['new_expired_at'] ?? ''));
+            if ($candidate === null) {
+                continue;
+            }
+
+            if ($excluded !== null && $candidate === $excluded) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('fbgServerExpirationActionLabel')) {
+    function fbgServerExpirationActionLabel(string $action): string
+    {
+        return [
+            'provision' => 'Provisioned',
+            'renewal' => 'Renewed',
+            'admin_edit' => 'Admin Edit',
+            'admin_clear' => 'Admin Cleared',
+            'admin_restore' => 'Expiration Restored',
+        ][trim($action)] ?? ucfirst(str_replace('_', ' ', trim($action)));
+    }
+}
+
+if (!function_exists('fbgServerExpirationSourceLabel')) {
+    function fbgServerExpirationSourceLabel(string $source): string
+    {
+        return [
+            'frontend_provisioning' => 'Frontend Provisioning',
+            'frontend_renewal' => 'Frontend Renewal',
+            'admin_server_editor' => 'Admin Server Editor',
+            'admin_restore_control' => 'Admin Restore Control',
+        ][trim($source)] ?? ucfirst(str_replace('_', ' ', trim($source)));
+    }
+}
 function isShowingAllServers(): bool
 {
     return canAccess(4) && !empty($_SESSION['show_all_servers']);
