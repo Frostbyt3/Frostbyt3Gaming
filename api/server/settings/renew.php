@@ -128,6 +128,10 @@ try {
         throw new RuntimeException("You can't renew this server.");
     }
 
+    if (empty($serverRow['expired_at'])) {
+        throw new RuntimeException('This server is missing expiration information and cannot be renewed. Please contact support.');
+    }
+
     $gameStmt = $pdo->prepare(
         'SELECT id, price
          FROM games
@@ -174,9 +178,7 @@ try {
     $newCredit = $currentCredit - $price;
     $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($serverRow['expired_at'] ?? ''));
 
-    $expiryBase = !empty($serverRow['expired_at'])
-        ? new DateTimeImmutable((string)$serverRow['expired_at'])
-        : new DateTimeImmutable('today');
+    $expiryBase = new DateTimeImmutable((string)$serverRow['expired_at']);
 
     $newExpiry = $expiryBase->modify('+30 days');
     $newExpiryForDb = $newExpiry->format('Y-m-d H:i:s');

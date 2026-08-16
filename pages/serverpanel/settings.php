@@ -80,7 +80,7 @@ $shopCurrency = 'USD';
 $userBalance = 0.00;
 $renewPrice = 0.00;
 $canRenewServer = false;
-$renewDisabledReason = 'Renew details could not be loaded.';
+$renewDisabledReason = 'Renewal information is unavailable for this server. Please contact support.';
 $hasValidRenewData = false;
 $expiryRaw = $selectedServer['expired_at'] ?? null;
 $expiryDisplay = $expiryRaw ? date('M j, Y g:i A', strtotime((string)$expiryRaw)) : null;
@@ -144,7 +144,9 @@ try {
             $expiryDisplay = date('M j, Y g:i A', strtotime($expiryRaw));
         }
 
-       if (!empty($renewRow['product_id']) && isset($renewRow['price'])) {
+        if (!empty($renewRow['product_id']) && empty($renewRow['expired_at'])) {
+            $renewDisabledReason = 'This server is missing expiration information and cannot be renewed. Please contact support.';
+        } elseif (!empty($renewRow['product_id']) && isset($renewRow['price'])) {
             $renewPrice = (float)$renewRow['price'];
 
             if ($renewPrice > 0) {
@@ -160,7 +162,7 @@ try {
                 $renewDisabledReason = 'Invalid renew price.';
             }
         } else {
-            $renewDisabledReason = 'Renew details could not be loaded.';
+            $renewDisabledReason = 'Renewal information is unavailable for this server. Please contact support.';
         }
     }
 } catch (Throwable $e) {

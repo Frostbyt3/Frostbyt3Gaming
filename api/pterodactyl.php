@@ -1870,6 +1870,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                     s.database_limit,
                     s.nest_id,
                     s.egg_id,
+                    s.product_id,
                     s.expired_at,
                     s.created_at,
                     s.updated_at,
@@ -1936,6 +1937,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                 'feature_databases' => (int)($row['database_limit'] ?? 0),
                 'created_at' => (string)($row['created_at'] ?? ''),
                 'updated_at' => (string)($row['updated_at'] ?? ''),
+                'product_id' => (int)($row['product_id'] ?? 0),
                 'expired_at' => $expiredAt,
                 'is_expired' => !empty($expiredAt) && strtotime((string)$expiredAt) <= time(),
                 'egg_id' => (int)($row['egg_id'] ?? 0),
@@ -2159,6 +2161,7 @@ if (!function_exists('pteroSyncServerAccessSession')) {
                 'node_name' => (string)($server['node_name'] ?? ''),
                 'egg_name' => (string)($server['egg_name'] ?? ''),
                 'suspended' => !empty($server['suspended']),
+                'product_id' => (int)($server['product_id'] ?? 0),
                 'expired_at' => (string)($server['expired_at'] ?? ''),
                 'owner_username' => (string)($server['owner_username'] ?? ''),
             ];
