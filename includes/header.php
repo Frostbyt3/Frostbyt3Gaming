@@ -5,9 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta property="og:title" content="Frostbyt3 Gaming">
-    <meta property="og:description" content="Gaming at it's best!">
-    <meta property="og:image" content="./backend/img/Snowflake.png">
-    <meta property="og:url" content="">
+    <meta property="og:description" content="Powering the games you love">
+    <meta property="og:image" content="https://frostbyt3gaming.com/backend/img/Snowflake.png">
+    <meta property="og:url" content="https://frostbyt3gaming.com/">
+    <meta property="og:type" content="website">
     <title>Frostbyt3 Gaming - <?php echo getRandomTitle(); ?></title>
     <link rel="stylesheet" href="<?php echo asset('/backend/css/style.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('/backend/css/mobile.css'); ?>">
