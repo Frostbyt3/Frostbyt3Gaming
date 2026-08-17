@@ -1,4 +1,4 @@
-<footer class="site-footer">
+<!-- <footer class="site-footer">
 
     <div class="footer-links">
         <a href="./page.php?name=legal&doc=terms">Terms of Service</a>
@@ -19,4 +19,4 @@
         Copyright <?php echo date('Y'); ?> &copy; Frostbyt3 Gaming LLC. All rights reserved.
     </p>
 
-</footer>
+</footer> -->

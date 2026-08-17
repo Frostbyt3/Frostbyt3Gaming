@@ -89,10 +89,8 @@ if (
     <?php include('./pages/' . $allowed[$page]); ?>
 </main>
 
-<?php include('./includes/community.php'); ?>
-
 <footer>
-    <?php include('./includes/footer.php'); ?>
+<?php include('./includes/community.php'); ?>
 </footer>
 
 <!-- localStorage.removeItem("fbg_privacy_notice_dismissed"); -->
@@ -111,30 +109,30 @@ if (
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const notice = document.getElementById("fbgPrivacyNotice");
-    const closeBtn = document.getElementById("fbgPrivacyNoticeClose");
+    document.addEventListener("DOMContentLoaded", function () {
+        const notice = document.getElementById("fbgPrivacyNotice");
+        const closeBtn = document.getElementById("fbgPrivacyNoticeClose");
 
-    if (!notice || !closeBtn) return;
+        if (!notice || !closeBtn) return;
 
-    const storageKey = "fbg_privacy_notice_dismissed";
+        const storageKey = "fbg_privacy_notice_dismissed";
 
-    if (localStorage.getItem(storageKey) !== "1") {
-        notice.hidden = false;
-        requestAnimationFrame(() => {
-            notice.classList.add("is-visible");
+        if (localStorage.getItem(storageKey) !== "1") {
+            notice.hidden = false;
+            requestAnimationFrame(() => {
+                notice.classList.add("is-visible");
+            });
+        }
+
+        closeBtn.addEventListener("click", function () {
+            localStorage.setItem(storageKey, "1");
+            notice.classList.remove("is-visible");
+
+            setTimeout(() => {
+                notice.hidden = true;
+            }, 200);
         });
-    }
-
-    closeBtn.addEventListener("click", function () {
-        localStorage.setItem(storageKey, "1");
-        notice.classList.remove("is-visible");
-
-        setTimeout(() => {
-            notice.hidden = true;
-        }, 200);
     });
-});
 </script>
 </body>
 </html>

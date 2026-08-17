@@ -16,10 +16,10 @@ require_once __DIR__ . '/../includes/db.php';
             <hr class="hero-divider"></hr>
 
             <ul class="hero-features">
-                <li>🎮 Official Game Servers</li>
-                <li>💬 Friendly Discord Community</li>
-                <li>📰 Regular Development Updates</li>
-                <li>⚙️ Custom platform built from the ground up</li>
+                <li>Official Game Servers</li>
+                <li>Friendly Discord Community</li>
+                <li>Regular Development Updates</li>
+                <li>Custom platform built from the ground up</li>
                 <!-- <li>Dedicated game server hosting</li>
                 <li>Custom Minecraft, Rust, and more</li>
                 <li>Fast hardware and reliable uptime</li>
@@ -27,8 +27,8 @@ require_once __DIR__ . '/../includes/db.php';
             </ul>
 
             <div class="hero-actions">
-                <a href="https://frostbyt3gaming.com/discord" class="btn">💬 Join Our Community</a>
-                <a href="./page.php?name=servers" class="btn secondary-button">🚀 Browse Servers</a>
+                <a href="https://frostbyt3gaming.com/discord" class="btn"><i class="fas fa-cloud"></i> &nbsp;oin Our Community</a>
+                <a href="./page.php?name=servers" class="btn secondary-button"><i class="fas fa-rocket"></i>&nbsp;Browse Servers</a>
             </div>
             
             <p class="hero-bottom">
