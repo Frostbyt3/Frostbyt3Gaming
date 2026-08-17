@@ -27,7 +27,7 @@ require_once __DIR__ . '/../includes/db.php';
             </ul>
 
             <div class="hero-actions">
-                <a href="https://frostbyt3gaming.com/discord" class="btn"><i class="fas fa-cloud"></i> &nbsp;oin Our Community</a>
+                <a href="https://frostbyt3gaming.com/discord" class="btn"><i class="fas fa-cloud"></i> &nbsp;Join Our Community</a>
                 <a href="./page.php?name=servers" class="btn secondary-button"><i class="fas fa-rocket"></i>&nbsp;Browse Servers</a>
             </div>
             
