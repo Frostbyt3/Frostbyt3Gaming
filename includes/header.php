@@ -83,7 +83,7 @@
 
                         <hr>
                         <a href="/page.php?name=account"><i class="fas fa-user"></i> Manage Profile</a>
-                        <a href="/page.php?name=credit"><i class="fas fa-credit-card"></i> Manage Balance</a>
+                        <a href="/page.php?name=wallet"><i class="fas fa-credit-card"></i> Manage Wallet</a>
                         <a href="/page.php?name=logout" class="danger"><i class="fas fa-arrow-right-from-bracket"></i> Logout</a>
                     </div>
                 </li>

@@ -49,10 +49,10 @@ $visibleTransactions = [];
 $hiddenPendingTransactions = 0;
 $dashboardPageUrl = './page.php?name=dashboard';
 $accountPageUrl = './page.php?name=account';
-$creditPageUrl = './page.php?name=credit';
+$creditPageUrl = './page.php?name=wallet';
 $discordUrl = 'https://frostbyt3gaming.com/discord';
-$fbgSidebarCurrent = 'credit';
-$fbgSidebarTitle = 'Manage Balance';
+$fbgSidebarCurrent = 'wallet';
+$fbgSidebarTitle = 'Manage Wallet';
 
 foreach ($transactions as $transaction) {
     $completed = (int)($transaction['completed'] ?? 0) === 1;
@@ -82,7 +82,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                 <div class="fbg-account-shell">
                     <div class="fbg-account-header">
                         <div>
-                            <h1>Manage Balance</h1>
+                            <h1>Manage Wallet</h1>
                             <p>Add funds, review account balance, and view completed balance uploads.</p>
                         </div>
                     </div>

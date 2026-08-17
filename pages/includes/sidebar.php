@@ -7,7 +7,7 @@ $fbgSidebarEyebrow = isset($fbgSidebarEyebrow) ? (string)$fbgSidebarEyebrow : 'S
 $fbgSidebarDashboardUrl = isset($dashboardPageUrl) ? (string)$dashboardPageUrl : './page.php?name=dashboard';
 $fbgSidebarServersUrl = isset($serversPageUrl) ? (string)$serversPageUrl : './page.php?name=servers';
 $fbgSidebarAccountUrl = isset($accountPageUrl) ? (string)$accountPageUrl : './page.php?name=account';
-$fbgSidebarCreditUrl = isset($creditPageUrl) ? (string)$creditPageUrl : './page.php?name=credit';
+$fbgSidebarCreditUrl = isset($creditPageUrl) ? (string)$creditPageUrl : './page.php?name=wallet';
 $fbgSidebarDiscordUrl = isset($discordUrl) ? (string)$discordUrl : 'https://frostbyt3gaming.com/discord';
 ?>
 <button
@@ -57,9 +57,9 @@ $fbgSidebarDiscordUrl = isset($discordUrl) ? (string)$discordUrl : 'https://fros
                 <i class="fas fa-user"></i>
                 <span>User Profile</span>
             </a>
-            <a href="<?php echo htmlspecialchars($fbgSidebarCreditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-admin-nav-link <?php echo $fbgSidebarCurrent === 'credit' ? 'is-active' : ''; ?>">
+            <a href="<?php echo htmlspecialchars($fbgSidebarCreditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-admin-nav-link <?php echo $fbgSidebarCurrent === 'wallet' ? 'is-active' : ''; ?>">
                 <i class="fas fa-wallet"></i>
-                <span>Manage Balance</span>
+                <span>Manage Wallet</span>
             </a>
         </div>
     </nav>

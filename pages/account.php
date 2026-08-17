@@ -233,7 +233,7 @@ $firstName = (string)($panelUser['first_name'] ?? $panelUser['name_first'] ?? ''
 $lastName = (string)($panelUser['last_name'] ?? $panelUser['name_last'] ?? '');
 $accountPageUrl = './page.php?name=account';
 $dashboardPageUrl = './page.php?name=dashboard';
-$creditPageUrl = './page.php?name=credit';
+$creditPageUrl = './page.php?name=wallet';
 $discordUrl = 'https://frostbyt3gaming.com/discord';
 $fbgSidebarCurrent = 'account';
 $fbgSidebarTitle = 'User Profile';

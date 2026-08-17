@@ -19,7 +19,7 @@ $tosCanFrame = $tosUrl !== '';
 $dashboardPageUrl = './page.php?name=dashboard';
 $serversPageUrl = './page.php?name=servers';
 $accountPageUrl = './page.php?name=account';
-$creditPageUrl = './page.php?name=credit';
+$creditPageUrl = './page.php?name=wallet';
 $discordUrl = 'https://frostbyt3gaming.com/discord';
 $fbgSidebarCurrent = 'servers';
 $fbgSidebarTitle = 'Game Servers';
