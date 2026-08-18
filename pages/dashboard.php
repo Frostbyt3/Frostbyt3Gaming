@@ -278,7 +278,7 @@ session_write_close();
                             <div class="fbg-dashboard-control-strip">
                                 <label class="fbg-dashboard-search-wrap" for="fbg-dashboard-search">
                                     <input id="fbg-dashboard-search" type="search" placeholder="Search servers..." autocomplete="off">
-                                    <i class="fas fa-search" aria-hidden="true"></i>
+                                    <i class="fas fa-search fbg-dashboard-search-icon" aria-hidden="true"></i>
                                 </label>
 
                                 <div class="fbg-dashboard-view-toggle" role="group" aria-label="Dashboard view mode">
