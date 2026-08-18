@@ -589,15 +589,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const formData = new FormData();
-            formData.append('csrf_token', csrfToken);
-            formData.append('server_identifier', identifier);
-            formData.append('action', action);
-
             const res = await fetch(POWER_URL, {
                 method: 'POST',
-                body: formData,
-                headers: { 'Accept': 'application/json' }
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    id: identifier,
+                    action: action
+                })
             });
 
             const data = await res.json();
@@ -606,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error(data.error || 'Request failed');
             }
 
-            showMessage(msgBox, data.message || 'Success', false);
+            showMessage(msgBox, data.data?.message || data.message || 'Success', false);
             currentPollDelay = POLL_FAST;
             refreshStatusesBatch({ immediate: true, force: true, ids: [identifier] });
             queueBurstRefreshes();
