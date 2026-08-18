@@ -1,14 +1,31 @@
 <?php
 declare(strict_types=1);
 
-$fbgSidebarCurrent = isset($fbgSidebarCurrent) ? (string)$fbgSidebarCurrent : 'dashboard';
-$fbgSidebarTitle = isset($fbgSidebarTitle) ? (string)$fbgSidebarTitle : 'Dashboard';
+$fbgSidebarPageName = strtolower(trim((string)($_GET['name'] ?? '')));
+
+if ($fbgSidebarPageName === '') {
+    $fbgSidebarPageName = strtolower(pathinfo((string)($_SERVER['SCRIPT_NAME'] ?? ''), PATHINFO_FILENAME));
+}
+
+if ($fbgSidebarPageName === 'credit') {
+    $fbgSidebarPageName = 'wallet';
+}
+
+$fbgSidebarTitles = [
+    'dashboard' => 'Dashboard',
+    'servers' => 'Game Servers',
+    'account' => 'User Profile',
+    'wallet' => 'Manage Wallet',
+];
+
+$fbgSidebarCurrent = isset($fbgSidebarCurrent) ? (string)$fbgSidebarCurrent : $fbgSidebarPageName;
+$fbgSidebarTitle = isset($fbgSidebarTitle) ? (string)$fbgSidebarTitle : ($fbgSidebarTitles[$fbgSidebarCurrent] ?? 'Dashboard');
 $fbgSidebarEyebrow = isset($fbgSidebarEyebrow) ? (string)$fbgSidebarEyebrow : 'Server Panel';
-$fbgSidebarDashboardUrl = isset($dashboardPageUrl) ? (string)$dashboardPageUrl : './page.php?name=dashboard';
-$fbgSidebarServersUrl = isset($serversPageUrl) ? (string)$serversPageUrl : './page.php?name=servers';
-$fbgSidebarAccountUrl = isset($accountPageUrl) ? (string)$accountPageUrl : './page.php?name=account';
-$fbgSidebarCreditUrl = isset($creditPageUrl) ? (string)$creditPageUrl : './page.php?name=wallet';
-$fbgSidebarDiscordUrl = isset($discordUrl) ? (string)$discordUrl : 'https://frostbyt3gaming.com/discord';
+$fbgSidebarDashboardUrl = './page.php?name=dashboard';
+$fbgSidebarServersUrl = './page.php?name=servers';
+$fbgSidebarAccountUrl = './page.php?name=account';
+$fbgSidebarCreditUrl = './page.php?name=wallet';
+$fbgSidebarDiscordUrl = 'https://frostbyt3gaming.com/discord';
 ?>
 <button
     type="button"

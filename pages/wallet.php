@@ -47,12 +47,6 @@ $serverPurchases = fbgGetUserServerPurchaseHistory($userId);
 $showPendingTransactions = (string)($_GET['show_pending'] ?? '') === '1';
 $visibleTransactions = [];
 $hiddenPendingTransactions = 0;
-$dashboardPageUrl = './page.php?name=dashboard';
-$accountPageUrl = './page.php?name=account';
-$creditPageUrl = './page.php?name=wallet';
-$discordUrl = 'https://frostbyt3gaming.com/discord';
-$fbgSidebarCurrent = 'wallet';
-$fbgSidebarTitle = 'Manage Wallet';
 
 foreach ($transactions as $transaction) {
     $completed = (int)($transaction['completed'] ?? 0) === 1;

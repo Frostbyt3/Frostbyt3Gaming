@@ -186,11 +186,6 @@ unset($_SESSION['dashboard_flash_success'], $_SESSION['dashboard_flash_error']);
 
 $csrfTokenForJs = (string)($_SESSION['csrf_token'] ?? '');
 $serversPageUrl = './page.php?name=servers';
-$accountPageUrl = './page.php?name=account';
-$creditPageUrl = './page.php?name=wallet';
-$discordUrl = 'https://frostbyt3gaming.com/discord';
-$fbgSidebarCurrent = 'dashboard';
-$fbgSidebarTitle = 'Dashboard';
 
 $totalServers = count($userServers);
 $dashboardNodeKeys = [];

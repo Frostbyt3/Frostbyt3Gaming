@@ -16,15 +16,6 @@ $tosUrl = trim((string)fbgGetShopSetting('settings::shop::tos_url', ''));
 $tosLink = $tosUrl !== '' ? $tosUrl : './page.php?name=legal&doc=terms';
 $tosCanFrame = $tosUrl !== '';
 
-$dashboardPageUrl = './page.php?name=dashboard';
-$serversPageUrl = './page.php?name=servers';
-$accountPageUrl = './page.php?name=account';
-$creditPageUrl = './page.php?name=wallet';
-$discordUrl = 'https://frostbyt3gaming.com/discord';
-$fbgSidebarCurrent = 'servers';
-$fbgSidebarTitle = 'Game Servers';
-$fbgSidebarEyebrow = 'Server Panel';
-
 function fbgShopFormatMemory(int $megabytes): string
 {
     if ($megabytes > 0 && $megabytes % 1024 === 0) {

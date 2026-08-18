@@ -231,12 +231,6 @@ $username = (string)($panelUser['username'] ?? $_SESSION['username'] ?? '');
 $email = (string)($panelUser['email'] ?? $_SESSION['email'] ?? '');
 $firstName = (string)($panelUser['first_name'] ?? $panelUser['name_first'] ?? '');
 $lastName = (string)($panelUser['last_name'] ?? $panelUser['name_last'] ?? '');
-$accountPageUrl = './page.php?name=account';
-$dashboardPageUrl = './page.php?name=dashboard';
-$creditPageUrl = './page.php?name=wallet';
-$discordUrl = 'https://frostbyt3gaming.com/discord';
-$fbgSidebarCurrent = 'account';
-$fbgSidebarTitle = 'User Profile';
 ?>
 
 <section class="fbg-account-page">

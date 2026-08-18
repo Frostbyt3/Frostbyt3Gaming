@@ -78,9 +78,9 @@
 
                         <a href="/page.php?name=dashboard"><i class="fas fa-house"></i> Dashboard</a>
 
-                        <?php if (canAccess(4)): ?>
+                        <!-- <?php if (canAccess(4)): ?>
                             <a href="https://panel.frostbyt3gaming.com/"><i class="fas fa-suitcase"></i> Backend Panel</a>
-                        <?php endif; ?>
+                        <?php endif; ?> -->
 
                         <hr>
                         <a href="/page.php?name=account"><i class="fas fa-user"></i> Manage Profile</a>
