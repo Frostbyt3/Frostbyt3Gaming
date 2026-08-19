@@ -104,16 +104,12 @@ declare(strict_types=1);
             "I don't know what I'm doing anymore!",
             "I can has cheezburger?",
             "Straight outta 1991!",
-            "Why would anyone do drugs when they could just mow a lawn?",
-            "Drug free since 2023!",
             "I didn't do it.",
             "Do your patch!",
             "Have you tried turning it off and back on again?",
             "An actual company now!",
             "Perfectly legal",
-            /* "I am 30 to 40 years old and do not need this", */
             "Arise, chicken, arise!",
-            /* "1-800 Billy Witch Doctor", */
             "Powered by caffeine",
             "May contain dragons",
             "Now with 10% more uptime!",
