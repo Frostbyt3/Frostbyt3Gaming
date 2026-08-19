@@ -818,8 +818,8 @@ if (!function_exists('fbgCreateStripeBalanceCheckout')) {
         $sessionParams = [
             'mode' => 'payment',
             'client_reference_id' => (string)$userId,
-            'success_url' => $baseUrl . '/page.php?name=credit&stripe_session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $baseUrl . '/page.php?name=credit&payment_cancelled=1',
+            'success_url' => $baseUrl . '/page.php?name=wallet&stripe_session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $baseUrl . '/page.php?name=wallet&payment_cancelled=1',
             'line_items' => [
                 [
                     'quantity' => 1,
@@ -1214,8 +1214,8 @@ if (!function_exists('fbgCreatePayPalBalanceCheckout')) {
                 'landing_page' => 'LOGIN',
                 'user_action' => 'PAY_NOW',
                 'shipping_preference' => 'NO_SHIPPING',
-                'return_url' => $baseUrl . '/page.php?name=credit&payment_provider=paypal',
-                'cancel_url' => $baseUrl . '/page.php?name=credit&payment_cancelled=paypal',
+                'return_url' => $baseUrl . '/page.php?name=wallet&payment_provider=paypal',
+                'cancel_url' => $baseUrl . '/page.php?name=wallet&payment_cancelled=paypal',
             ],
         ]);
 

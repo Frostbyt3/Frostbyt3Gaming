@@ -70,7 +70,7 @@
                             <div class="nav-user-email"><?php echo htmlspecialchars($email); ?></div>
                             <div class="nav-user-credit">
                                 <span>Account Balance</span>
-                                <a href="/page.php?name=credit"><strong>$<?php echo htmlspecialchars(fbgFormatCredit($creditBalance, $shopCurrency)); ?></strong></a>
+                                <a href="/page.php?name=wallet"><strong>$<?php echo htmlspecialchars(fbgFormatCredit($creditBalance, $shopCurrency)); ?></strong></a>
                             </div>
                         </div>
 
