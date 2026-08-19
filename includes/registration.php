@@ -283,6 +283,28 @@ function fbgMarkPendingRegistrationConsumed(int $id): bool
     return $stmt->rowCount() > 0;
 }
 
+function fbgDeletePendingRegistration(int $id): bool
+{
+    if ($id <= 0) {
+        return false;
+    }
+
+    fbgEnsurePendingRegistrationSecuritySchema();
+    $pdo = fbgPendingRegistrationDb();
+
+    $stmt = $pdo->prepare(
+        'DELETE FROM pending_registrations
+         WHERE id = :id
+           AND consumed_at IS NULL'
+    );
+
+    $stmt->execute([
+        ':id' => $id,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
 function fbgMarkPendingRegistrationManuallyApproved(int $id, int $adminId, string $reason): bool
 {
     fbgEnsurePendingRegistrationSecuritySchema();

@@ -608,7 +608,7 @@ session_write_close();
                                         <div class="fbg-dashboard-server-actions-wrap">
                                             <?php if ($canOpenPanel): ?>
                                                 <a href="<?php echo htmlspecialchars($serverPanelUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-sm fbg-primary-button" onclick="event.stopPropagation();">
-                                                    <span>Panel</span>
+                                                    <span>Open Panel</span>
                                                     <i class="fas fa-arrow-up-right-from-square"></i>
                                                 </a>
                                             <?php endif; ?>

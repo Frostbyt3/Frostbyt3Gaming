@@ -100,6 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminRegistrationRedirect('That registration has already been completed.', 'error');
     }
 
+    if ($action === 'delete_registration') {
+        $deleted = fbgDeletePendingRegistration((int)$pending['id']);
+
+        fbgAdminRegistrationRedirect(
+            $deleted ? 'Pending registration deleted.' : 'Pending registration could not be deleted.',
+            $deleted ? 'success' : 'error'
+        );
+    }
+
     if (!empty($pending['rejected_at'])) {
         fbgAdminRegistrationRedirect('Rejected or expired registrations cannot be modified here.', 'error');
     }
@@ -196,6 +205,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent ? 'Registration approved and completion email sent.' : 'Registration approved, but the completion email could not be sent.',
             $sent ? 'success' : 'error'
         );
+    }
+
+    if ($action === 'set_password') {
+        if (empty($pending['email_verified_at'])) {
+            fbgAdminRegistrationRedirect('Registration must be verified or manually approved before setting a password.', 'error');
+        }
+
+        $password = (string)($_POST['set_password'] ?? '');
+        $confirmPassword = (string)($_POST['set_confirm_password'] ?? '');
+        $passwordErrors = fbgValidatePassword($password, $confirmPassword);
+
+        if (!empty($passwordErrors)) {
+            fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
+        }
+
+        $created = fbgCreatePterodactylUserFromPendingRegistration($pending, $password);
+
+        if (empty($created['ok'])) {
+            fbgAdminRegistrationRedirect($created['error'] ?? 'Account could not be created.', 'error');
+        }
+
+        fbgAdminRegistrationRedirect('Password set and account created.');
     }
 
     fbgAdminRegistrationRedirect('Unknown registration action.', 'error');
@@ -425,8 +456,10 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
                             <?php foreach ($registrations as $registration): ?>
                                 <?php
-                                $canModify = empty($registration['consumed_at']) && empty($registration['rejected_at']);
+                                $canDelete = empty($registration['consumed_at']);
+                                $canModify = $canDelete && empty($registration['rejected_at']);
                                 $canManualApprove = $canModify && empty($registration['email_verified_at']);
+                                $canSetPassword = $canModify && !empty($registration['email_verified_at']);
                                 $registrationLabel = trim((string)($registration['username'] ?? ''));
                                 if ($registrationLabel === '') {
                                     $registrationLabel = (string)($registration['email'] ?? 'registration');
@@ -443,7 +476,7 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                                     <td><?= htmlspecialchars(fbgAdminRegistrationDate($registration['verification_expires_at'] ?? null), ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><?= (int)($registration['verification_resend_count'] ?? 0) ?></td>
                                     <td>
-                                        <?php if ($canModify): ?>
+                                        <?php if ($canModify || $canDelete): ?>
                                             <div class="fbg-registration-actions-menu" data-registration-actions>
                                                 <button
                                                     type="button"
@@ -455,12 +488,14 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                                                 </button>
 
                                                 <div class="fbg-registration-actions-dropdown" data-registration-actions-dropdown>
-                                                    <form method="POST" class="fbg-registration-actions-form">
-                                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-                                                        <input type="hidden" name="action" value="resend_verification">
-                                                        <input type="hidden" name="registration_id" value="<?= (int)$registration['id'] ?>">
-                                                        <button type="submit">Resend Verification</button>
-                                                    </form>
+                                                    <?php if ($canModify): ?>
+                                                        <form method="POST" class="fbg-registration-actions-form">
+                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                            <input type="hidden" name="action" value="resend_verification">
+                                                            <input type="hidden" name="registration_id" value="<?= (int)$registration['id'] ?>">
+                                                            <button type="submit">Resend Verification</button>
+                                                        </form>
+                                                    <?php endif; ?>
 
                                                     <?php if ($canManualApprove): ?>
                                                         <button
@@ -471,6 +506,29 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                                                             data-registration-email="<?= htmlspecialchars((string)($registration['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                                             Manual Approval
                                                         </button>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($canSetPassword): ?>
+                                                        <button
+                                                            type="button"
+                                                            data-registration-password-trigger
+                                                            data-registration-id="<?= (int)$registration['id'] ?>"
+                                                            data-registration-label="<?= htmlspecialchars($registrationLabel, ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-registration-email="<?= htmlspecialchars((string)($registration['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                            Set Password
+                                                        </button>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($canDelete): ?>
+                                                        <form
+                                                            method="POST"
+                                                            class="fbg-registration-actions-form"
+                                                            onsubmit="return confirm('Delete this pending registration? This cannot be undone.');">
+                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                            <input type="hidden" name="action" value="delete_registration">
+                                                            <input type="hidden" name="registration_id" value="<?= (int)$registration['id'] ?>">
+                                                            <button type="submit" class="fbg-registration-action-danger">Delete Registration</button>
+                                                        </form>
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
@@ -556,6 +614,57 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     </div>
 </div>
 
+<div class="fbg-modal-overlay" id="registration-password-modal" hidden>
+    <div class="fbg-modal-card fbg-registration-approval-modal" role="dialog" aria-modal="true" aria-labelledby="registration-password-title">
+        <button type="button" class="fbg-modal-close" id="registration-password-close" aria-label="Close">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+
+        <div class="fbg-modal-header">
+            <h3 id="registration-password-title">Set Registration Password</h3>
+            <p id="registration-password-description">Set a password and finish creating this user's account.</p>
+        </div>
+
+        <form method="POST" class="fbg-admin-form" id="registration-password-form">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="action" value="set_password">
+            <input type="hidden" name="registration_id" id="registration-password-id" value="">
+
+            <div class="fbg-admin-field">
+                <label>Registration</label>
+                <input type="text" id="registration-password-label" value="" disabled>
+            </div>
+
+            <div class="fbg-registration-approval-passwords">
+                <div class="fbg-admin-field">
+                    <label for="registration-password">Password</label>
+                    <input
+                        id="registration-password"
+                        type="password"
+                        name="set_password"
+                        autocomplete="new-password"
+                        required>
+                </div>
+
+                <div class="fbg-admin-field">
+                    <label for="registration-confirm-password">Confirm Password</label>
+                    <input
+                        id="registration-confirm-password"
+                        type="password"
+                        name="set_confirm_password"
+                        autocomplete="new-password"
+                        required>
+                </div>
+            </div>
+
+            <div class="fbg-modal-actions">
+                <button type="button" class="btn fbg-neutral-button" id="registration-password-cancel">Cancel</button>
+                <button type="submit" class="btn">Set Password and Create Account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
 .fbg-registration-actions-menu {
     position: relative;
@@ -623,6 +732,15 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     color: #ffffff;
 }
 
+.fbg-registration-actions-dropdown button.fbg-registration-action-danger {
+    color: #ffb8b8;
+}
+
+.fbg-registration-actions-dropdown button.fbg-registration-action-danger:hover {
+    background: rgba(255, 74, 74, 0.14);
+    color: #ffffff;
+}
+
 .fbg-registration-actions-form {
     margin: 0;
 }
@@ -654,6 +772,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalConfirmPassword = document.getElementById('registration-approval-confirm-password');
     const emailSubmit = document.querySelector('[data-approval-email-submit]');
     const passwordSubmit = document.querySelector('[data-approval-password-submit]');
+    const setPasswordModal = document.getElementById('registration-password-modal');
+    const setPasswordClose = document.getElementById('registration-password-close');
+    const setPasswordCancel = document.getElementById('registration-password-cancel');
+    const setPasswordId = document.getElementById('registration-password-id');
+    const setPasswordLabel = document.getElementById('registration-password-label');
+    const setPasswordDescription = document.getElementById('registration-password-description');
+    const setPasswordInput = document.getElementById('registration-password');
+    const setConfirmPasswordInput = document.getElementById('registration-confirm-password');
 
     const setPasswordRequired = (isRequired) => {
         if (modalPassword) {
@@ -715,8 +841,37 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.remove('fbg-modal-open');
     };
 
+    const openSetPasswordModal = (button) => {
+        if (!setPasswordModal || !setPasswordId || !setPasswordLabel) return;
+
+        const label = button.dataset.registrationLabel || 'registration';
+        const email = button.dataset.registrationEmail || '';
+
+        setPasswordId.value = button.dataset.registrationId || '';
+        setPasswordLabel.value = email !== '' ? `${label} (${email})` : label;
+        if (setPasswordDescription) {
+            setPasswordDescription.textContent = `Set a password for ${label} and finish creating this user's account.`;
+        }
+        if (setPasswordInput) setPasswordInput.value = '';
+        if (setConfirmPasswordInput) setConfirmPasswordInput.value = '';
+        setPasswordModal.hidden = false;
+        document.body.classList.add('fbg-modal-open');
+        closeMenus();
+        if (setPasswordInput) setPasswordInput.focus();
+    };
+
+    const closeSetPasswordModal = () => {
+        if (!setPasswordModal) return;
+        setPasswordModal.hidden = true;
+        document.body.classList.remove('fbg-modal-open');
+    };
+
     document.querySelectorAll('[data-registration-approve-trigger]').forEach((button) => {
         button.addEventListener('click', () => openApprovalModal(button));
+    });
+
+    document.querySelectorAll('[data-registration-password-trigger]').forEach((button) => {
+        button.addEventListener('click', () => openSetPasswordModal(button));
     });
 
     if (emailSubmit) {
@@ -737,15 +892,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.key === 'Escape') {
             closeMenus();
             closeApprovalModal();
+            closeSetPasswordModal();
         }
     });
 
     if (modalClose) modalClose.addEventListener('click', closeApprovalModal);
     if (modalCancel) modalCancel.addEventListener('click', closeApprovalModal);
+    if (setPasswordClose) setPasswordClose.addEventListener('click', closeSetPasswordModal);
+    if (setPasswordCancel) setPasswordCancel.addEventListener('click', closeSetPasswordModal);
     if (modal) {
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
                 closeApprovalModal();
+            }
+        });
+    }
+    if (setPasswordModal) {
+        setPasswordModal.addEventListener('click', (event) => {
+            if (event.target === setPasswordModal) {
+                closeSetPasswordModal();
             }
         });
     }
