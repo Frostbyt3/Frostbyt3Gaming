@@ -8,6 +8,7 @@ require_once __DIR__ . '/../config/secrets.php';
 function isLocal(): bool
 {
     $host = $_SERVER['HTTP_HOST'] ?? '';
+    $host = strtolower(trim((string)preg_replace('/:\d+$/', '', $host)));
 
     return in_array($host, [
         'localhost',

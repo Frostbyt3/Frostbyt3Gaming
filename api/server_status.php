@@ -1,8 +1,8 @@
 <?php
 
-session_start([
-    'read_and_close' => true,
-]);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 header('Content-Type: application/json');
 
@@ -40,13 +40,10 @@ $allowedServers = $_SESSION['allowed_servers'] ?? [];
 $serverMeta = $_SESSION['server_meta'] ?? [];
 
 if (!is_array($allowedServers) || !is_array($serverMeta)) {
-    session_start();
     pteroEnsureServerAccessSession(false);
 
     $allowedServers = $_SESSION['allowed_servers'] ?? [];
     $serverMeta = $_SESSION['server_meta'] ?? [];
-
-    session_write_close();
 }
 
 $allowedServers = array_values(array_filter(array_map(
@@ -64,7 +61,6 @@ $validIds = array_values(array_filter(
  * This helps if the session is stale, without rebuilding on every poll.
  */
 if (empty($validIds)) {
-    session_start();
     pteroEnsureServerAccessSession(true);
 
     $allowedServers = array_values(array_filter(array_map(
@@ -78,8 +74,6 @@ if (empty($validIds)) {
         $requestedIds,
         static fn($id) => in_array($id, $allowedServers, true)
     ));
-
-    session_write_close();
 }
 
 if (empty($validIds)) {
@@ -88,9 +82,62 @@ if (empty($validIds)) {
     exit;
 }
 
-/**
- * Release the session lock before making API calls.
- */
+if (!function_exists('fbgRefreshStatusServerMeta')) {
+    function fbgRefreshStatusServerMeta(array $identifiers): array
+    {
+        $identifiers = array_values(array_unique(array_filter(array_map(
+            static fn($identifier) => trim((string)$identifier),
+            $identifiers
+        ))));
+
+        if (empty($identifiers)) {
+            return is_array($_SESSION['server_meta'] ?? null) ? $_SESSION['server_meta'] : [];
+        }
+
+        $serverMeta = is_array($_SESSION['server_meta'] ?? null) ? $_SESSION['server_meta'] : [];
+        $placeholders = [];
+        $params = [];
+
+        foreach ($identifiers as $index => $identifier) {
+            $key = ':identifier_' . $index;
+            $placeholders[] = $key;
+            $params[$key] = $identifier;
+        }
+
+        try {
+            $stmt = fbgPteroDb()->prepare('
+                SELECT uuidShort AS identifier, status
+                FROM servers
+                WHERE uuidShort IN (' . implode(', ', $placeholders) . ')
+            ');
+            $stmt->execute($params);
+
+            foreach ($stmt->fetchAll() as $row) {
+                $identifier = trim((string)($row['identifier'] ?? ''));
+                if ($identifier === '') {
+                    continue;
+                }
+
+                $rawStatus = strtolower(trim((string)($row['status'] ?? '')));
+                $serverMeta[$identifier] = is_array($serverMeta[$identifier] ?? null)
+                    ? $serverMeta[$identifier]
+                    : ['identifier' => $identifier];
+                $serverMeta[$identifier]['status'] = $rawStatus;
+                $serverMeta[$identifier]['suspended'] = $rawStatus === 'suspended';
+                $serverMeta[$identifier]['is_installing'] = in_array($rawStatus, ['installing', 'install_failed'], true);
+                $serverMeta[$identifier]['install_status'] = $rawStatus;
+            }
+
+            $_SESSION['server_meta'] = $serverMeta;
+        } catch (Throwable $e) {
+            error_log('Unable to refresh server status metadata: ' . $e->getMessage());
+        }
+
+        return $serverMeta;
+    }
+}
+
+$serverMeta = fbgRefreshStatusServerMeta($validIds);
 session_write_close();
 
 $results = [];
@@ -109,12 +156,22 @@ foreach ($validIds as $identifier) {
      * Never turn an upstream resource/API issue into fake "Forbidden".
      * Keep the server in the result set with a safe fallback state.
      */
-    $resourceStatus = (string)($resources['status'] ?? 'unknown');
+    $resourceStatus = strtolower(trim((string)($resources['status'] ?? 'unknown'))) ?: 'unknown';
+
+    if (!$isInstalling && $resourceStatus === 'installing') {
+        $resourceStatus = 'unknown';
+    }
+
+    if (!$isSuspended && $resourceStatus === 'suspended') {
+        $resourceStatus = 'unknown';
+    }
+
     $effectiveStatus = $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : $resourceStatus);
 
     $results[$identifier] = [
         'status' => $effectiveStatus,
         'resource_status' => $resourceStatus,
+        'install_status' => (string)($meta['install_status'] ?? ''),
         'is_installing' => $isInstalling,
         'is_suspended' => $isSuspended,
         'cpu' => (float)($resources['cpu'] ?? 0),

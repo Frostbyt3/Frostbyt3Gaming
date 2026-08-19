@@ -84,6 +84,7 @@ document.addEventListener('click', function (e) {
     let pollTimer = null;
     let currentPollDelay = POLL_NORMAL;
     let lastInstallState = isInstalling;
+    let renderedSpecialMode = getSpecialMode(null, isInstalling, isSuspended);
     let burstTimeouts = [];
     let activeRefreshController = null;
     let railRefreshInFlight = false;
@@ -577,8 +578,22 @@ document.addEventListener('click', function (e) {
         const nextSuspended = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended')
             ? !!data.is_suspended
             : (incomingStatus === 'suspended' ? true : isSuspended);
-        const previousSpecialMode = getSpecialMode(currentStatus, isInstalling, isSuspended);
+        const previousSpecialMode = renderedSpecialMode;
+        const hasExplicitInstallState = data && Object.prototype.hasOwnProperty.call(data, 'is_installing');
+        const hasExplicitSuspendState = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended');
         let displayStatus = nextSuspended ? 'suspended' : (nextInstalling ? 'installing' : incomingStatus);
+
+        if (hasExplicitInstallState && !nextInstalling && displayStatus === 'installing') {
+            displayStatus = normalizeServerStatus(data && data.resource_status) === 'installing'
+                ? 'unknown'
+                : normalizeServerStatus(data && data.resource_status);
+        }
+
+        if (hasExplicitSuspendState && !nextSuspended && displayStatus === 'suspended') {
+            displayStatus = normalizeServerStatus(data && data.resource_status) === 'suspended'
+                ? 'unknown'
+                : normalizeServerStatus(data && data.resource_status);
+        }
 
         if (!isOptimisticUpdate && !nextInstalling && !nextSuspended && shouldPreservePowerStatus(displayStatus, currentStatus)) {
             displayStatus = currentStatus;
@@ -625,7 +640,10 @@ document.addEventListener('click', function (e) {
         }
 
         if (previousSpecialMode !== nextSpecialMode) {
+            renderedSpecialMode = nextSpecialMode;
             reloadTabContent();
+        } else {
+            renderedSpecialMode = nextSpecialMode;
         }
 
         updatePollDelayForStatus(displayStatus);

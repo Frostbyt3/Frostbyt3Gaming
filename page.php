@@ -74,6 +74,16 @@ if (
     exit;
 }
 
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && $page === 'serverpanel'
+    && isset($_GET['partial'])
+    && $_GET['partial'] === 'tab'
+) {
+    include('./pages/' . $allowed[$page]);
+    exit;
+}
+
 include('./includes/header.php');
 
 if (
