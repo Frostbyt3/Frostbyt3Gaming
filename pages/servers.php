@@ -65,7 +65,7 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                         <div class="fbg-shop-balance">
                             <span>Account Balance</span>
                             <strong>$<?php echo $isLoggedIn ? htmlspecialchars(fbgFormatCredit($balance, $currency)) : 'Login Required'; ?></strong>
-                            <a href="./page.php?name=credit">Manage Balance</a>
+                            <a href="./page.php?name=wallet">Manage Wallet</a>
                         </div>
                     </div>
 
