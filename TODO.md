@@ -14,6 +14,11 @@
 - [ ] Add order/invoice detail pages for completed balance uploads and server purchases.
 - [ ] Add invoice support after the core shop loop is stable.
 
+## Shared Frontend Utilities
+
+- [ ] Create proper pagination function/convert current per-page functions to global.
+- [ ] Create toast notification function/convert current per-page functions to global.
+
 ## Registration Security
 
 - [x] Add guarded `pending_registrations` schema upgrades for rejection, IP, resend, and manual approval metadata.

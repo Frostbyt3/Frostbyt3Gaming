@@ -177,6 +177,25 @@ if (!function_exists('getGameIcon')) {
     }
 }
 
+if (!function_exists('fbgServerSupportsModpacks')) {
+    function fbgServerSupportsModpacks(array $server): bool
+    {
+        $source = strtolower(trim(
+            (string)($server['egg_name'] ?? '') . ' ' .
+            (string)($server['name'] ?? '') . ' ' .
+            (string)($server['description'] ?? '')
+        ));
+
+        foreach (['minecraft', 'modpack', 'forge', 'fabric', 'neoforge', 'quilt', 'paper', 'spigot', 'bukkit', 'purpur', 'sponge'] as $needle) {
+            if (str_contains($source, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 if (!function_exists('fbgServerRailInitialStatus')) {
     function fbgServerRailInitialStatus(array $server, string $identifier, string $selectedIdentifier, bool $selectedInstalling): string
     {
@@ -260,6 +279,10 @@ $availableTabs = [];
 
 if ($hasServerPermission('control.console') || $hasServerPermission('websocket.connect')) {
     $availableTabs['console'] = ['label' => 'Console', 'icon' => 'fas fa-terminal'];
+}
+
+if (fbgServerSupportsModpacks($selectedServer) && $hasServerPermission('file.create')) {
+    $availableTabs['mc-modpacks'] = ['label' => 'Modpacks', 'icon' => 'fas fa-cubes'];
 }
 
 if (

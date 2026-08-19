@@ -22,6 +22,7 @@
         }
     </script>
     <script src="<?php echo asset('./backend/js/external-redirect.js'); ?>"></script>
+    <script src="<?php echo asset('./backend/js/confirm-modal.js'); ?>"></script>
 </head>
 <body>
     <header>
