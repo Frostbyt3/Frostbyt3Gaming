@@ -98,6 +98,15 @@
         }, isError ? 7000 : 4000);
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     function hideMessage() {
         if (!messageEl) return;
         window.clearTimeout(messageTimeout);
@@ -322,7 +331,13 @@
     }
 
     async function restoreBackup(uuid) {
-        const confirmed = window.confirm('Restore this backup? This will overwrite the current server files.');
+        const confirmed = await confirmAction(
+            'Restore Backup?',
+            'This will overwrite the current server files.',
+            'Restore',
+            'Cancel',
+            { variant: 'danger' }
+        );
         if (!confirmed) return;
 
         try {
@@ -358,7 +373,13 @@
     }
 
     async function deleteBackup(uuid) {
-        const confirmed = window.confirm('Delete this backup? This cannot be undone.');
+        const confirmed = await confirmAction(
+            'Delete Backup?',
+            'Delete this backup? This cannot be undone.',
+            'Delete',
+            'Cancel',
+            { variant: 'danger' }
+        );
         if (!confirmed) return;
 
         try {

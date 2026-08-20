@@ -83,6 +83,15 @@
         }
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     function syncScheduleHeaderActions() {
         if (!scheduleHeaderActions) return;
         scheduleHeaderActions.hidden = scheduleId > 0;
@@ -391,8 +400,12 @@
         const deleteScheduleButton = document.getElementById('delete-schedule-button');
         if (deleteScheduleButton) {
             deleteScheduleButton.addEventListener('click', async () => {
-                const confirmed = window.confirm(
-                    'Delete this schedule? Any tasks inside this schedule will also be removed.'
+                const confirmed = await confirmAction(
+                    'Delete Schedule?',
+                    'Any tasks inside this schedule will also be removed.',
+                    'Delete',
+                    'Cancel',
+                    { variant: 'danger' }
                 );
 
                 if (!confirmed) {
@@ -427,7 +440,13 @@
                     return;
                 }
 
-                const confirmed = window.confirm('Delete this task? This cannot be undone.');
+                const confirmed = await confirmAction(
+                    'Delete Task?',
+                    'Delete this task? This cannot be undone.',
+                    'Delete',
+                    'Cancel',
+                    { variant: 'danger' }
+                );
                 if (!confirmed) {
                     return;
                 }

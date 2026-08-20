@@ -48,6 +48,15 @@
         }, isError ? 7000 : 4000);
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     async function request(url, options = {}) {
         const response = await fetch(url, {
             credentials: 'same-origin',
@@ -333,8 +342,12 @@
             return;
         }
 
-        const confirmed = window.confirm(
-            `Delete allocation ${getHostnameLabel(allocation)}:${allocation.port}?\n\nThis cannot be undone.`
+        const confirmed = await confirmAction(
+            'Delete Allocation?',
+            `Delete allocation ${getHostnameLabel(allocation)}:${allocation.port}? This cannot be undone.`,
+            'Delete',
+            'Cancel',
+            { variant: 'danger' }
         );
 
         if (!confirmed) return;

@@ -491,6 +491,15 @@
         }
     }
 
+    async function confirmFilesAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     function setEditorDirtyState() {
         if (!editorStatus || !editorTextarea) return;
 
@@ -522,7 +531,7 @@
         document.body.classList.add('fbg-modal-open');
     }
 
-    function closeEditorModal(force = false) {
+    async function closeEditorModal(force = false) {
         if (!editorModal) return;
 
         const isDirty = editorTextarea && (
@@ -531,7 +540,13 @@
                 : editorTextarea.value !== editorOriginalValue
         );
         if (!force && isDirty && !editorIsSaving) {
-            const confirmed = window.confirm('Discard unsaved changes?');
+            const confirmed = await confirmFilesAction(
+                'Discard changes?',
+                'You have unsaved changes in the editor. Closing now will discard them.',
+                'Discard',
+                'Keep Editing',
+                { variant: 'danger' }
+            );
             if (!confirmed) {
                 return;
             }
@@ -959,7 +974,7 @@
         newFolderForm?.reset();
     }
 
-    function handleActionClick(item) {
+    async function handleActionClick(item) {
         const action = item.dataset.filesAction || '';
         const path = item.dataset.path || '/';
         const name = item.dataset.name || 'item';
@@ -982,7 +997,13 @@
         }
 
         if (action === 'delete') {
-            const confirmed = window.confirm(`Delete "${name}"? This cannot be undone.`);
+            const confirmed = await confirmFilesAction(
+                'Delete item?',
+                `Delete "${name}"? This cannot be undone.`,
+                'Delete',
+                'Cancel',
+                { variant: 'danger' }
+            );
             if (!confirmed) {
                 return;
             }

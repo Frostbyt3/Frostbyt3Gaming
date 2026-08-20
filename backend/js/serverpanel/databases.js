@@ -80,6 +80,15 @@
         }, isError ? 7000 : 4000);
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     async function readJsonResponse(response, fallbackMessage) {
         const text = await response.text();
         let data = null;
@@ -389,7 +398,13 @@
     async function rotatePassword() {
         if (!currentDatabaseId || !rotateButton || !canUpdate) return;
 
-        const confirmed = window.confirm('Rotate this database password? Existing connections using the old password will stop working.');
+        const confirmed = await confirmAction(
+            'Rotate Password?',
+            'Existing connections using the old password will stop working.',
+            'Rotate Password',
+            'Cancel',
+            { variant: 'danger' }
+        );
         if (!confirmed) return;
 
         const originalText = rotateButton.textContent;
@@ -432,7 +447,13 @@
 
         const item = databaseMap[databaseId] || {};
         const attr = getAttr(item);
-        const confirmed = window.confirm(`Delete database ${attr.name || databaseId}? This cannot be undone.`);
+        const confirmed = await confirmAction(
+            'Delete Database?',
+            `Delete database ${attr.name || databaseId}? This cannot be undone.`,
+            'Delete',
+            'Cancel',
+            { variant: 'danger' }
+        );
 
         if (!confirmed) return;
 

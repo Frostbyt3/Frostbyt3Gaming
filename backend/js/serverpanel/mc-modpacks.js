@@ -356,9 +356,13 @@
                     'Cancel',
                     { variant: 'danger' }
                 )
-                : window.confirm('Delete all server files before installing this modpack? This cannot be undone.');
+                : false;
 
             if (!confirmed) {
+                if (typeof window.FBGConfirm !== 'function') {
+                    console.warn('FBGConfirm is not available.');
+                }
+
                 return;
             }
         }

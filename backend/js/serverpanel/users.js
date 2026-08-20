@@ -64,6 +64,15 @@
         }, isError ? 7000 : 4000);
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     async function parseJsonResponse(response, invalidJsonMessage) {
         const rawText = await response.text();
 
@@ -396,7 +405,15 @@
 
                 if (!subuserUuid) return;
 
-                if (!window.confirm(`Remove ${subuserName} from this server?`)) {
+                const confirmed = await confirmAction(
+                    'Remove User?',
+                    `Remove ${subuserName} from this server?`,
+                    'Remove',
+                    'Cancel',
+                    { variant: 'danger' }
+                );
+
+                if (!confirmed) {
                     return;
                 }
 

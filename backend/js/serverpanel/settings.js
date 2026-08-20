@@ -52,6 +52,15 @@
         }, isError ? 7000 : 5000);
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     async function parseJsonResponse(response) {
         const data = await response.json().catch(() => ({
             ok: false,
@@ -181,8 +190,12 @@
 
     if (reinstallButton && canReinstall) {
         reinstallButton.addEventListener('click', async () => {
-            const confirmed = window.confirm(
-                'Are you sure you want to reinstall this server?\n\nThis can overwrite files and re-run the install script.'
+            const confirmed = await confirmAction(
+                'Reinstall Server?',
+                'This can overwrite files and re-run the install script.',
+                'Reinstall',
+                'Cancel',
+                { variant: 'danger' }
             );
 
             if (!confirmed) return;
@@ -209,8 +222,11 @@
 
     if (renewButton && canRenew) {
         renewButton.addEventListener('click', async () => {
-            const confirmed = window.confirm(
-                'Renew this server for one additional month and deduct the cost from your balance?'
+            const confirmed = await confirmAction(
+                'Renew Server?',
+                'Renew this server for one additional month and deduct the cost from your balance?',
+                'Renew',
+                'Cancel'
             );
 
             if (!confirmed) return;

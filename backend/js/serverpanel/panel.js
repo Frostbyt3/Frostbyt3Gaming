@@ -100,6 +100,15 @@ document.addEventListener('click', function (e) {
         return !!pendingPowerAction && pendingPowerUntil > Date.now();
     }
 
+    async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
+        if (typeof window.FBGConfirm === 'function') {
+            return window.FBGConfirm(title, description, confirmText, cancelText, options);
+        }
+
+        console.warn('FBGConfirm is not available.');
+        return false;
+    }
+
     function isSettledStatusActive() {
         return !!settledStatus && settledStatusUntil > Date.now();
     }
@@ -1006,11 +1015,19 @@ document.addEventListener('click', function (e) {
     }
 
     if (stopBtn) {
-        stopBtn.addEventListener('click', () => {
+        stopBtn.addEventListener('click', async () => {
             const action = stopBtn.dataset.action || 'stop';
 
             if (action === 'kill') {
-                if (!confirm('Force kill this server? This may cause data loss.')) {
+                const confirmed = await confirmAction(
+                    'Force Kill Server?',
+                    'This may cause data loss.',
+                    'Force Kill',
+                    'Cancel',
+                    { variant: 'danger' }
+                );
+
+                if (!confirmed) {
                     return;
                 }
             }
