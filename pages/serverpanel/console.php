@@ -12,7 +12,7 @@
     </div>
 </div>
 
-<pre id="server-console-output" class="fbg-console-output">Connecting to console...</pre>
+<div id="server-console-output" class="fbg-console-output">Connecting to console...</div>
 
 <!-- <label for="server-command-input" class="fbg-meta-label" style="margin-top: 12px;">Command</label> -->
 <div class="fbg-command-row">
@@ -20,4 +20,6 @@
     <button type="button" class="btn fbg-neutral-button btn-sm" id="send-command-button">Send</button>
 </div>
 
+<link rel="stylesheet" href="<?php echo asset('/backend/vendor/xterm/xterm.css'); ?>">
+<script src="<?php echo asset('/backend/vendor/xterm/xterm.js'); ?>"></script>
 <script src="<?php echo asset('/backend/js/serverpanel/console.js'); ?>"></script>

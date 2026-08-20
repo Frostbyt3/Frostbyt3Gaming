@@ -24,9 +24,12 @@
 
     if (!consoleOutput) return;
 
+    const TerminalCtor = typeof window.Terminal === 'function' ? window.Terminal : null;
     let socket = null;
     let socketToken = '';
     let socketUrl = '';
+    let terminal = null;
+    let terminalResizeTimer = null;
     let authenticated = false;
     let connecting = false;
     let manuallyClosed = false;
@@ -40,6 +43,8 @@
     let commandHistoryIndex = -1;
     let commandMessageTimeout = null;
     let consoleMessageTimeout = null;
+    let pendingConsoleHtml = '';
+    let consoleFlushFrame = null;
 
     function clearNamedTimeout(name) {
         if (name === 'command' && commandMessageTimeout) {
@@ -85,7 +90,15 @@
     }
 
     function scrollConsoleToBottom() {
-        if (!consoleOutput || !consoleAutoscrollEnabled) return;
+        if (!consoleAutoscrollEnabled) return;
+
+        if (terminal && typeof terminal.scrollToBottom === 'function') {
+            terminal.scrollToBottom();
+            return;
+        }
+
+        if (!consoleOutput) return;
+
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
 
@@ -94,13 +107,6 @@
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-    }
-
-    function highlightLogLine(line) {
-        if (line.includes('[WARN]')) return '<span class="log-warn">' + line + '</span>';
-        if (line.includes('[ERROR]')) return '<span class="log-error">' + line + '</span>';
-        if (line.includes('[INFO]')) return '<span class="log-info">' + line + '</span>';
-        return line;
     }
 
     function ansiToHtml(text) {
@@ -134,27 +140,153 @@
         });
     }
 
-    function appendConsoleText(text) {
-        if (!consoleOutput || !text) return;
+    function formatLogLine(line) {
+        const html = ansiToHtml(line);
 
-        let normalized = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (line.includes('[WARN]')) return '<span class="log-warn">' + html + '</span>';
+        if (line.includes('[ERROR]')) return '<span class="log-error">' + html + '</span>';
+        if (line.includes('[INFO]')) return '<span class="log-info">' + html + '</span>';
 
-        if (consoleOutput.textContent === 'Connecting to console...') {
-            consoleOutput.innerHTML = '';
-        }
+        return html;
+    }
 
-        if (normalized && !normalized.endsWith('\n')) {
-            normalized += '\n';
-        }
+    function flushConsoleBuffer() {
+        consoleFlushFrame = null;
 
-        const lines = normalized.split('\n').map(highlightLogLine).join('\n');
-        consoleOutput.innerHTML += ansiToHtml(lines);
+        if (!consoleOutput || !pendingConsoleHtml) return;
+
+        const html = pendingConsoleHtml;
+        pendingConsoleHtml = '';
+
+        consoleOutput.insertAdjacentHTML('beforeend', html);
 
         if (consoleOutput.textContent.length > MAX_TEXT_LENGTH) {
             consoleOutput.textContent = consoleOutput.textContent.slice(-TRIM_TO_TEXT_LENGTH);
         }
 
         scrollConsoleToBottom();
+    }
+
+    function queueConsoleHtml(html) {
+        if (!html) return;
+
+        pendingConsoleHtml += html;
+
+        if (consoleFlushFrame !== null) return;
+
+        consoleFlushFrame = window.requestAnimationFrame(flushConsoleBuffer);
+    }
+
+    function normalizeTerminalText(text) {
+        let normalized = String(text)
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+
+        if (normalized && !normalized.endsWith('\n')) {
+            normalized += '\n';
+        }
+
+        return normalized
+            .replace(/\n/g, '\r\n');
+    }
+
+    function resizeTerminal() {
+        if (!terminal || !consoleOutput || typeof terminal.resize !== 'function') return;
+
+        const styles = window.getComputedStyle(consoleOutput);
+        const fontSize = parseFloat(styles.fontSize) || 12;
+        const lineHeight = parseFloat(styles.lineHeight) || Math.ceil(fontSize * 1.35);
+        const paddingX = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+        const paddingY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+        const characterWidth = fontSize * 0.62;
+        const cols = Math.max(40, Math.floor((consoleOutput.clientWidth - paddingX) / characterWidth));
+        const rows = Math.max(12, Math.floor((consoleOutput.clientHeight - paddingY) / lineHeight));
+
+        terminal.resize(cols, rows);
+    }
+
+    function scheduleTerminalResize() {
+        if (terminalResizeTimer) {
+            clearTimeout(terminalResizeTimer);
+        }
+
+        terminalResizeTimer = setTimeout(() => {
+            terminalResizeTimer = null;
+            resizeTerminal();
+        }, 100);
+    }
+
+    function initializeTerminal() {
+        if (!TerminalCtor || terminal) return !!terminal;
+
+        consoleOutput.textContent = '';
+        consoleOutput.classList.add('is-xterm');
+
+        const rootStyles = window.getComputedStyle(document.documentElement);
+        const terminalBackground = rootStyles.getPropertyValue('--fbg-body-bg').trim() || '#111111';
+
+        terminal = new TerminalCtor({
+            allowTransparency: true,
+            convertEol: true,
+            cursorBlink: false,
+            cursorStyle: 'underline',
+            disableStdin: true,
+            fontFamily: '"JetBrains Mono", "Fira Code", Consolas, monospace',
+            fontSize: 12,
+            lineHeight: 1.35,
+            rows: 32,
+            scrollback: 8000,
+            theme: {
+                background: terminalBackground,
+                foreground: '#f5f5f5',
+                black: '#000000',
+                red: '#e06c75',
+                green: '#98c379',
+                yellow: '#e5c07b',
+                blue: '#61afef',
+                magenta: '#c678dd',
+                cyan: '#56b6c2',
+                white: '#dcdfe4',
+                brightBlack: '#7f848e',
+                brightRed: '#ff7b72',
+                brightGreen: '#7ee787',
+                brightYellow: '#f2cc60',
+                brightBlue: '#79c0ff',
+                brightMagenta: '#d2a8ff',
+                brightCyan: '#a5f3fc',
+                brightWhite: '#ffffff'
+            }
+        });
+
+        terminal.open(consoleOutput);
+        resizeTerminal();
+
+        window.addEventListener('resize', scheduleTerminalResize);
+
+        return true;
+    }
+
+    function appendConsoleText(text) {
+        if (!consoleOutput || !text) return;
+
+        if (terminal || initializeTerminal()) {
+            terminal.write(normalizeTerminalText(text));
+            scrollConsoleToBottom();
+            return;
+        }
+
+        let normalized = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+        if (consoleOutput.textContent === 'Connecting to console...') {
+            consoleOutput.innerHTML = '';
+            pendingConsoleHtml = '';
+        }
+
+        if (normalized && !normalized.endsWith('\n')) {
+            normalized += '\n';
+        }
+
+        queueConsoleHtml(normalized.split('\n').map(formatLogLine).join('\n'));
     }
 
     function sendSocketEvent(event, args = [null]) {
@@ -226,7 +358,7 @@
         setCommandEnabled(false);
 
         if (reason) {
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91m' + reason + '\x1b[0m \x1b[93mReconnecting...');
+            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[91m' + reason + '\x1b[0m \x1b[93mReconnecting...\x1b[0m');
         }
 
         const delay = reconnectDelay;
@@ -359,7 +491,7 @@
                 authenticated = true;
                 reconnectDelay = RECONNECT_MIN_MS;
                 setCommandEnabled(true);
-                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConsole connected!');
+                appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConsole connected!\x1b[0m');
                 requestLogs();
                 requestStats();
                 scheduleTokenRefresh();
@@ -416,7 +548,7 @@
         clearTokenTimer();
         closeSocket(true);
         setCommandEnabled(false);
-        appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConnecting to console...');
+        appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConnecting to console...\x1b[0m');
 
         const connectionId = ++activeConnectionId;
 
@@ -514,8 +646,13 @@
 
     if (consoleClearButton) {
         consoleClearButton.addEventListener('click', function () {
-            consoleOutput.textContent = '';
-            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[93mConsole cleared.');
+            if (terminal) {
+                terminal.clear();
+            } else {
+                consoleOutput.textContent = '';
+            }
+
+            appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[93mConsole cleared.\x1b[0m');
         });
     }
 
@@ -572,5 +709,6 @@
         closeSocket();
     });
 
+    initializeTerminal();
     connectConsole();
 })();

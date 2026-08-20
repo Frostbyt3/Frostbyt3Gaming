@@ -3453,6 +3453,28 @@ a.button {
     box-sizing: border-box;
 }
 
+.fbg-console-output.is-xterm {
+    overflow: hidden;
+    white-space: normal;
+    word-break: normal;
+}
+
+.fbg-console-output.is-xterm .terminal {
+    height: 100%;
+}
+
+.fbg-console-output.is-xterm .xterm-viewport {
+    background-color: transparent !important;
+}
+
+.fbg-console-output.is-xterm .xterm-screen {
+    width: 100% !important;
+}
+
+.fbg-console-output.is-xterm span {
+    text-shadow: none;
+}
+
 .fbg-console-output span {
     text-shadow: 0 0 4px rgba(255,255,255,0.05);
 }

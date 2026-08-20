@@ -231,11 +231,17 @@ document.addEventListener('click', function (e) {
     }
 
     function consoleAppend(text) {
+        let output = String(text || '');
+
+        if (output.includes('\x1b[') && !output.endsWith('\x1b[0m')) {
+            output += '\x1b[0m';
+        }
+
         if (
             window.FBG_SERVER_PANEL_CONSOLE &&
             typeof window.FBG_SERVER_PANEL_CONSOLE.appendConsoleText === 'function'
         ) {
-            window.FBG_SERVER_PANEL_CONSOLE.appendConsoleText(text);
+            window.FBG_SERVER_PANEL_CONSOLE.appendConsoleText(output);
         }
     }
 
