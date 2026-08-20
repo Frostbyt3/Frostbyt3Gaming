@@ -148,14 +148,14 @@
 - [x] Add database name field.
 - [x] Add connections-from field.
 - [x] Add concurrent connections field.
-- [x] Add database deletion/reset actions if supported.
+- [x] Add database deletion/reset actions.
 
 ### Admin Server Mounts Tab
 
-- [ ] Display available mounts for the server.
-- [ ] Only show mounts available for the server's egg and node.
-- [ ] Display mount ID, name, source, target, and mounted status.
-- [ ] Add mount/unmount actions if supported.
+- [x] Display available mounts for the server.
+- [x] Only show mounts available for the server's egg and node.
+- [x] Display mount ID, name, source, target, and mounted status.
+- [x] Add mount/unmount actions.
 
 ### Admin Server Manage Tab
 
@@ -168,7 +168,25 @@
 
 ### Admin Server Delete Tab
 
-- [ ] Add server delete action.
-- [ ] Require strong confirmation before deleting.
+- [x] Add server delete action.
+- [x] Require strong confirmation before deleting.
 - [ ] Prevent accidental deletion with clear server name confirmation.
 - [ ] Decide whether deleted server purchase/history records should remain for billing/audit history.
+
+## Admin Database Host Management
+
+- [ ] Add backend Database Hosts admin page and route.
+- [ ] Add Database Hosts sidebar/navigation entry.
+- [ ] Add database host list table with ID, name, host, port, username, database count, and linked node.
+- [ ] Add Create New Database Host modal.
+- [ ] Add create form fields for name, host, port, username, password, and linked node.
+- [ ] Add clear `WITH GRANT OPTION` warning copy for database host credentials.
+- [ ] Validate database host create/update inputs before calling Pterodactyl.
+- [ ] Allow clicking an existing database host to open a details/edit modal.
+- [ ] Show editable host details: name, host, port, and linked node.
+- [ ] Show editable user details: username and optional password replacement.
+- [ ] Show associated databases for the selected database host.
+- [ ] Add save/update action for database host details.
+- [ ] Add delete action for database hosts.
+- [ ] Guard database host deletion when associated databases exist.
+- [ ] Add confirmation modal for database host deletion.
