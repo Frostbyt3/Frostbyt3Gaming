@@ -462,7 +462,7 @@ $renderServerTabContent = function () use (
                                 class="fbg-server-installing-art fbg-server-suspended-art"
                                 aria-hidden="true"
                             >
-                            <h1>Suspended</h1>
+                            <h1>SUSPENDED</h1>
                             <p>This server is currently suspended.</p>
                             <hr class="fbg-server-installing-divider fbg-server-suspended-divider">
                             <p>Please contact support if you believe this suspension is incorrect.</p>

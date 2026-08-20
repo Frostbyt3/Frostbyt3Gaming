@@ -2751,32 +2751,21 @@ a.button {
 }
 
 .fbg-status-badge {
-    /* display: inline-flex;
-    align-items: center;
-    justify-content: center; */
     min-width: 92px;
-    /* padding: 6px 12px; */
-    /* border-radius: 6px; */
     background: transparent;
     font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    /* border: 1px solid transparent; */
-    /* box-sizing: border-box; */
 }
 
 .fbg-status-badge.running {
     color: #d9ffe1;
-    /* background: rgba(76, 175, 80, 0.16);
-    border-color: rgba(76, 175, 80, 0.4); */
 }
 
 .fbg-status-badge.starting,
 .fbg-status-badge.stopping {
     color: #fff1c2;
-    /* background: rgba(255, 193, 7, 0.16);
-    border-color: rgba(255, 193, 7, 0.4); */
 }
 
 .fbg-status-badge.suspended {
@@ -2789,18 +2778,14 @@ a.button {
 
 .fbg-status-badge.offline {
     color: #ffd7d7;
-    /* background: rgba(255, 107, 107, 0.16);
-    border-color: rgba(255, 107, 107, 0.4); */
 }
 
 .fbg-status-badge.unknown {
     color: #dfdfdf;
-    /* background: rgba(170, 170, 170, 0.14);
-    border-color: rgba(170, 170, 170, 0.3); */
 }
 
 .fbg-status-badge.processing {
-    color: #facc15; /* nice yellow */
+    color: #facc15;
     animation: fbg-processing-pulse 1.5s ease-in-out infinite;
 }
 
@@ -3523,6 +3508,7 @@ a.button {
     flex-wrap: wrap;
     font-size: clamp(1.9rem, 2.6vw, 2.6rem);
     line-height: 1.15;
+    text-transform: none;
 }
 
 .fbg-server-heading-installing h1 .svg-inline--fa,
