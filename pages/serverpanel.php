@@ -115,7 +115,7 @@ $resources = [
     'disk_bytes' => 0,
     'uptime' => 0,
 ];
-$status = (string)$resources['status'];
+$status = $canShowSuspendedRenewal ? 'expired' : (string)$resources['status'];
 
 if (!function_exists('fbgFormatBytesToGb')) {
     function fbgFormatBytesToGb(int $bytes): string
@@ -133,6 +133,7 @@ if (!function_exists('fbgStatusText')) {
             'starting'   => 'Starting',
             'stopping'   => 'Stopping',
             'suspended'  => 'Suspended',
+            'expired'    => 'Expired',
             'installing' => 'Installing',
             default      => 'Unknown',
         };
@@ -142,7 +143,7 @@ if (!function_exists('fbgStatusText')) {
 if (!function_exists('fbgStatusClass')) {
     function fbgStatusClass(string $status): string
     {
-        return in_array($status, ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended'], true)
+        return in_array($status, ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'expired'], true)
             ? $status
             : 'unknown';
     }
@@ -205,6 +206,13 @@ if (!function_exists('fbgServerRailInitialStatus')) {
     {
         if ($identifier === $selectedIdentifier) {
             if (!empty($server['suspended']) || strtolower(trim((string)($server['status'] ?? ''))) === 'suspended') {
+                $expiredAt = trim((string)($server['expired_at'] ?? ''));
+                $isExpired = $expiredAt !== '' && strtotime($expiredAt) !== false && strtotime($expiredAt) <= time();
+
+                if (empty($server['suspend_manual']) && $isExpired) {
+                    return 'expired';
+                }
+
                 return 'suspended';
             }
 
@@ -216,6 +224,13 @@ if (!function_exists('fbgServerRailInitialStatus')) {
         }
 
         if (!empty($server['suspended']) || strtolower(trim((string)($server['status'] ?? ''))) === 'suspended') {
+            $expiredAt = trim((string)($server['expired_at'] ?? ''));
+            $isExpired = $expiredAt !== '' && strtotime($expiredAt) !== false && strtotime($expiredAt) <= time();
+
+            if (empty($server['suspend_manual']) && $isExpired) {
+                return 'expired';
+            }
+
             return 'suspended';
         }
 
@@ -419,21 +434,44 @@ $renderServerTabContent = function () use (
                     <div class="fbg-server-heading-installing fbg-server-heading-suspended">
                         <br>
                         <?php if ($canShowSuspendedRenewal): ?>
-                            <h2>
-                                Looks like your server has expired <i class="fas fa-face-frown"></i>
-                            </h2>
+                            <img
+                                src="/backend/img/expired.png"
+                                alt=""
+                                class="fbg-server-installing-art fbg-server-expired-art"
+                                aria-hidden="true"
+                            >
+                            <h1>Looks like your server has expired.</h1>
                             <p>No worries! Renew your server to restore access and pick up where you left off.</p>
-                        <?php else: ?>
-                            <i class="fas fa-ban"></i>
-                            <h1>Suspended</h1>
-                            <p>This server is currently suspended.</p>
-                            <p>Please contact support if you believe this suspension is incorrect.</p>
-                        <?php endif; ?>
-                        <?php if ($canShowSuspendedRenewal): ?>
-                            <div class="fbg-settings-section-footer" style="margin-top: 18px; justify-content: center;">
+                            <div class="fbg-settings-section-footer fbg-server-expired-action">
                                 <a href="<?php echo htmlspecialchars($renewUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-neutral-button">
                                     Renew Server
                                 </a>
+                            </div>
+                            <hr class="fbg-server-installing-divider fbg-server-expired-divider">
+                            <div class="fbg-server-installing-info fbg-server-expired-info">
+                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                <div>
+                                    <p><strong>Your server data is still here.</strong></p>
+                                    <p>Renew your server to regain access before it is scheduled for deletion.</p>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <img
+                                src="/backend/img/prohibited.png"
+                                alt=""
+                                class="fbg-server-installing-art fbg-server-suspended-art"
+                                aria-hidden="true"
+                            >
+                            <h1>Suspended</h1>
+                            <p>This server is currently suspended.</p>
+                            <hr class="fbg-server-installing-divider fbg-server-suspended-divider">
+                            <p>Please contact support if you believe this suspension is incorrect.</p>
+                            <div class="fbg-server-installing-info fbg-server-suspended-info">
+                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                <div>
+                                    <p>Suspensions are typically due to a violation of our Terms of Service.</p>
+                                    <p>For more information, please reach out to our support team.</p>
+                                </div>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -447,10 +485,23 @@ $renderServerTabContent = function () use (
         <div class="fbg-tab-placeholder-panel">
             <div class="fbg-server-card-header">
                 <div class="fbg-server-heading-installing">
-                    <br>
-                    <h1>Your server is being crafted! <i class="fas fa-screwdriver-wrench"></i></h1>
+                    <img
+                        src="/backend/img/construction.png"
+                        alt=""
+                        class="fbg-server-installing-art"
+                        aria-hidden="true"
+                    >
+                    <h1>Your server is being crafted!</h1>
                     <p>Hang tight while we get everything ready.</p>
+                    <hr class="fbg-server-installing-divider">
                     <p>Assuming we didn't forget any materials...</p>
+                    <div class="fbg-server-installing-info">
+                        <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        <div>
+                            <p>This may take a few minutes depending on install size.</p>
+                            <p>You'll get access as soon as everything is set up.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

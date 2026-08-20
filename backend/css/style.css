@@ -2783,6 +2783,10 @@ a.button {
     color: #ffb86b;
 }
 
+.fbg-status-badge.expired {
+    color: #7bbcff;
+}
+
 .fbg-status-badge.offline {
     color: #ffd7d7;
     /* background: rgba(255, 107, 107, 0.16);
@@ -3154,6 +3158,11 @@ a.button {
     box-shadow: 0 0 10px rgba(251, 146, 60, 0.28);
 }
 
+.fbg-server-rail-status-dot.expired {
+    background: #2ea7ff;
+    box-shadow: 0 0 10px rgba(46, 167, 255, 0.32);
+}
+
 .fbg-server-rail-status-dot.unknown {
     background: #8b8b8b;
 }
@@ -3267,6 +3276,10 @@ a.button {
 
 .fbg-sidebar-stat-icon-status.suspended {
     color: #fb923c;
+}
+
+.fbg-sidebar-stat-icon-status.expired {
+    color: #2ea7ff;
 }
 
 .fbg-sidebar-stat-icon-status.unknown {
@@ -3473,6 +3486,13 @@ a.button {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
+    min-height: 520px;
+    justify-content: center;
+    gap: 18px;
+    padding: clamp(36px, 6vw, 72px) 24px;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .fbg-server-heading-installing > i,
@@ -3494,8 +3514,15 @@ a.button {
 }
 
 .fbg-server-heading-installing h1 {
-    padding: 22px;
-    display: inline-block;
+    margin: 18px 0 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: clamp(1.9rem, 2.6vw, 2.6rem);
+    line-height: 1.15;
 }
 
 .fbg-server-heading-installing h1 .svg-inline--fa,
@@ -3519,6 +3546,131 @@ a.button {
     text-align: center;
     font-size: clamp(1.55rem, 2vw, 2rem);
     line-height: 1.2;
+}
+
+.fbg-server-heading-installing p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: clamp(1rem, 1.35vw, 1.25rem);
+    line-height: 1.5;
+}
+
+.fbg-server-installing-art {
+    width: clamp(256px, 16vw, 512px);
+    height: clamp(256px, 16vw, 512px);
+    object-fit: contain;
+    filter: drop-shadow(0 20px 42px rgba(32, 169, 255, 0.2));
+}
+
+.fbg-server-suspended-art {
+    width: clamp(256px, 16vw, 512px);
+    height: clamp(256px, 16vw, 512px);
+    object-fit: contain;
+    filter: drop-shadow(0 20px 42px rgba(255, 84, 84, 0.18));
+}
+
+.fbg-server-expired-art {
+    width: clamp(256px, 16vw, 512px);
+    height: clamp(256px, 16vw, 512px);
+    object-fit: contain;
+    filter: drop-shadow(0 20px 42px rgba(32, 169, 255, 0.24));
+}
+
+.fbg-server-installing-divider {
+    width: min(520px, 72%);
+    height: 1px;
+    margin: 18px 0 8px;
+    border: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.22),
+        transparent
+    );
+}
+
+.fbg-server-suspended-divider {
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 90, 90, 0.3),
+        transparent
+    );
+}
+
+.fbg-server-expired-divider {
+    margin-top: 12px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(46, 167, 255, 0.32),
+        transparent
+    );
+}
+
+.fbg-server-installing-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(560px, 100%);
+    margin-top: 16px;
+    padding: 16px 20px;
+    border: 1px solid rgba(46, 167, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(24, 31, 39, 0.48);
+    box-shadow: 0 0 32px rgba(46, 167, 255, 0.08);
+    text-align: left;
+    box-sizing: border-box;
+}
+
+.fbg-server-suspended-info {
+    border-color: rgba(255, 90, 90, 0.35);
+    background: rgba(42, 22, 24, 0.48);
+    box-shadow: 0 0 32px rgba(255, 84, 84, 0.08);
+}
+
+.fbg-server-expired-info {
+    border-color: rgba(46, 167, 255, 0.42);
+    background: rgba(24, 31, 39, 0.52);
+    box-shadow: 0 0 32px rgba(46, 167, 255, 0.1);
+}
+
+.fbg-server-installing-info > i,
+.fbg-server-installing-info > .svg-inline--fa {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    color: var(--fbg-brightblue);
+    font-size: 1.75rem;
+}
+
+.fbg-server-suspended-info > i,
+.fbg-server-suspended-info > .svg-inline--fa {
+    color: #ff5f5f;
+}
+
+.fbg-server-expired-info > i,
+.fbg-server-expired-info > .svg-inline--fa {
+    color: #7bbcff;
+}
+
+.fbg-server-expired-action {
+    margin-top: 8px;
+    justify-content: center;
+}
+
+.fbg-server-expired-action .btn {
+    min-width: 180px;
+}
+
+.fbg-server-installing-info p {
+    font-size: 0.98rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.fbg-server-installing-info p + p {
+    margin-top: 4px;
 }
 
 .fbg-editable-row {

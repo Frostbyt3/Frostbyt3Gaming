@@ -204,13 +204,14 @@ document.addEventListener('click', function (e) {
             case 'starting': return 'Starting';
             case 'stopping': return 'Stopping';
             case 'suspended': return 'Suspended';
+            case 'expired': return 'Expired';
             case 'installing': return 'Installing';
             default: return 'Unknown';
         }
     }
 
     function statusToClass(status) {
-        return ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended'].includes(status)
+        return ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'expired'].includes(status)
             ? status
             : 'unknown';
     }
@@ -257,6 +258,9 @@ document.addEventListener('click', function (e) {
                 break;
             case 'suspended':
                 consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[91mSUSPENDED\x1b[36m.');
+                break;
+            case 'expired':
+                consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[94mEXPIRED\x1b[36m.');
                 break;
             default:
                 consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[36mServer marked as \x1b[91mUNKNOWN\x1b[36m.');
@@ -463,7 +467,7 @@ document.addEventListener('click', function (e) {
     function updateStatusIcon(status) {
         if (!statusIcon) return;
 
-        statusIcon.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown');
+        statusIcon.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'expired', 'unknown');
         statusIcon.classList.add(statusToClass(status));
     }
 
@@ -479,7 +483,7 @@ document.addEventListener('click', function (e) {
         }
 
         const normalized = statusToClass(normalizeServerStatus(status));
-        dot.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown');
+        dot.classList.remove('running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'expired', 'unknown');
         dot.classList.add(normalized);
 
         const label = statusToText(normalized);
@@ -492,7 +496,7 @@ document.addEventListener('click', function (e) {
             currentPollDelay = POLL_FAST;
         } else if (status === 'running') {
             currentPollDelay = POLL_NORMAL;
-        } else if (status === 'suspended') {
+        } else if (status === 'suspended' || status === 'expired') {
             currentPollDelay = POLL_SLOW;
         } else {
             currentPollDelay = POLL_SLOW;
@@ -598,7 +602,9 @@ document.addEventListener('click', function (e) {
         const previousSpecialMode = renderedSpecialMode;
         const hasExplicitInstallState = data && Object.prototype.hasOwnProperty.call(data, 'is_installing');
         const hasExplicitSuspendState = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended');
-        let displayStatus = nextSuspended ? 'suspended' : (nextInstalling ? 'installing' : incomingStatus);
+        let displayStatus = nextSuspended
+            ? (nextCanShowSuspendedRenewal ? 'expired' : 'suspended')
+            : (nextInstalling ? 'installing' : incomingStatus);
 
         if (hasExplicitInstallState && !nextInstalling && displayStatus === 'installing') {
             displayStatus = normalizeServerStatus(data && data.resource_status) === 'installing'
@@ -692,7 +698,7 @@ document.addEventListener('click', function (e) {
             cpuEl.textContent = (Number.isFinite(cpuValue) ? cpuValue : 0).toFixed(2) + '%';
         }
 
-        const powerLocked = displayStatus === 'installing' || displayStatus === 'suspended';
+        const powerLocked = nextInstalling || nextSuspended;
 
         if (startBtn) {
             startBtn.disabled = (
@@ -750,7 +756,7 @@ document.addEventListener('click', function (e) {
 
             Object.entries(servers).forEach(([serverId, serverData]) => {
                 const nextStatus = serverData && serverData.is_suspended
-                    ? 'suspended'
+                    ? (serverData.can_show_suspended_renewal ? 'expired' : 'suspended')
                     : (serverData && serverData.is_installing
                         ? 'installing'
                         : normalizeServerStatus(serverData && serverData.status));
@@ -775,7 +781,7 @@ document.addEventListener('click', function (e) {
             return 'unknown';
         }
 
-        const states = ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'unknown'];
+        const states = ['running', 'offline', 'starting', 'stopping', 'installing', 'suspended', 'expired', 'unknown'];
         return states.find((state) => statusBadge.classList.contains(state)) || 'unknown';
     }
 
