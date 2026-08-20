@@ -8335,10 +8335,19 @@ textarea.startup-variable-input {
     top: 0;
     align-self: start;
     height: calc(100vh - 72px);
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 24px 18px;
     box-sizing: border-box;
     background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
     backdrop-filter: blur(10px);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.fbg-admin-sidebar::-webkit-scrollbar {
+    display: none;
 }
 
 .fbg-admin-sidebar-brand {
@@ -9048,6 +9057,8 @@ textarea.startup-variable-input {
         position: relative;
         top: auto;
         height: auto;
+        max-height: none;
+        overflow-y: visible;
         border-right: none;
         border-bottom: 1px solid var(--fbg-border-medium);
     }
