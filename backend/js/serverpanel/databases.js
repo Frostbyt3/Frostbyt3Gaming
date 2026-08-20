@@ -70,12 +70,18 @@
     function showMessage(message, isError = false) {
         if (!messageEl) return;
 
-        messageEl.textContent = message;
-        messageEl.className = 'fbg-dashboard-alert ' + (isError ? 'error' : 'success');
+        const fallback = isError ? 'Database action failed.' : 'Database action completed.';
+        const normalizedMessage = typeof message === 'string' && message.trim() !== ''
+            ? message.trim()
+            : fallback;
+
+        messageEl.textContent = normalizedMessage;
+        messageEl.className = 'fbg-dashboard-alert ' + (isError ? 'error' : 'success') + ' is-visible';
         messageEl.style.display = 'block';
 
         clearTimeout(showMessage._timer);
         showMessage._timer = setTimeout(() => {
+            messageEl.classList.remove('is-visible');
             messageEl.style.display = 'none';
         }, isError ? 7000 : 4000);
     }
@@ -101,10 +107,43 @@
         }
 
         if (!response.ok || !data.ok) {
-            throw new Error(data.error || fallbackMessage);
+            throw new Error(errorMessageFromData(data, fallbackMessage));
         }
 
         return data;
+    }
+
+    function errorMessageFromData(data, fallbackMessage) {
+        const candidates = [
+            data?.error,
+            data?.message,
+            data?.data?.error,
+            data?.data?.message,
+            data?.errors?.[0]?.detail,
+            data?.errors?.[0]?.message,
+            data?.data?.errors?.[0]?.detail,
+            data?.data?.errors?.[0]?.message
+        ];
+
+        for (const candidate of candidates) {
+            if (typeof candidate === 'string' && candidate.trim() !== '') {
+                return candidate.trim();
+            }
+        }
+
+        const objectCandidate = candidates.find((candidate) => candidate && typeof candidate === 'object');
+        if (objectCandidate) {
+            try {
+                const encoded = JSON.stringify(objectCandidate);
+                if (encoded && encoded !== '{}') {
+                    return encoded;
+                }
+            } catch (error) {
+                console.error('Failed to encode database endpoint error:', objectCandidate);
+            }
+        }
+
+        return fallbackMessage;
     }
 
     function getAttr(item) {

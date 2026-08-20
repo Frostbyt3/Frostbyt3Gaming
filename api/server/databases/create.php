@@ -10,6 +10,43 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../pterodactyl.php';
 
+function fbgServerDatabaseCreateErrorMessage(mixed $value, string $fallback): string
+{
+    if (is_string($value) && trim($value) !== '') {
+        return trim($value);
+    }
+
+    if (is_array($value)) {
+        $paths = [
+            ['errors', 0, 'detail'],
+            ['errors', 0, 'message'],
+            ['error'],
+            ['message'],
+            ['data', 'errors', 0, 'detail'],
+            ['data', 'errors', 0, 'message'],
+            ['data', 'error'],
+            ['data', 'message'],
+        ];
+
+        foreach ($paths as $path) {
+            $current = $value;
+            foreach ($path as $key) {
+                if (!is_array($current) || !array_key_exists($key, $current)) {
+                    continue 2;
+                }
+
+                $current = $current[$key];
+            }
+
+            if (is_string($current) && trim($current) !== '') {
+                return trim($current);
+            }
+        }
+    }
+
+    return $fallback;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     pteroJsonError(405, 'Method not allowed.');
 }
@@ -72,7 +109,7 @@ try {
         http_response_code((int)($result['status'] ?? 500) ?: 500);
         echo json_encode([
             'ok' => false,
-            'error' => $result['error'] ?? 'Failed to create database.',
+            'error' => fbgServerDatabaseCreateErrorMessage($result, 'Failed to create database.'),
             'data' => null,
         ]);
         exit;

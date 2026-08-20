@@ -175,18 +175,18 @@
 
 ## Admin Database Host Management
 
-- [ ] Add backend Database Hosts admin page and route.
-- [ ] Add Database Hosts sidebar/navigation entry.
-- [ ] Add database host list table with ID, name, host, port, username, database count, and linked node.
-- [ ] Add Create New Database Host modal.
-- [ ] Add create form fields for name, host, port, username, password, and linked node.
-- [ ] Add clear `WITH GRANT OPTION` warning copy for database host credentials.
-- [ ] Validate database host create/update inputs before calling Pterodactyl.
-- [ ] Allow clicking an existing database host to open a details/edit modal.
-- [ ] Show editable host details: name, host, port, and linked node.
-- [ ] Show editable user details: username and optional password replacement.
-- [ ] Show associated databases for the selected database host.
-- [ ] Add save/update action for database host details.
-- [ ] Add delete action for database hosts.
-- [ ] Guard database host deletion when associated databases exist.
-- [ ] Add confirmation modal for database host deletion.
+- [x] Add backend Database Hosts admin page and route.
+- [x] Add Database Hosts sidebar/navigation entry.
+- [x] Add database host list table with ID, name, host, port, username, database count, and linked node.
+- [x] Add Create New Database Host modal.
+- [x] Add create form fields for name, host, port, username, password, and linked node.
+- [x] Add clear `WITH GRANT OPTION` warning copy for database host credentials.
+- [x] Validate database host create/update inputs before saving.
+- [x] Allow clicking an existing database host to open a details/edit modal.
+- [x] Show editable host details: name, host, port, and linked node.
+- [x] Show editable user details: username and optional password replacement.
+- [x] Show associated databases for the selected database host.
+- [x] Add save/update action for database host details.
+- [x] Add delete action for database hosts.
+- [x] Guard database host deletion when associated databases exist.
+- [x] Add confirmation modal for database host deletion.

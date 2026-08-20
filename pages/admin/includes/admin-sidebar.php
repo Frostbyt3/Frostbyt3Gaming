@@ -53,6 +53,10 @@ if (function_exists('asset')) {
         <div class="fbg-admin-nav-group">
             <span class="fbg-admin-nav-group-title">Management</span>
 
+            <a href="./page.php?name=admin-database-hosts" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-database-hosts', $currentAdminPage) ?>">
+                Database Hosts
+            </a>
+
             <a href="./page.php?name=admin-users" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-users', $currentAdminPage) ?>">
                 Users
             </a>
