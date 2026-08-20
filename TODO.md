@@ -7,7 +7,7 @@
 - [x] Replace the servers placeholder with a real category and plan catalog.
 - [x] Add purchase-with-credit provisioning through the Pterodactyl API.
 - [x] Add frontend payment settings management for Stripe, PayPal, and balance limits.
-- [x] Add server purchase history to the Manage Balance page.
+- [x] Add server purchase history to the Manage Wallet page.
 - [x] Record shop purchase metadata for renewals and 30-day expiration tracking.
 - [x] Remove server-panel install-state hard reloads and stabilize polling.
 - [x] Add admin CRUD for shop categories and server plans.
@@ -35,6 +35,8 @@
 - [x] Add Pending Registrations admin management page with pagination/search/filter/sort.
 - [x] Add admin resend-verification action with new token, cooldown, counters, and delivery reporting.
 - [x] Add admin manual approval action with required reason and duplicate username/email checks.
+- [x] Add admin manual delete action for pending registrations.
+- [x] Add admin set-password completion flow for pending registrations that need account creation finalized.
 - [x] Add registration statistics to the admin dashboard.
 - [ ] Add registration security logging without passwords, plaintext tokens, token hashes, or session data.
 - [ ] Add or document coverage for legitimate registration, bot rejection paths, resend, manual approval, cleanup, and stats.
@@ -157,12 +159,12 @@
 
 ### Admin Server Manage Tab
 
-- [ ] Add reinstall server action.
-- [ ] Add install status toggle/action.
-- [ ] Add suspend/unsuspend server action.
-- [ ] Add transfer server action.
-- [ ] Add warning copy for destructive or high-risk actions.
-- [ ] Add confirmation modals for manage actions.
+- [x] Add reinstall server action.
+- [x] Add install status toggle/action.
+- [x] Add suspend/unsuspend server action.
+- [x] Add transfer server action.
+- [x] Add warning copy for destructive or high-risk actions.
+- [x] Add confirmation modals for manage actions.
 
 ### Admin Server Delete Tab
 
