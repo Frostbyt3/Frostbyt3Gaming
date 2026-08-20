@@ -28,6 +28,7 @@
     const newFolderCancel = document.getElementById('files-newfolder-cancel');
     const newFolderButton = document.getElementById('files-new-folder-button');
     const newFolderSubmit = document.getElementById('files-newfolder-submit');
+    const newFileButton = document.getElementById('files-new-file-button');
 
     const uploadButton = document.getElementById('files-upload-button');
     const uploadInput = document.getElementById('files-upload-input');
@@ -45,7 +46,10 @@
     const editorCloseButton = document.getElementById('files-editor-close');
     const editorCancelButton = document.getElementById('files-editor-cancel');
     const editorSaveButton = document.getElementById('files-editor-save');
+    const editorTitle = document.getElementById('files-editor-title');
     const editorTextarea = document.getElementById('files-editor-textarea');
+    const editorNameField = document.getElementById('files-editor-name-field');
+    const editorNameInput = document.getElementById('files-editor-name');
     const editorPathLabel = document.getElementById('files-editor-path');
     const editorStatus = document.getElementById('files-editor-status');
     const editorNotice = document.getElementById('files-editor-notice');
@@ -64,6 +68,8 @@
     let editorIsLoading = false;
     let editorIsSaving = false;
     let editorLanguage = 'plain';
+    let editorMode = 'edit';
+    let editorCreateDirectory = '/';
 
     let currentItems = [];
     let currentSearchTerm = '';
@@ -148,6 +154,20 @@
         return parts.length ? parts[parts.length - 1] : '';
     }
 
+    function buildChildPath(directory, name) {
+        const cleanDirectory = normalizePath(directory || '/');
+        const cleanName = String(name || '').trim();
+
+        return cleanDirectory === '/'
+            ? `/${cleanName}`
+            : `${cleanDirectory.replace(/\/+$/, '')}/${cleanName}`;
+    }
+
+    function isValidFileName(name) {
+        const value = String(name || '').trim();
+        return value !== '' && value !== '.' && value !== '..' && !/[\/\\]/.test(value);
+    }
+
     function getExtension(name) {
         const value = String(name || '').trim().toLowerCase();
         const lastDot = value.lastIndexOf('.');
@@ -166,6 +186,24 @@
         }
 
         return 'plain';
+    }
+
+    function updateCreateFilePathPreview() {
+        if (editorMode !== 'create') return;
+
+        const fileName = String(editorNameInput?.value || '').trim();
+        const previewPath = fileName
+            ? buildChildPath(editorCreateDirectory, fileName)
+            : normalizePath(editorCreateDirectory);
+
+        editorFilePath = fileName ? previewPath : '';
+        setEditorLanguage(fileName ? getEditorLanguageFromPath(previewPath) : 'plain');
+
+        if (editorPathLabel) {
+            editorPathLabel.textContent = fileName
+                ? previewPath
+                : `Creating in ${normalizePath(editorCreateDirectory)}`;
+        }
     }
 
     function getEditorLanguageLabel(language) {
@@ -456,7 +494,9 @@
     function setEditorDirtyState() {
         if (!editorStatus || !editorTextarea) return;
 
-        const dirty = editorTextarea.value !== editorOriginalValue;
+        const dirty = editorMode === 'create'
+            ? String(editorNameInput?.value || '').trim() !== '' || editorTextarea.value !== ''
+            : editorTextarea.value !== editorOriginalValue;
         editorStatus.textContent = dirty ? 'Unsaved changes' : 'Saved';
         editorStatus.classList.toggle('is-dirty', dirty);
     }
@@ -485,7 +525,11 @@
     function closeEditorModal(force = false) {
         if (!editorModal) return;
 
-        const isDirty = editorTextarea && editorTextarea.value !== editorOriginalValue;
+        const isDirty = editorTextarea && (
+            editorMode === 'create'
+                ? String(editorNameInput?.value || '').trim() !== '' || editorTextarea.value !== ''
+                : editorTextarea.value !== editorOriginalValue
+        );
         if (!force && isDirty && !editorIsSaving) {
             const confirmed = window.confirm('Discard unsaved changes?');
             if (!confirmed) {
@@ -500,7 +544,21 @@
         editorOriginalValue = '';
         editorIsLoading = false;
         editorIsSaving = false;
+        editorMode = 'edit';
+        editorCreateDirectory = '/';
         setEditorLanguage('plain');
+
+        if (editorTitle) {
+            editorTitle.textContent = 'Edit File';
+        }
+
+        if (editorNameField) {
+            editorNameField.hidden = true;
+        }
+
+        if (editorNameInput) {
+            editorNameInput.value = '';
+        }
 
         if (editorTextarea) {
             editorTextarea.value = '';
@@ -520,6 +578,47 @@
         setEditorNotice('');
     }
 
+    function openCreateFileModal() {
+        editorMode = 'create';
+        editorCreateDirectory = normalizePath(currentDirectory);
+        editorFilePath = '';
+        editorOriginalValue = '';
+        editorIsLoading = false;
+        editorIsSaving = false;
+        setEditorLanguage('plain');
+
+        if (editorTitle) {
+            editorTitle.textContent = 'Create File';
+        }
+
+        if (editorNameField) {
+            editorNameField.hidden = false;
+        }
+
+        if (editorNameInput) {
+            editorNameInput.value = '';
+        }
+
+        if (editorTextarea) {
+            editorTextarea.value = '';
+            editorTextarea.readOnly = false;
+        }
+
+        if (editorStatus) {
+            editorStatus.textContent = 'Unsaved changes';
+            editorStatus.classList.add('is-dirty');
+        }
+
+        setEditorNotice('');
+        updateCreateFilePathPreview();
+        renderCodeEditor();
+        openEditorModal();
+
+        setTimeout(() => {
+            editorNameInput?.focus();
+        }, 0);
+    }
+
     async function loadEditorFile(entry) {
         if (!entry || !entry.is_file) return;
 
@@ -529,9 +628,23 @@
         editorFilePath = cleanPath;
         editorOriginalValue = '';
         editorIsLoading = true;
+        editorMode = 'edit';
+        editorCreateDirectory = '/';
         setEditorLanguage(getEditorLanguageFromPath(cleanPath));
 
         openEditorModal();
+
+        if (editorTitle) {
+            editorTitle.textContent = 'Edit File';
+        }
+
+        if (editorNameField) {
+            editorNameField.hidden = true;
+        }
+
+        if (editorNameInput) {
+            editorNameInput.value = '';
+        }
 
         if (editorPathLabel) {
             editorPathLabel.textContent = cleanPath;
@@ -605,13 +718,42 @@
     }
 
     async function saveEditorFile() {
-        if (!editorFilePath || !editorTextarea || editorIsLoading || editorIsSaving) {
+        if (!editorTextarea || editorIsLoading || editorIsSaving) {
+            return;
+        }
+
+        if (editorMode === 'create') {
+            const fileName = String(editorNameInput?.value || '').trim();
+
+            if (!isValidFileName(fileName)) {
+                setEditorNotice('Please enter a valid file name.', true);
+                editorNameInput?.focus();
+                return;
+            }
+
+            const fileExtension = getExtension(fileName);
+            if (!fileExtension || !EDITABLE_EXTENSIONS.has(fileExtension)) {
+                setEditorNotice('This file type is not editable in the browser.', true);
+                editorNameInput?.focus();
+                return;
+            }
+
+            editorFilePath = buildChildPath(editorCreateDirectory, fileName);
+
+            if (findEntryByPath(editorFilePath)) {
+                setEditorNotice('A file or folder with that name already exists.', true);
+                editorNameInput?.focus();
+                return;
+            }
+        }
+
+        if (!editorFilePath) {
             return;
         }
 
         const contents = editorTextarea.value;
 
-        if (contents === editorOriginalValue) {
+        if (editorMode !== 'create' && contents === editorOriginalValue) {
             closeEditorModal(true);
             return;
         }
@@ -620,20 +762,39 @@
 
         try {
             await withButtonBusyState(editorSaveButton, 'Saving...', async () => {
-                await postJson(
-                    '/api/server/files/write.php',
-                    {
-                        id: serverId,
-                        path: editorFilePath,
-                        contents: contents
-                    },
-                    'Invalid JSON from file write endpoint:'
-                );
+                if (editorMode === 'create') {
+                    await postJson(
+                        '/api/server/files/create-file.php',
+                        {
+                            id: serverId,
+                            path: editorCreateDirectory,
+                            name: getBaseName(editorFilePath),
+                            contents: contents
+                        },
+                        'Invalid JSON from create-file endpoint:'
+                    );
+                } else {
+                    await postJson(
+                        '/api/server/files/write.php',
+                        {
+                            id: serverId,
+                            path: editorFilePath,
+                            contents: contents
+                        },
+                        'Invalid JSON from file write endpoint:'
+                    );
+                }
 
                 editorOriginalValue = contents;
                 setEditorDirtyState();
-                showFilesMessageTimed(`Saved "${getBaseName(editorFilePath)}"`, false);
+                const savedFileName = getBaseName(editorFilePath);
+                const createdFile = editorMode === 'create';
                 closeEditorModal(true);
+                await loadFiles();
+                showFilesMessageTimed(
+                    createdFile ? `File "${savedFileName}" created.` : `Saved "${savedFileName}"`,
+                    false
+                );
             });
         } catch (error) {
             console.error('Save file error:', error);
@@ -1440,6 +1601,7 @@
     newFolderButton?.addEventListener('click', openNewFolderModal);
     newFolderClose?.addEventListener('click', closeNewFolderModal);
     newFolderCancel?.addEventListener('click', closeNewFolderModal);
+    newFileButton?.addEventListener('click', openCreateFileModal);
 
     newFolderModal?.addEventListener('click', (event) => {
         if (event.target === newFolderModal) {
@@ -1692,6 +1854,10 @@
     editorCloseButton?.addEventListener('click', () => closeEditorModal());
     editorCancelButton?.addEventListener('click', () => closeEditorModal());
     editorSaveButton?.addEventListener('click', saveEditorFile);
+    editorNameInput?.addEventListener('input', () => {
+        updateCreateFilePathPreview();
+        setEditorDirtyState();
+    });
 
     editorTextarea?.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {

@@ -98,6 +98,10 @@ $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
             </button>
             <input type="file" id="files-upload-input" multiple hidden>
 
+            <button type="button" class="btn fbg-neutral-button btn-sm" id="files-new-file-button">
+                <i class="fas fa-file-circle-plus"></i> New File
+            </button>
+
             <button type="button" class="btn fbg-neutral-button btn-sm" id="files-new-folder-button">
                 <i class="fas fa-folder-plus"></i> New Folder
             </button>
@@ -245,6 +249,18 @@ $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
             </div>
 
             <div class="fbg-files-editor-notice" id="files-editor-notice" hidden></div>
+
+            <div class="fbg-files-form-group fbg-files-editor-name-field" id="files-editor-name-field" hidden>
+                <label for="files-editor-name">File Name</label>
+                <input
+                    type="text"
+                    id="files-editor-name"
+                    class="fbg-files-text-input"
+                    maxlength="255"
+                    autocomplete="off"
+                    placeholder="eula.txt"
+                >
+            </div>
 
             <div class="fbg-files-code-editor" id="files-code-editor" data-language="plain">
                 <div class="fbg-files-code-editor-toolbar">

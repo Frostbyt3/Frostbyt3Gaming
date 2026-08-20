@@ -4115,6 +4115,10 @@ body.fbg-confirm-open {
     gap: 8px;
 }
 
+.fbg-files-editor-name-field[hidden] {
+    display: none !important;
+}
+
 .fbg-files-form-group label {
     font-size: 0.82rem;
     font-weight: 700;
