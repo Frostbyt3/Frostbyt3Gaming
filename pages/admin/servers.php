@@ -303,6 +303,11 @@ function fbgAdminServersFind(int $serverId): ?array
         return null;
     }
 
+    $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
+        ? fbgEnsurePteroServersSuspendManualColumn()
+        : false;
+    $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual,' : '0 AS suspend_manual,';
+
     $stmt = fbgPteroDb()->prepare("
         SELECT
             s.id,
@@ -313,6 +318,7 @@ function fbgAdminServersFind(int $serverId): ?array
             s.name,
             s.description,
             s.status,
+            {$suspendManualSelect}
             s.owner_id,
             s.memory,
             s.swap,
@@ -1120,6 +1126,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($result['ok'])) {
             fbgAdminServersRedirect((string)($result['error'] ?? 'Suspension state could not be changed.'), 'error', $serverId, 'manage');
+        }
+
+        if (function_exists('fbgEnsurePteroServersSuspendManualColumn') && fbgEnsurePteroServersSuspendManualColumn()) {
+            $manualSuspendStmt = fbgPteroDb()->prepare('
+                UPDATE servers
+                SET suspend_manual = :suspend_manual
+                WHERE id = :id
+            ');
+            $manualSuspendStmt->execute([
+                ':suspend_manual' => $isSuspended ? 0 : 1,
+                ':id' => $serverId,
+            ]);
         }
 
         fbgAdminServersRedirect(

@@ -3475,11 +3475,15 @@ a.button {
     align-items: center;
 }
 
-.fbg-server-heading-installing i {
+.fbg-server-heading-installing > i,
+.fbg-server-heading-installing > .svg-inline--fa {
     font-size: 5rem;
+    width: 1em;
+    height: 1em;
 }
 
-.fbg-server-heading-suspended i {
+.fbg-server-heading-suspended i,
+.fbg-server-heading-suspended .svg-inline--fa {
     color: #ff9c9c;
 }
 
@@ -3492,6 +3496,29 @@ a.button {
 .fbg-server-heading-installing h1 {
     padding: 22px;
     display: inline-block;
+}
+
+.fbg-server-heading-installing h1 .svg-inline--fa,
+.fbg-server-heading-installing h2 .svg-inline--fa,
+.fbg-server-heading-installing h1 i,
+.fbg-server-heading-installing h2 i {
+    width: 1em;
+    height: 1em;
+    font-size: 0.9em;
+    vertical-align: -0.08em;
+}
+
+.fbg-server-heading-installing h2 {
+    margin: 0;
+    padding: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    text-align: center;
+    font-size: clamp(1.55rem, 2vw, 2rem);
+    line-height: 1.2;
 }
 
 .fbg-editable-row {

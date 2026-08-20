@@ -99,8 +99,13 @@ try {
     $pdo = fbgPteroDb();
     $pdo->beginTransaction();
 
+    $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
+        ? fbgEnsurePteroServersSuspendManualColumn()
+        : false;
+    $suspendManualSelect = $hasSuspendManualColumn ? 'suspend_manual' : '0 AS suspend_manual';
+
     $serverStmt = $pdo->prepare(
-        'SELECT id, product_id, expired_at, status
+        'SELECT id, product_id, expired_at, status, ' . $suspendManualSelect . '
          FROM servers
          WHERE id = :id
          LIMIT 1
@@ -126,6 +131,10 @@ try {
 
     if (empty($serverRow['product_id'])) {
         throw new RuntimeException("You can't renew this server.");
+    }
+
+    if (!empty($serverRow['suspend_manual'])) {
+        throw new RuntimeException('This server cannot be renewed while it is manually suspended. Please contact support.');
     }
 
     if (empty($serverRow['expired_at'])) {

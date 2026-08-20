@@ -11,6 +11,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 $canRenameSettings = $hasServerPermission('settings.rename');
 $canReinstallServer = $hasServerPermission('settings.reinstall');
 $canUseSftp = $hasServerPermission('file.sftp');
+$isManualSuspension = !empty($selectedServer['suspend_manual']);
 
 $currentUsername = trim((string)($_SESSION['username'] ?? $selectedServer['owner_username'] ?? 'user'));
 
@@ -84,9 +85,14 @@ $renewDisabledReason = 'Renewal information is unavailable for this server. Plea
 $hasValidRenewData = false;
 $expiryRaw = $selectedServer['expired_at'] ?? null;
 $expiryDisplay = $expiryRaw ? date('M j, Y g:i A', strtotime((string)$expiryRaw)) : null;
+$showRenewalSection = !$isManualSuspension;
 
 try {
     $pdo = fbgPteroDb();
+    $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
+        ? fbgEnsurePteroServersSuspendManualColumn()
+        : false;
+    $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual,' : '0 AS suspend_manual,';
 
     $userStmt = $pdo->prepare('
         SELECT credit
@@ -117,7 +123,7 @@ try {
     }
 
     $renewStmt = $pdo->prepare('
-        SELECT s.product_id, s.expired_at, g.price
+        SELECT s.product_id, s.expired_at, ' . $suspendManualSelect . ' g.price
         FROM servers s
         LEFT JOIN games g ON g.id = s.product_id
         WHERE s.id = :server_id
@@ -144,6 +150,9 @@ try {
             $expiryDisplay = date('M j, Y g:i A', strtotime($expiryRaw));
         }
 
+        $isManualSuspension = !empty($renewRow['suspend_manual']);
+        $showRenewalSection = !$isManualSuspension;
+
         if (!empty($renewRow['product_id']) && empty($renewRow['expired_at'])) {
             $renewDisabledReason = 'This server is missing expiration information and cannot be renewed. Please contact support.';
         } elseif (!empty($renewRow['product_id']) && isset($renewRow['price'])) {
@@ -153,7 +162,7 @@ try {
                 $hasValidRenewData = true;
 
                 if ($userBalance >= $renewPrice) {
-                    $canRenewServer = true;
+                    $canRenewServer = $showRenewalSection;
                     $renewDisabledReason = '';
                 } else {
                     $renewDisabledReason = 'You do not have enough balance to renew this server.';
@@ -167,6 +176,10 @@ try {
     }
 } catch (Throwable $e) {
     // Leave defaults in place.
+}
+
+if (!$showRenewalSection) {
+    $canRenewServer = false;
 }
 ?>
 
@@ -251,61 +264,63 @@ try {
                 </div>
             </section>
 
-            <section class="fbg-settings-section" id="renew">
-                <div class="fbg-settings-section-header">
-                    <h3>Renew Server</h3>
-                </div>
+            <?php if ($showRenewalSection): ?>
+                <section class="fbg-settings-section" id="renew">
+                    <div class="fbg-settings-section-header">
+                        <h3>Renew Server</h3>
+                    </div>
 
-                <div class="fbg-settings-balance-row">
-                    <span>Available Balance</span>
-                    <code id="settings-balance-value">
-                        <?php echo htmlspecialchars(number_format($userBalance, 2) . ' ' . $shopCurrency); ?>
-                    </code>
-                </div>
-
-                <?php if ($expiryDisplay): ?>
-                    <div class="fbg-settings-balance-row" id="settings-expiration-row">
-                        <span>Expiration Date</span>
-                        <code id="settings-expiration-value">
-                            <?php echo htmlspecialchars($expiryDisplay); ?>
+                    <div class="fbg-settings-balance-row">
+                        <span>Available Balance</span>
+                        <code id="settings-balance-value">
+                            <?php echo htmlspecialchars(number_format($userBalance, 2) . ' ' . $shopCurrency); ?>
                         </code>
                     </div>
-                <?php else: ?>
-                    <div class="fbg-settings-balance-row" id="settings-expiration-row" style="display: none;">
-                        <span>Expiration Date</span>
-                        <code id="settings-expiration-value"></code>
-                    </div>
-                <?php endif; ?>
 
-                <p class="fbg-settings-note">
-                    Your server will be renewed for an additional 30 days and the cost will be deducted from your balance.
-                </p>
+                    <?php if ($expiryDisplay): ?>
+                        <div class="fbg-settings-balance-row" id="settings-expiration-row">
+                            <span>Expiration Date</span>
+                            <code id="settings-expiration-value">
+                                <?php echo htmlspecialchars($expiryDisplay); ?>
+                            </code>
+                        </div>
+                    <?php else: ?>
+                        <div class="fbg-settings-balance-row" id="settings-expiration-row" style="display: none;">
+                            <span>Expiration Date</span>
+                            <code id="settings-expiration-value"></code>
+                        </div>
+                    <?php endif; ?>
 
-                <?php if (!$canRenewServer && $renewDisabledReason !== ''): ?>
-                    <p class="fbg-settings-renew-warning" id="settings-renew-warning">
-                        <?php echo htmlspecialchars($renewDisabledReason); ?>
+                    <p class="fbg-settings-note">
+                        Your server will be renewed for an additional 30 days and the cost will be deducted from your balance.
                     </p>
-                <?php else: ?>
-                    <p class="fbg-settings-renew-warning" id="settings-renew-warning" style="display: none;"></p>
-                <?php endif; ?>
 
-                <div class="fbg-settings-section-footer">
-                    <div></div>
-                    <button
-                        type="button"
-                        class="btn fbg-neutral-button"
-                        id="settings-renew-button"
-                        data-renew-price="<?php echo htmlspecialchars(number_format($renewPrice, 2, '.', '')); ?>"
-                        data-currency="<?php echo htmlspecialchars($shopCurrency); ?>"
-                        <?php echo ($canRenewServer && $hasValidRenewData) ? '' : 'disabled'; ?>
-                    >
-                        Renew Server - 
-                        <?php echo $hasValidRenewData 
-                            ? htmlspecialchars(number_format($renewPrice, 2) . ' ' . $shopCurrency) 
-                            : 'Unavailable'; ?>
-                    </button>
-                </div>
-            </section>
+                    <?php if (!$canRenewServer && $renewDisabledReason !== ''): ?>
+                        <p class="fbg-settings-renew-warning" id="settings-renew-warning">
+                            <?php echo htmlspecialchars($renewDisabledReason); ?>
+                        </p>
+                    <?php else: ?>
+                        <p class="fbg-settings-renew-warning" id="settings-renew-warning" style="display: none;"></p>
+                    <?php endif; ?>
+
+                    <div class="fbg-settings-section-footer">
+                        <div></div>
+                        <button
+                            type="button"
+                            class="btn fbg-neutral-button"
+                            id="settings-renew-button"
+                            data-renew-price="<?php echo htmlspecialchars(number_format($renewPrice, 2, '.', '')); ?>"
+                            data-currency="<?php echo htmlspecialchars($shopCurrency); ?>"
+                            <?php echo ($canRenewServer && $hasValidRenewData) ? '' : 'disabled'; ?>
+                        >
+                            Renew Server -
+                            <?php echo $hasValidRenewData
+                                ? htmlspecialchars(number_format($renewPrice, 2) . ' ' . $shopCurrency)
+                                : 'Unavailable'; ?>
+                        </button>
+                    </div>
+                </section>
+            <?php endif; ?>
         </div>
 
         <div class="fbg-settings-column">

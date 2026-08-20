@@ -26,6 +26,7 @@ document.addEventListener('click', function (e) {
     const isConsoleTab = currentTab === 'console';
     let isInstalling = !!config.isInstalling;
     let isSuspended = !!config.isSuspended;
+    let canShowSuspendedRenewal = !!config.canShowSuspendedRenewal;
     const allowConsoleWhileInstalling = !!config.allowConsoleWhileInstalling;
 
     if (!identifier || !csrfToken) return;
@@ -84,7 +85,7 @@ document.addEventListener('click', function (e) {
     let pollTimer = null;
     let currentPollDelay = POLL_NORMAL;
     let lastInstallState = isInstalling;
-    let renderedSpecialMode = getSpecialMode(null, isInstalling, isSuspended);
+    let renderedSpecialMode = getSpecialMode(null, isInstalling, isSuspended, canShowSuspendedRenewal);
     let burstTimeouts = [];
     let activeRefreshController = null;
     let railRefreshInFlight = false;
@@ -489,8 +490,12 @@ document.addEventListener('click', function (e) {
         }
     }
 
-    function getSpecialMode(status, nextInstalling, nextSuspended) {
+    function getSpecialMode(status, nextInstalling, nextSuspended, nextCanShowSuspendedRenewal) {
         if (nextSuspended || status === 'suspended') {
+            if (currentTab === 'settings' && nextCanShowSuspendedRenewal) {
+                return null;
+            }
+
             return 'suspended';
         }
 
@@ -578,6 +583,9 @@ document.addEventListener('click', function (e) {
         const nextSuspended = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended')
             ? !!data.is_suspended
             : (incomingStatus === 'suspended' ? true : isSuspended);
+        const nextCanShowSuspendedRenewal = data && Object.prototype.hasOwnProperty.call(data, 'can_show_suspended_renewal')
+            ? !!data.can_show_suspended_renewal
+            : canShowSuspendedRenewal;
         const previousSpecialMode = renderedSpecialMode;
         const hasExplicitInstallState = data && Object.prototype.hasOwnProperty.call(data, 'is_installing');
         const hasExplicitSuspendState = data && Object.prototype.hasOwnProperty.call(data, 'is_suspended');
@@ -622,8 +630,9 @@ document.addEventListener('click', function (e) {
         lastInstallState = nextInstalling;
         isInstalling = nextInstalling;
         isSuspended = nextSuspended;
+        canShowSuspendedRenewal = nextCanShowSuspendedRenewal;
 
-        const nextSpecialMode = getSpecialMode(displayStatus, nextInstalling, nextSuspended);
+        const nextSpecialMode = getSpecialMode(displayStatus, nextInstalling, nextSuspended, nextCanShowSuspendedRenewal);
 
         if (!nextInstalling && !nextSuspended) {
             const reachedFinalState =

@@ -95,6 +95,10 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
         }
 
         $serverMeta = is_array($_SESSION['server_meta'] ?? null) ? $_SESSION['server_meta'] : [];
+        $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
+            ? fbgEnsurePteroServersSuspendManualColumn()
+            : false;
+        $suspendManualSelect = $hasSuspendManualColumn ? 'suspend_manual' : '0 AS suspend_manual';
         $placeholders = [];
         $params = [];
 
@@ -106,7 +110,7 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
 
         try {
             $stmt = fbgPteroDb()->prepare('
-                SELECT uuidShort AS identifier, status
+                SELECT uuidShort AS identifier, status, expired_at, ' . $suspendManualSelect . '
                 FROM servers
                 WHERE uuidShort IN (' . implode(', ', $placeholders) . ')
             ');
@@ -124,6 +128,9 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
                     : ['identifier' => $identifier];
                 $serverMeta[$identifier]['status'] = $rawStatus;
                 $serverMeta[$identifier]['suspended'] = $rawStatus === 'suspended';
+                $serverMeta[$identifier]['suspend_manual'] = !empty($row['suspend_manual']);
+                $serverMeta[$identifier]['expired_at'] = (string)($row['expired_at'] ?? '');
+                $serverMeta[$identifier]['is_expired'] = !empty($row['expired_at']) && strtotime((string)$row['expired_at']) <= time();
                 $serverMeta[$identifier]['is_installing'] = in_array($rawStatus, ['installing', 'install_failed'], true);
                 $serverMeta[$identifier]['install_status'] = $rawStatus;
             }
@@ -151,6 +158,9 @@ foreach ($validIds as $identifier) {
     $meta = is_array($serverMeta[$identifier] ?? null) ? $serverMeta[$identifier] : [];
     $isInstalling = !empty($meta['is_installing']);
     $isSuspended = !empty($meta['suspended']) || strtolower(trim((string)($meta['status'] ?? ''))) === 'suspended';
+    $isManualSuspension = !empty($meta['suspend_manual']);
+    $isExpiredServer = !empty($meta['is_expired']);
+    $canShowSuspendedRenewal = $isSuspended && !$isManualSuspension && $isExpiredServer;
 
     /**
      * Never turn an upstream resource/API issue into fake "Forbidden".
@@ -174,6 +184,8 @@ foreach ($validIds as $identifier) {
         'install_status' => (string)($meta['install_status'] ?? ''),
         'is_installing' => $isInstalling,
         'is_suspended' => $isSuspended,
+        'suspend_manual' => $isManualSuspension,
+        'can_show_suspended_renewal' => $canShowSuspendedRenewal,
         'cpu' => (float)($resources['cpu'] ?? 0),
         'memory_bytes' => (int)($resources['memory_bytes'] ?? 0),
         'disk_bytes' => (int)($resources['disk_bytes'] ?? 0),

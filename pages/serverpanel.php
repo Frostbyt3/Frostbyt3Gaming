@@ -103,6 +103,10 @@ $canRestartServer = $hasServerPermission('control.restart');
 
 $isInstalling = !empty($selectedServer['is_installing']);
 $isSuspended = strtolower(trim((string)($selectedServer['status'] ?? ''))) === 'suspended' || !empty($selectedServer['suspended']);
+$isManualSuspension = !empty($selectedServer['suspend_manual']);
+$expiredAtRaw = trim((string)($selectedServer['expired_at'] ?? ''));
+$isExpiredServer = $expiredAtRaw !== '' && strtotime($expiredAtRaw) !== false && strtotime($expiredAtRaw) <= time();
+$canShowSuspendedRenewal = $isSuspended && !$isManualSuspension && $isExpiredServer;
 
 $resources = [
     'status' => $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : 'unknown'),
@@ -397,6 +401,7 @@ $renderServerTabContent = function () use (
     $canStopServer,
     $canRestartServer,
     $serverIdentifier,
+    $canShowSuspendedRenewal,
     $resources,
     $status,
     $ramLimit,
@@ -405,7 +410,7 @@ $renderServerTabContent = function () use (
     $serverAddress
 ): void {
     $isSettingsTab = ($serverTab === 'settings');
-    $renderSpecialStateBanner = function (string $mode) use ($serverIdentifier): void {
+    $renderSpecialStateBanner = function (string $mode) use ($serverIdentifier, $canShowSuspendedRenewal): void {
         if ($mode === 'suspended') {
             $renewUrl = './page.php?name=serverpanel&id=' . rawurlencode($serverIdentifier) . '&tab=settings#renew';
             ?>
@@ -413,15 +418,24 @@ $renderServerTabContent = function () use (
                 <div class="fbg-server-card-header">
                     <div class="fbg-server-heading-installing fbg-server-heading-suspended">
                         <br>
-                        <i class="fas fa-ban"></i>
-                        <h1>Suspended</h1>
-                        <p>This server is currently suspended.</p>
-                        <p>Access to normal controls is temporarily unavailable.</p>
-                        <div class="fbg-settings-section-footer" style="margin-top: 18px; justify-content: center;">
-                            <a href="<?php echo htmlspecialchars($renewUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-neutral-button">
-                                Renew Server
-                            </a>
-                        </div>
+                        <?php if ($canShowSuspendedRenewal): ?>
+                            <h2>
+                                Looks like your server has expired <i class="fas fa-face-frown"></i>
+                            </h2>
+                            <p>No worries! Renew your server to restore access and pick up where you left off.</p>
+                        <?php else: ?>
+                            <i class="fas fa-ban"></i>
+                            <h1>Suspended</h1>
+                            <p>This server is currently suspended.</p>
+                            <p>Please contact support if you believe this suspension is incorrect.</p>
+                        <?php endif; ?>
+                        <?php if ($canShowSuspendedRenewal): ?>
+                            <div class="fbg-settings-section-footer" style="margin-top: 18px; justify-content: center;">
+                                <a href="<?php echo htmlspecialchars($renewUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn fbg-neutral-button">
+                                    Renew Server
+                                </a>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -434,9 +448,8 @@ $renderServerTabContent = function () use (
             <div class="fbg-server-card-header">
                 <div class="fbg-server-heading-installing">
                     <br>
-                    <i class="fas fa-screwdriver-wrench"></i>
-                    <h1>Installing</h1>
-                    <p>This server is currently being crafted.</p>
+                    <h1>Your server is being crafted! <i class="fas fa-screwdriver-wrench"></i></h1>
+                    <p>Hang tight while we get everything ready.</p>
                     <p>Assuming we didn't forget any materials...</p>
                 </div>
             </div>
@@ -445,9 +458,10 @@ $renderServerTabContent = function () use (
     };
 
     if ($isSuspended) {
-        $renderSpecialStateBanner('suspended');
+        $useSettingsRenewalControls = $isSettingsTab && $canShowSuspendedRenewal;
 
-        if (!$isSettingsTab) {
+        if (!$useSettingsRenewalControls) {
+            $renderSpecialStateBanner('suspended');
             return;
         }
     }
@@ -633,6 +647,7 @@ session_write_close();
                         csrfToken: <?php echo json_encode($csrfTokenForJs); ?>,
                         isInstalling: <?php echo json_encode($isInstalling); ?>,
                         isSuspended: <?php echo json_encode($isSuspended); ?>,
+                        canShowSuspendedRenewal: <?php echo json_encode($canShowSuspendedRenewal); ?>,
                         allowConsoleWhileInstalling: <?php echo json_encode($isPanelAdmin && $serverTab === 'console'); ?>,
                         currentTab: <?php echo json_encode($serverTab); ?>
                     };

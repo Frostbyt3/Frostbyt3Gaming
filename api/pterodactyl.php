@@ -704,6 +704,42 @@ if (!function_exists('pteroNormalizeServerResources')) {
     }
 }
 
+if (!function_exists('fbgEnsurePteroServersSuspendManualColumn')) {
+    function fbgEnsurePteroServersSuspendManualColumn(): bool
+    {
+        static $hasColumn = null;
+
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $pdo = fbgPteroDb();
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'servers'
+                  AND COLUMN_NAME = 'suspend_manual'
+            ");
+            $stmt->execute();
+
+            if ((int)$stmt->fetchColumn() > 0) {
+                $hasColumn = true;
+                return true;
+            }
+
+            $pdo->exec("ALTER TABLE servers ADD COLUMN suspend_manual TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
+            $hasColumn = true;
+            return true;
+        } catch (Throwable $e) {
+            error_log('Unable to ensure servers.suspend_manual column: ' . $e->getMessage());
+            $hasColumn = false;
+            return false;
+        }
+    }
+}
+
 if (!function_exists('pteroGetMultipleServerResources')) {
     function pteroGetMultipleServerResources(array $identifiers): array
     {
@@ -1853,6 +1889,9 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                 $queryParams['owner_id'] = $panelUserId;
             }
 
+            $hasSuspendManualColumn = fbgEnsurePteroServersSuspendManualColumn();
+            $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual,' : '0 AS suspend_manual,';
+
             $stmt = fbgPteroDb()->prepare("
                 SELECT
                     s.id,
@@ -1862,6 +1901,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                     s.name,
                     s.description,
                     s.status,
+                    {$suspendManualSelect}
                     s.owner_id,
                     s.memory,
                     s.disk,
@@ -1920,6 +1960,7 @@ if (!function_exists('pteroGetServerAccessMapForUserFromDatabase')) {
                 'name' => (string)($row['name'] ?? 'Unnamed Server'),
                 'description' => (string)($row['description'] ?? ''),
                 'suspended' => $rawStatus === 'suspended',
+                'suspend_manual' => !empty($row['suspend_manual']),
                 'is_installing' => $rawStatus === 'installing',
                 'install_status' => $rawStatus,
                 'owner_id' => $ownerId,
@@ -2148,6 +2189,7 @@ if (!function_exists('pteroSyncServerAccessSession')) {
                 'name' => (string)($server['name'] ?? ''),
                 'description' => (string)($server['description'] ?? ''),
                 'uuid' => (string)($server['uuid'] ?? ''),
+                'status' => (string)($server['install_status'] ?? ''),
                 'is_installing' => !empty($server['is_installing']),
                 'install_status' => (string)($server['install_status'] ?? ''),
                 'allocation_ip' => (string)($server['allocation_ip'] ?? ''),
@@ -2161,6 +2203,7 @@ if (!function_exists('pteroSyncServerAccessSession')) {
                 'node_name' => (string)($server['node_name'] ?? ''),
                 'egg_name' => (string)($server['egg_name'] ?? ''),
                 'suspended' => !empty($server['suspended']),
+                'suspend_manual' => !empty($server['suspend_manual']),
                 'product_id' => (int)($server['product_id'] ?? 0),
                 'expired_at' => (string)($server['expired_at'] ?? ''),
                 'owner_username' => (string)($server['owner_username'] ?? ''),
