@@ -1400,6 +1400,13 @@
         return payload.upload_url;
     }
 
+    function addDirectoryToUploadUrl(uploadUrl, directory) {
+        const cleanDirectory = normalizePath(directory || '/');
+        const separator = uploadUrl.includes('?') ? '&' : '?';
+
+        return `${uploadUrl}${separator}directory=${encodeURIComponent(cleanDirectory)}`;
+    }
+
     function uploadFilesToSignedUrl(uploadUrl, files, directory, progressCallback) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -1409,9 +1416,7 @@
                 formData.append('files', file, file.name);
             }
 
-            formData.append('directory', directory);
-
-            xhr.open('POST', uploadUrl, true);
+            xhr.open('POST', addDirectoryToUploadUrl(uploadUrl, directory), true);
 
             xhr.upload.addEventListener('progress', (event) => {
                 if (!event.lengthComputable) return;
