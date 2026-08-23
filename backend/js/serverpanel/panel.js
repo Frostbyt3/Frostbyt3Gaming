@@ -596,6 +596,7 @@ document.addEventListener('click', function (e) {
         const incomingStatus = getIncomingStatus(data);
         const currentStatus = getCurrentDisplayStatus();
         const isOptimisticUpdate = !!(data && data.updating);
+        const shouldWriteStatusLog = data && data.status_source === 'socket_status';
         const nextInstalling = data && Object.prototype.hasOwnProperty.call(data, 'is_installing')
             ? !!data.is_installing
             : isInstalling;
@@ -662,6 +663,9 @@ document.addEventListener('click', function (e) {
 
             if (reachedFinalState) {
                 setSettledStatus(displayStatus);
+                pendingPowerAction = null;
+                pendingPowerUntil = 0;
+                loggedStatusesForAction.clear();
             } else if (displayStatus !== currentStatus) {
                 clearSettledStatus();
             }
@@ -679,7 +683,7 @@ document.addEventListener('click', function (e) {
         updatePollDelayForStatus(displayStatus);
         updateRailStatus(identifier, displayStatus);
 
-        if (shouldLogStatusTransition(displayStatus)) {
+        if (shouldWriteStatusLog && shouldLogStatusTransition(displayStatus)) {
             logStatusChange(displayStatus);
         }
 

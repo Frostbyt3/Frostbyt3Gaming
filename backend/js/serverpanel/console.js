@@ -447,7 +447,7 @@
         const normalized = normalizeStatus(status);
         if (!normalized) return;
 
-        panelApi.updateUI({ status: normalized });
+        panelApi.updateUI({ status: normalized, status_source: 'socket_status' });
     }
 
     function updatePanelStats(rawStats) {
