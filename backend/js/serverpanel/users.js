@@ -64,6 +64,28 @@
         }, isError ? 7000 : 4000);
     }
 
+    function showUsersToast({
+        type = 'info',
+        title = 'Users',
+        message = '',
+        duration,
+        persistent = false
+    } = {}) {
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        const cleanMessage = String(message || title || '');
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
         if (typeof window.FBGConfirm === 'function') {
             return window.FBGConfirm(title, description, confirmText, cancelText, options);
@@ -393,7 +415,10 @@
                         openEditModal(result.item || {});
                     });
                 } catch (error) {
-                    showMessage(error.message || 'Failed to load subuser.', true);
+                    showUsersToast({
+                        type: 'error',
+                        message: "We couldn't load that user's permissions.\nPlease try again in a moment."
+                    });
                 }
             });
         });
@@ -435,11 +460,17 @@
                             'Invalid JSON from subuser delete endpoint:'
                         );
 
-                        showMessage(result.message || 'User removed successfully.');
+                        showUsersToast({
+                            type: 'warning',
+                            message: 'User removed from this server.'
+                        });
                         await loadUsers();
                     });
                 } catch (error) {
-                    showMessage(error.message || 'Failed to delete user.', true);
+                    showUsersToast({
+                        type: 'error',
+                        message: "We couldn't remove that user.\nPlease try again in a moment."
+                    });
                 }
             });
         });
@@ -504,16 +535,20 @@
                 );
 
                 closeModal();
-                showMessage(
-                    result.message || (mode === 'create'
-                        ? 'User created successfully.'
-                        : 'Permissions updated successfully.')
-                );
+                showUsersToast({
+                    type: 'success',
+                    message: mode === 'create'
+                        ? 'User added to this server.'
+                        : 'User permissions updated.'
+                });
 
                 await loadUsers();
             });
         } catch (error) {
-            showMessage(error.message || 'Failed to save user.', true);
+            showUsersToast({
+                type: 'error',
+                message: "We couldn't save that user.\nPlease check the details and try again."
+            });
         }
     });
 

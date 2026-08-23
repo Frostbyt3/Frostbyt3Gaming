@@ -41,6 +41,27 @@
         }, isError ? 7000 : 3000);
     }
 
+    function showStartupToast({ type = 'info', title = 'Startup', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function request(url, options = {}) {
         const response = await fetch(url, {
             credentials: 'same-origin',
@@ -206,7 +227,10 @@
                 }, 1800);
 
                 if (!silentSuccess) {
-                    showMessage(data.message || 'Startup variable updated successfully.');
+                    showStartupToast({
+                        type: 'success',
+                        message: 'Startup variable saved.',
+                    });
                 }
             } catch (error) {
                 const fallbackValue = String(input.dataset.lastSavedValue ?? '');
@@ -218,7 +242,10 @@
                 }
 
                 setCardState(variableKey, error.message || 'Failed to save.', true);
-                showMessage(error.message || 'Failed to update startup variable.', true);
+                showStartupToast({
+                    type: 'error',
+                    message: "We couldn't save that startup variable.\nPlease try again in a moment.",
+                });
             } finally {
                 setInputBusy(input, false);
                 pendingSaves.delete(variableKey);
@@ -430,10 +457,16 @@
                         }
                     }
 
-                    showMessage(data.message || 'Docker image updated successfully.');
+                    showStartupToast({
+                        type: 'success',
+                        message: 'Docker image updated.',
+                    });
                 } catch (error) {
                     dockerSelect.value = previousValue;
-                    showMessage(error.message || 'Failed to update Docker image.', true);
+                    showStartupToast({
+                        type: 'error',
+                        message: "We couldn't update the Docker image.\nPlease try again in a moment.",
+                    });
                 } finally {
                     dockerSelect.disabled = false;
                 }

@@ -98,6 +98,27 @@
         }, isError ? 7000 : 4000);
     }
 
+    function showBackupsToast({ type = 'info', title = 'Backups', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
         if (typeof window.FBGConfirm === 'function') {
             return window.FBGConfirm(title, description, confirmText, cancelText, options);
@@ -297,12 +318,18 @@
             await postJson(`${API_BASE}/create.php`, payload);
 
             closeCreateModal();
-            showMessage('Backup creation started successfully.');
+            showBackupsToast({
+                type: 'success',
+                message: 'Backup creation has started.',
+            });
             await loadBackups(false);
             queueRefreshBurst();
             startBackupsPolling();
         } catch (error) {
-            showMessage(error.message || 'Failed to create backup.', true);
+            showBackupsToast({
+                type: 'error',
+                message: "We couldn't start that backup.\nPlease try again in a moment.",
+            });
         } finally {
             createSubmit.disabled = false;
         }
@@ -326,7 +353,10 @@
 
             window.open(url, '_blank', 'noopener,noreferrer');
         } catch (error) {
-            showMessage(error.message || 'Failed to download backup.', true);
+            showBackupsToast({
+                type: 'error',
+                message: "We couldn't prepare that backup download.\nPlease try again in a moment.",
+            });
         }
     }
 
@@ -348,11 +378,17 @@
                 truncate: true
             });
 
-            showMessage('Backup restore has been queued.');
+            showBackupsToast({
+                type: 'success',
+                message: 'Backup restore has been queued.',
+            });
             await loadBackups(false);
             queueRefreshBurst();
         } catch (error) {
-            showMessage(error.message || 'Failed to restore backup.', true);
+            showBackupsToast({
+                type: 'error',
+                message: "We couldn't queue that restore.\nPlease try again in a moment.",
+            });
         }
     }
 
@@ -365,10 +401,16 @@
                 lock: shouldLock
             });
 
-            showMessage(data?.message || 'Backup lock state updated.');
+            showBackupsToast({
+                type: 'success',
+                message: shouldLock ? 'Backup locked.' : 'Backup unlocked.',
+            });
             await loadBackups(false);
         } catch (error) {
-            showMessage(error.message || 'Failed to update backup lock.', true);
+            showBackupsToast({
+                type: 'error',
+                message: "We couldn't update that backup lock.\nPlease try again in a moment.",
+            });
         }
     }
 
@@ -389,10 +431,16 @@
                 csrf_token: csrfToken
             });
 
-            showMessage('Backup deleted.');
+            showBackupsToast({
+                type: 'success',
+                message: 'Backup deleted.',
+            });
             await loadBackups(false);
         } catch (error) {
-            showMessage(error.message || 'Failed to delete backup.', true);
+            showBackupsToast({
+                type: 'error',
+                message: "We couldn't delete that backup.\nPlease try again in a moment.",
+            });
         }
     }
 

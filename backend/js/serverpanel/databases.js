@@ -86,6 +86,27 @@
         }, isError ? 7000 : 4000);
     }
 
+    function showDatabaseToast({ type = 'info', title = 'Databases', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
         if (typeof window.FBGConfirm === 'function') {
             return window.FBGConfirm(title, description, confirmText, cancelText, options);
@@ -323,7 +344,10 @@
                     ${escapeHtml(error.message || 'Failed to load databases.')}
                 </div>
             `;
-            showMessage(error.message || 'Failed to load databases.', true);
+            showDatabaseToast({
+                type: 'error',
+                message: "We couldn't load databases for this server.\nPlease refresh and try again.",
+            });
         }
     }
 
@@ -375,10 +399,16 @@
 
             const data = await readJsonResponse(response, 'Failed to create database.');
             closeCreateModal();
-            showMessage(data?.data?.message || 'Database created successfully.');
+            showDatabaseToast({
+                type: 'success',
+                message: 'Database created.',
+            });
             await loadDatabases();
         } catch (error) {
-            showMessage(error.message || 'Failed to create database.', true);
+            showDatabaseToast({
+                type: 'error',
+                message: "We couldn't create that database.\nPlease try again in a moment.",
+            });
         } finally {
             createSubmit.disabled = false;
             createSubmit.textContent = originalText;
@@ -425,7 +455,10 @@
             detailsModal.hidden = false;
             document.body.classList.add('fbg-modal-open');
         } catch (error) {
-            showMessage(error.message || 'Failed to load database details.', true);
+            showDatabaseToast({
+                type: 'error',
+                message: "We couldn't load that database's details.\nPlease try again in a moment.",
+            });
         } finally {
             if (button) {
                 button.disabled = false;
@@ -465,7 +498,10 @@
             });
 
             await readJsonResponse(response, 'Failed to rotate database password.');
-            showMessage('Database password rotated successfully.');
+            showDatabaseToast({
+                type: 'success',
+                message: 'Database password rotated.',
+            });
 
             const detailResponse = await fetch(endpoints.view + encodeURIComponent(currentDatabaseId), {
                 headers: { 'Accept': 'application/json' }
@@ -474,7 +510,10 @@
             fillDetails(detailData.data || {});
             await loadDatabases();
         } catch (error) {
-            showMessage(error.message || 'Failed to rotate database password.', true);
+            showDatabaseToast({
+                type: 'error',
+                message: "We couldn't rotate that database password.\nPlease try again in a moment.",
+            });
         } finally {
             rotateButton.disabled = false;
             rotateButton.textContent = originalText;
@@ -517,10 +556,16 @@
             });
 
             const data = await readJsonResponse(response, 'Failed to delete database.');
-            showMessage(data?.data?.message || 'Database deleted successfully.');
+            showDatabaseToast({
+                type: 'success',
+                message: 'Database deleted.',
+            });
             await loadDatabases();
         } catch (error) {
-            showMessage(error.message || 'Failed to delete database.', true);
+            showDatabaseToast({
+                type: 'error',
+                message: "We couldn't delete that database.\nPlease try again in a moment.",
+            });
         } finally {
             if (button) {
                 button.disabled = false;

@@ -1,23 +1,3 @@
-document.addEventListener('click', function (e) {
-    const el = e.target.closest('.fbg-copyable');
-    if (!el) return;
-
-    const text = el.dataset.copy || el.textContent;
-
-    navigator.clipboard.writeText(text).then(() => {
-        const original = el.textContent;
-        el.textContent = 'Copied!';
-        el.classList.add('copied');
-
-        setTimeout(() => {
-            el.classList.remove('copied');
-            el.textContent = original;
-        }, 1200);
-    }).catch(err => {
-        console.error('Copy failed:', err);
-    });
-});
-
 (function () {
     const config = window.FBG_SERVER_PANEL || {};
     const identifier = config.identifier;
@@ -464,6 +444,58 @@ document.addEventListener('click', function (e) {
         showTimedMessage(detailsMessage, message, isError, 'details');
     }
 
+    function plainToastText(value) {
+        return String(value || '')
+            .replace(/\\n/g, '\n')
+            .replace(/^#{1,3}\s+/gm, '')
+            .replace(/^-#\s+/gm, '')
+            .replace(/[*_~-]/g, '')
+            .trim();
+    }
+
+    function showPanelToast({ type = 'info', title = 'Server Panel', message = '', duration, persistent = false, fallback = 'power' } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        const fallbackMessage = plainToastText(cleanMessage);
+        const isError = type === 'error' || type === 'warning';
+
+        if (fallback === 'details') {
+            showDetailsMessage(fallbackMessage, isError);
+            return;
+        }
+
+        if (fallback === 'none') {
+            return;
+        }
+
+        showPowerMessage(fallbackMessage, isError);
+    }
+
+    function getPowerActionLabel(action) {
+        switch (action) {
+            case 'start': return 'start';
+            case 'stop': return 'stop';
+            case 'restart': return 'restart';
+            case 'kill': return 'force stop';
+            default: return 'update';
+        }
+    }
+
     function setPowerButtonsDisabled(disabled) {
         [startBtn, stopBtn, restartBtn].forEach(btn => {
             if (btn) btn.disabled = disabled;
@@ -843,7 +875,11 @@ document.addEventListener('click', function (e) {
 
     async function sendPower(action) {
         if (isInstalling) {
-            showPowerMessage('This server is still installing. Power actions are temporarily disabled.', true);
+            showPanelToast({
+                type: 'warning',
+                title: 'Server Power',
+                message: 'This server is still being installed.\nPower controls will be available once setup has finished.',
+            });
             return;
         }
 
@@ -852,7 +888,12 @@ document.addEventListener('click', function (e) {
         pendingPowerUntil = Date.now() + POWER_ACTION_WINDOW_MS;
         loggedStatusesForAction = new Set();
 
-        showPowerMessage('Sending ' + action + ' command...', false);
+        const actionLabel = getPowerActionLabel(action);
+        /* showPanelToast({
+            type: 'info',
+            title: 'Server Power',
+            message: `Sending the ***${actionLabel}*** request to your server...`,
+        }); */
         consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[93mSending ' + action + ' command...');
 
         if (action === 'start') {
@@ -888,14 +929,22 @@ document.addEventListener('click', function (e) {
                 throw new Error(data.error || 'Power action failed');
             }
 
-            showPowerMessage(data.data?.message || 'Power action sent.', false);
+            showPanelToast({
+                type: 'success',
+                title: 'Server Power',
+                message: `Your ***${actionLabel}*** request has been sent to the server.`,
+            });
             consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[92m' + (data.data?.message || 'Success'));
 
             refresh({ force: true, immediate: true });
             queueBurstRefreshes();
         } catch (err) {
             console.error('Power error:', err);
-            showPowerMessage(err.message || 'Power action failed.', true);
+            showPanelToast({
+                type: 'error',
+                title: 'Server Power',
+                message: `We couldn't send the ***${actionLabel}*** request.\nPlease try again in a moment.`,
+            });
             consoleAppend('\x1b[93m[FBG]:\x1b[0m \x1b[91m' + (err.message || 'Power action failed.'));
             pendingPowerAction = null;
             pendingPowerUntil = 0;
@@ -967,7 +1016,12 @@ document.addEventListener('click', function (e) {
         }
 
         if (field === 'name' && !value) {
-            showDetailsMessage('Server name cannot be empty.', true);
+            showPanelToast({
+                type: 'warning',
+                title: 'Server Details',
+                message: 'Please enter a server name before saving.',
+                fallback: 'details',
+            });
             return;
         }
 
@@ -1019,10 +1073,22 @@ document.addEventListener('click', function (e) {
             }
 
             closeEditor(field);
-            showDetailsMessage(data.message || 'Saved.', false);
+            showPanelToast({
+                type: 'success',
+                title: 'Server Details',
+                message: field === 'name'
+                    ? 'Your server name has been updated to:\n### ' + data.name
+                    : 'Your server description has been updated to:\n### ' + data.description,
+                fallback: 'details',
+            });
         } catch (err) {
             console.error('Save details error:', err);
-            showDetailsMessage(err.message || 'Failed to save changes.', true);
+            showPanelToast({
+                type: 'error',
+                title: 'Server Details',
+                message: "We couldn't save those changes.\nPlease try again in a moment.",
+                fallback: 'details',
+            });
         }
     }
 
@@ -1148,6 +1214,32 @@ document.addEventListener('click', function (e) {
         refresh,
         updateAddress
     };
+
+    document.addEventListener('click', function (e) {
+        const el = e.target.closest('.fbg-copyable');
+        if (!el) return;
+
+        const text = el.dataset.copy || el.textContent;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const original = el.textContent;
+            el.textContent = 'Copied!';
+            el.classList.add('copied');
+
+            setTimeout(() => {
+                el.classList.remove('copied');
+                el.textContent = original;
+            }, 1200);
+        }).catch(err => {
+            console.error('Copy failed:', err);
+            showPanelToast({
+                type: 'error',
+                title: 'Clipboard',
+                message: "We couldn't copy that text.\nPlease select and copy it manually.",
+                fallback: 'none',
+            });
+        });
+    });
 
     refresh({ force: true, immediate: true }).finally(() => {
         scheduleNextPoll(INITIAL_POLL_DELAY);

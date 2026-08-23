@@ -24,6 +24,7 @@
     <script src="<?php echo asset('./backend/js/external-redirect.js'); ?>"></script>
     <script src="<?php echo asset('./backend/js/confirm-modal.js'); ?>"></script>
     <script src="<?php echo asset('./backend/js/pagination.js'); ?>"></script>
+    <script src="<?php echo asset('./backend/js/toast.js'); ?>"></script>
 </head>
 <body>
     <header>

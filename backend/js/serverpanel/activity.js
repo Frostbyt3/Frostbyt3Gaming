@@ -92,6 +92,28 @@
         messageBox.style.display = text ? 'block' : 'none';
     }
 
+    function showActivityToast({
+        type = 'info',
+        title = 'Activity',
+        message = '',
+        duration,
+        persistent = false
+    } = {}) {
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        const cleanMessage = String(message || title || '');
+        showMessage(type, cleanMessage.replace(/[#*_~-]/g, ''));
+    }
+
     function clearMessage() {
         showMessage('', '');
     }
@@ -434,7 +456,10 @@
 
     async function loadActivity() {
         if (!serverIdentifier) {
-            showMessage('error is-visible', 'Missing server identifier.');
+            showActivityToast({
+                type: 'error',
+                message: "We couldn't find this server.\nPlease go back and try again."
+            });
             return;
         }
 
@@ -478,7 +503,10 @@
                 '</div>'
             ].join('');
 
-            showMessage('error', 'Failed to load activity logs.');
+            showActivityToast({
+                type: 'error',
+                message: "We couldn't load activity logs.\nPlease refresh and try again."
+            });
         } finally {
             if (refreshButton) {
                 refreshButton.disabled = false;

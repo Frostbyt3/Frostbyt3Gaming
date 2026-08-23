@@ -52,6 +52,27 @@
         }, isError ? 7000 : 5000);
     }
 
+    function showSettingsToast({ type = 'info', title = 'Settings', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
         if (typeof window.FBGConfirm === 'function') {
             return window.FBGConfirm(title, description, confirmText, cancelText, options);
@@ -153,7 +174,10 @@
             const descriptionValue = (descriptionInput?.value || '').trim();
 
             if (!nameValue) {
-                showMessage('Server name cannot be empty.', true);
+                showSettingsToast({
+                    type: 'warning',
+                    message: 'Please enter a server name before saving.',
+                });
                 if (nameInput) nameInput.focus();
                 return;
             }
@@ -176,9 +200,15 @@
                 if (headerNameInput) headerNameInput.value = nameValue;
                 if (headerDescriptionInput) headerDescriptionInput.value = descriptionValue;
 
-                showMessage('Server details updated successfully.', false);
+                showSettingsToast({
+                    type: 'success',
+                    message: 'Server details updated.',
+                });
             } catch (error) {
-                showMessage(error.message || 'Failed to update server details.', true);
+                showSettingsToast({
+                    type: 'error',
+                    message: "We couldn't update those server details.\nPlease try again in a moment.",
+                });
             } finally {
                 if (saveButton) {
                     saveButton.disabled = false;
@@ -210,9 +240,15 @@
                     id: serverIdentifier
                 });
 
-                showMessage(result?.data?.message || result?.message || 'Server reinstall initiated.', false);
+                showSettingsToast({
+                    type: 'success',
+                    message: 'Server reinstall has started.',
+                });
             } catch (error) {
-                showMessage(error.message || 'Failed to reinstall server.', true);
+                showSettingsToast({
+                    type: 'error',
+                    message: "We couldn't start the reinstall.\nPlease try again in a moment.",
+                });
             } finally {
                 reinstallButton.disabled = false;
                 reinstallButton.textContent = originalText;
@@ -246,13 +282,22 @@
                     ? `Server renewed successfully. ${renewData.unsuspend_warning}`
                     : (renewData.message || result?.message || 'Server renewed for an additional month.');
 
-                showMessage(successMessage, false);
+                showSettingsToast({
+                    type: 'success',
+                    message: successMessage,
+                });
 
                 if (renewData.unsuspend_warning) {
-                    showMessage(renewData.unsuspend_warning, false);
+                    showSettingsToast({
+                        type: 'warning',
+                        message: renewData.unsuspend_warning,
+                    });
                 }
             } catch (error) {
-                showMessage(error.message || 'Failed to renew server.', true);
+                showSettingsToast({
+                    type: 'error',
+                    message: "We couldn't renew this server.\nPlease check your balance and try again.",
+                });
                 renewButton.disabled = false;
                 renewButton.textContent = originalText;
             } finally {

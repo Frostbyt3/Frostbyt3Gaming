@@ -84,6 +84,44 @@
         showTimedMessage(consoleMessage, message, isError, 'console');
     }
 
+    function plainToastText(value) {
+        return String(value || '')
+            .replace(/\\n/g, '\n')
+            .replace(/^#{1,3}\s+/gm, '')
+            .replace(/^-#\s+/gm, '')
+            .replace(/[*_~-]/g, '')
+            .trim();
+    }
+
+    function showConsoleToast({ type = 'info', title = 'Server Console', message = '', duration, persistent = false, fallback = 'console' } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        const fallbackMessage = plainToastText(cleanMessage);
+        const isError = type === 'error' || type === 'warning';
+
+        if (fallback === 'command') {
+            showCommandMessage(fallbackMessage, isError);
+            return;
+        }
+
+        showConsoleMessage(fallbackMessage, isError);
+    }
+
     function setCommandEnabled(enabled) {
         if (commandInput) commandInput.disabled = !enabled;
         if (commandButton) commandButton.disabled = !enabled;
@@ -550,6 +588,13 @@
         setCommandEnabled(false);
         appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[92mConnecting to console...\x1b[0m');
 
+        /* showConsoleToast({
+            type: 'success', // success, warning, info, error
+            title: 'Frostbyt3 Gaming',
+            message: '# Header 1\n## Header 2\n### Header 3\nNormal Text\n-# Sub-text\n*italic*\n**bold**\n***bold italic***\n__underline__\n__*underline italic*__\n__**underline bold**__\n__***underline bold italic***__\n--strikethrough--',
+            persistent: true,
+        }) */
+
         const connectionId = ++activeConnectionId;
 
         try {
@@ -602,7 +647,10 @@
             });
         } catch (error) {
             console.error('Console connection failed:', error);
-            showConsoleMessage(error.message || 'Failed to connect to console.', true);
+            showConsoleToast({
+                type: 'error',
+                message: "We couldn't connect to the console.\nTrying again shortly.",
+            });
             scheduleReconnect('Failed to connect to console.');
         } finally {
             connecting = false;
@@ -619,7 +667,12 @@
         }
 
         if (!sendSocketEvent('send command', command)) {
-            showCommandMessage('Console is still connecting. Try again in a moment.', true);
+            showConsoleToast({
+                type: 'warning',
+                message: 'The console is still connecting.\nTry again in a moment.',
+                fallback: 'command',
+            });
+
             commandInput.focus();
             return;
         }
@@ -629,7 +682,12 @@
         commandHistoryIndex = -1;
         commandInput.value = '';
         commandInput.focus();
-        showCommandMessage('Command sent successfully.', false);
+
+        showConsoleToast({
+            type: 'success',
+            message: 'Your command has been sent to the server.',
+            fallback: 'command',
+        });
     }
 
     window.FBG_SERVER_PANEL_CONSOLE = {
@@ -653,6 +711,10 @@
             }
 
             appendConsoleText('\x1b[93m[FBG]:\x1b[0m \x1b[93mConsole cleared.\x1b[0m');
+            showConsoleToast({
+                type: 'info',
+                message: 'Console cleared.',
+            });
         });
     }
 
@@ -661,6 +723,11 @@
             consoleAutoscrollEnabled = !consoleAutoscrollEnabled;
             consoleAutoscrollButton.dataset.enabled = consoleAutoscrollEnabled ? 'true' : 'false';
             consoleAutoscrollButton.textContent = 'Auto-scroll: ' + (consoleAutoscrollEnabled ? 'On' : 'Off');
+
+            showConsoleToast({
+                type: (consoleAutoscrollEnabled ? 'info' : 'warning'),
+                message: 'Auto-scroll ' + (consoleAutoscrollEnabled ? 'enabled' : 'disabled'),
+            })
 
             if (consoleAutoscrollEnabled) {
                 scrollConsoleToBottom();

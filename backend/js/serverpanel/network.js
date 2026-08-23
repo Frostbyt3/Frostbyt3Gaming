@@ -48,6 +48,27 @@
         }, isError ? 7000 : 4000);
     }
 
+    function showNetworkToast({ type = 'info', title = 'Network', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     async function confirmAction(title, description, confirmText = 'Confirm', cancelText = 'Cancel', options = {}) {
         if (typeof window.FBGConfirm === 'function') {
             return window.FBGConfirm(title, description, confirmText, cancelText, options);
@@ -258,10 +279,16 @@
                 csrf_token: csrfToken
             });
 
-            showMessage(data?.message || 'Allocation created successfully.');
+            showNetworkToast({
+                type: 'success',
+                message: 'Network allocation created.',
+            });
             await loadAllocations();
         } catch (error) {
-            showMessage(error.message || 'Failed to create allocation.', true);
+            showNetworkToast({
+                type: 'error',
+                message: "We couldn't create a new allocation.\nPlease try again in a moment.",
+            });
         } finally {
             updateFooter();
         }
@@ -279,7 +306,10 @@
                 csrf_token: csrfToken
             });
 
-            showMessage(data?.message || 'Primary allocation updated successfully.');
+            showNetworkToast({
+                type: 'success',
+                message: 'Primary allocation updated.',
+            });
             await loadAllocations();
 
             const primaryAllocation = allocations.find((item) => item.isDefault);
@@ -290,7 +320,10 @@
                 window.FBG_SERVER_PANEL_API.updateAddress(address);
             }
         } catch (error) {
-            showMessage(error.message || 'Failed to set primary allocation.', true);
+            showNetworkToast({
+                type: 'error',
+                message: "We couldn't update the primary allocation.\nPlease try again in a moment.",
+            });
             if (button) button.disabled = false;
         }
     }
@@ -317,9 +350,15 @@
                 allocation.notes = input.value.trim();
             }
 
-            showMessage(data?.message || 'Allocation updated successfully.');
+            showNetworkToast({
+                type: 'success',
+                message: 'Allocation notes saved.',
+            });
         } catch (error) {
-            showMessage(error.message || 'Failed to update allocation notes.', true);
+            showNetworkToast({
+                type: 'error',
+                message: "We couldn't save those allocation notes.\nPlease try again in a moment.",
+            });
         } finally {
             savingNotes.delete(allocationId);
             input.disabled = !canUpdate;
@@ -333,12 +372,18 @@
         if (!allocation) return;
 
         if (allocation.isDefault) {
-            showMessage('The primary allocation cannot be deleted.', true);
+            showNetworkToast({
+                type: 'warning',
+                message: "The primary allocation can't be deleted.",
+            });
             return;
         }
 
         if (allocations.length <= 1) {
-            showMessage('You cannot delete the only allocation on this server.', true);
+            showNetworkToast({
+                type: 'warning',
+                message: "You can't delete the only allocation on this server.",
+            });
             return;
         }
 
@@ -361,10 +406,16 @@
                 csrf_token: csrfToken
             });
 
-            showMessage(data?.message || 'Allocation deleted successfully.');
+            showNetworkToast({
+                type: 'success',
+                message: 'Allocation deleted.',
+            });
             await loadAllocations();
         } catch (error) {
-            showMessage(error.message || 'Failed to delete allocation.', true);
+            showNetworkToast({
+                type: 'error',
+                message: "We couldn't delete that allocation.\nPlease try again in a moment.",
+            });
             if (button) button.disabled = false;
         }
     }

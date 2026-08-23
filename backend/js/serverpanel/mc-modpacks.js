@@ -75,6 +75,27 @@
         }
     }
 
+    function showModpacksToast({ type = 'info', title = 'Modpacks', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
     function clearMessage() {
         if (!messageEl) return;
 
@@ -273,7 +294,10 @@
             renderList(normalizeList(payload, provider));
         } catch (error) {
             contentEl.innerHTML = `<div class="fbg-schedules-empty">${escapeHtml(error.message || 'Failed to load modpacks.')}</div>`;
-            showMessage(error.message || 'Failed to load modpacks.', true);
+            showModpacksToast({
+                type: 'error',
+                message: "We couldn't load modpacks.\nPlease refresh and try again.",
+            });
         }
     }
 
@@ -332,7 +356,10 @@
             await loadVersions({ ...modpack, provider: activeProvider });
         } catch (error) {
             closeInstallModal();
-            showMessage(error.message || 'Failed to load modpack versions.', true);
+            showModpacksToast({
+                type: 'error',
+                message: "We couldn't load versions for that modpack.\nPlease try again in a moment.",
+            });
         }
     }
 
@@ -349,7 +376,10 @@
 
         const versionId = versionEl.value;
         if (!versionId) {
-            showMessage('Select a modpack version before installing.', true);
+            showModpacksToast({
+                type: 'warning',
+                message: 'Please select a modpack version before installing.',
+            });
             return;
         }
 
@@ -396,10 +426,16 @@
             const payload = await readJson(response, 'Failed to start modpack installation.');
 
             closeInstallModal();
-            showMessage(payload?.message || payload?.data?.message || 'Modpack installation has started.');
+            showModpacksToast({
+                type: 'success',
+                message: 'Modpack installation has started.',
+            });
             window.FBG_SERVER_PANEL_API?.refresh?.({ force: true, immediate: true });
         } catch (error) {
-            showMessage(error.message || 'Failed to start modpack installation.', true);
+            showModpacksToast({
+                type: 'error',
+                message: "We couldn't start that modpack install.\nPlease try again in a moment.",
+            });
         } finally {
             installSubmitEl.disabled = false;
             installSubmitEl.textContent = 'Install Modpack';

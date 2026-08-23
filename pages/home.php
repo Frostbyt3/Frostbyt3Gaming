@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 
+/* $toast = [
+    'type' => 'success',
+    'title' => 'Frostbyt3 Gaming',
+    'message' => "# Welcome Back!\n**Your dashboard awaits!**",
+    'duration' => 5000,
+]; */
+
 ?>
 
 <section class="hero">
@@ -221,5 +228,11 @@ $articles = $stmt->fetchAll();
                 });
             });
         }
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        window.FBGToast?.(<?= json_encode($toast, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>);
     });
 </script>

@@ -353,13 +353,43 @@
         }, 200);
     }
 
-    function showFilesMessageTimed(message, isError = false, duration = 3500) {
-        showFilesMessage(message, isError);
+    function formatToastText(value) {
+        return String(value || '')
+            .replace(/[*_#-]/g, '')
+            .trim();
+    }
 
+    function showFilesToast({ type = 'info', title = 'File Manager', message = '', duration, persistent = false } = {}) {
+        const cleanMessage = String(message || '').trim();
+
+        if (!cleanMessage) {
+            return;
+        }
+
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message: cleanMessage,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        showFilesMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
         window.clearTimeout(showFilesMessageTimed._timeoutId);
         showFilesMessageTimed._timeoutId = window.setTimeout(() => {
             hideFilesMessage();
-        }, duration);
+        }, duration || (type === 'error' || type === 'warning' ? 9000 : 5000));
+    }
+
+    function showFilesMessageTimed(message, isError = false, duration = 3500) {
+        showFilesToast({
+            type: isError ? 'error' : 'success',
+            message,
+            duration
+        });
     }
 
     function formatBytes(bytes) {
@@ -806,15 +836,29 @@
                 const createdFile = editorMode === 'create';
                 closeEditorModal(true);
                 await loadFiles();
-                showFilesMessageTimed(
-                    createdFile ? `File "${savedFileName}" created.` : `Saved "${savedFileName}"`,
-                    false
-                );
+
+                if (typeof window.FBGToast === 'function') {
+                    window.FBGToast({
+                        type: 'success',
+                        title: 'File Manager',
+                        message: createdFile ? `# File created:\n### ${savedFileName}` : `# File saved:\n### ${savedFileName}`,
+                    });
+                } else {
+                    showFilesMessageTimed(
+                        createdFile ? `File "${savedFileName}" created.` : `Saved "${savedFileName}"`,
+                        false
+                    );
+                }
+                
             });
         } catch (error) {
             console.error('Save file error:', error);
             setEditorNotice(error.message || 'Failed to save file.', true);
-            showFilesMessageTimed(error.message || 'Failed to save file.', true);
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: "We couldn't save that file.\nPlease check the file and try again.",
+            });
         } finally {
             editorIsSaving = false;
         }
@@ -1017,12 +1061,20 @@
                 'Invalid JSON from file delete endpoint:'
             )
             .then(async () => {
-                showFilesMessageTimed(`Deleted "${name}".`, false);
+                showFilesToast({
+                    type: 'success',
+                    title: 'File Manager',
+                    message: `# Item deleted:\n### ${formatToastText(name)}`,
+                });
                 await loadFiles();
             })
             .catch((error) => {
                 console.error('Delete error:', error);
-                showFilesMessageTimed(error.message || 'Failed to delete item.', true);
+                showFilesToast({
+                    type: 'error',
+                    title: 'File Manager',
+                    message: "We couldn't delete that item.\nPlease try again in a moment.",
+                });
             });
 
             return;
@@ -1032,7 +1084,11 @@
             const entry = findEntryByPath(path);
 
             if (!entry || !isEditableFile(entry)) {
-                showFilesMessageTimed('That file type is not editable in the browser yet.', true);
+                showFilesToast({
+                    type: 'warning',
+                    title: 'File Manager',
+                    message: "This file type can't be edited here yet.",
+                });
                 return;
             }
 
@@ -1477,7 +1533,11 @@
         }
 
         if (uploadInProgress) {
-            showFilesMessageTimed('Please wait for the current upload to finish.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: 'An upload is already running.\nPlease wait for it to finish before starting another one.',
+            });
             return;
         }
 
@@ -1525,12 +1585,13 @@
 
             await loadFiles();
 
-            showFilesMessageTimed(
-                files.length === 1
-                    ? `Uploaded "${files[0].name}".`
-                    : `Uploaded ${files.length} files.`,
-                false
-            );
+            showFilesToast({
+                type: 'success',
+                title: 'File Manager',
+                message: files.length === 1
+                    ? `# Upload complete:\n### ${formatToastText(files[0].name)}`
+                    : `# Upload complete:\n### ${files.length} files uploaded`,
+            });
         } catch (error) {
             console.error('Upload error:', error);
 
@@ -1542,6 +1603,14 @@
 
             const bar = uploadItem?.querySelector('.fbg-files-upload-progress-bar');
             bar?.classList.add('is-error');
+
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: message === 'Connection lost during upload.'
+                    ? 'The upload was interrupted.\nPlease check your connection and try again.'
+                    : "We couldn't upload that file.\nPlease try again in a moment.",
+            });
 
             setTimeout(() => {
                 if (!uploadItem) return;
@@ -1615,7 +1684,11 @@
             setItemsAndRender(payload.items || [], true);
         } catch (error) {
             console.error('Files list error:', error);
-            showFilesMessageTimed(error.message || 'Unable to load files.', true);
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: "We couldn't open this folder.\nPlease refresh the file manager and try again.",
+            });
             tableBody.innerHTML = `
                 <tr class="fbg-files-empty-row">
                     <td colspan="4">Unable to load this directory.</td>
@@ -1654,18 +1727,30 @@
         const oldName = getBaseName(path);
 
         if (!path || path === '/') {
-            showFilesMessageTimed('Missing file or folder path.', true);
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: "We couldn't find that file or folder.\nPlease refresh and try again.",
+            });
             return;
         }
 
         if (!newName) {
-            showFilesMessageTimed('Please enter a new name.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: 'Please enter a new name before saving.',
+            });
             renameNameInput?.focus();
             return;
         }
 
         if (newName === '.' || newName === '..' || /[\/\\]/.test(newName)) {
-            showFilesMessageTimed('That name is not valid.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: "That name won't work here.\nUse a name without slashes.",
+            });
             renameNameInput?.focus();
             return;
         }
@@ -1680,11 +1765,19 @@
                 await submitRename(path, newName);
                 closeRenameModal();
                 await loadFiles();
-                showFilesMessageTimed(`Renamed "${oldName}" to "${newName}".`, false);
+                showFilesToast({
+                    type: 'success',
+                    title: 'File Manager',
+                    message: `# Item renamed:\n**${formatToastText(oldName)}** is now **${formatToastText(newName)}**`,
+                });
             });
         } catch (error) {
             console.error('Rename error:', error);
-            showFilesMessageTimed(error.message || 'Failed to rename item.', true);
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: "We couldn't rename that item.\nPlease try again in a moment.",
+            });
         }
     });
 
@@ -1694,12 +1787,20 @@
         const name = String(newFolderNameInput?.value || '').trim();
 
         if (!name) {
-            showFilesMessageTimed('Folder name is required.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: 'Please enter a folder name before creating it.',
+            });
             return;
         }
 
         if (/[\/\\]/.test(name) || name === '.' || name === '..') {
-            showFilesMessageTimed('Invalid folder name.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: "That folder name won't work here.\nUse a name without slashes.",
+            });
             return;
         }
 
@@ -1717,11 +1818,19 @@
 
                 closeNewFolderModal();
                 await loadFiles();
-                showFilesMessageTimed(`Folder "${name}" created.`, false);
+                showFilesToast({
+                    type: 'success',
+                    title: 'File Manager',
+                    message: `# Folder created:\n### ${formatToastText(name)}`,
+                });
             });
         } catch (error) {
             console.error(error);
-            showFilesMessageTimed(error.message || 'Failed to create folder.', true);
+            showFilesToast({
+                type: 'error',
+                title: 'File Manager',
+                message: "We couldn't create that folder.\nPlease try again in a moment.",
+            });
         }
     });
 
@@ -1829,7 +1938,11 @@
 
     uploadButton?.addEventListener('click', () => {
         if (uploadInProgress) {
-            showFilesMessageTimed('An upload is already in progress.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: 'An upload is already running.\nPlease wait for it to finish before starting another one.',
+            });
             return;
         }
 
@@ -1841,7 +1954,11 @@
 
         for (const file of files) {
             if (!file.name || (file.size === 0 && file.type === '')) {
-                showFilesMessageTimed('Folder uploads are not currently supported.', true);
+                showFilesToast({
+                    type: 'warning',
+                    title: 'File Manager',
+                    message: "Folder uploads aren't supported here yet.\nPlease upload individual files instead.",
+                });
                 return;
             }
         }
@@ -1878,7 +1995,11 @@
         const items = event.dataTransfer?.items;
 
         if (containsDirectory(items)) {
-            showFilesMessageTimed('Folder uploads are not currently supported.', true);
+            showFilesToast({
+                type: 'warning',
+                title: 'File Manager',
+                message: "Folder uploads aren't supported here yet.\nPlease upload individual files instead.",
+            });
             return;
         }
 

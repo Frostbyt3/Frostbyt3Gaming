@@ -134,6 +134,32 @@
         }, isError ? 7000 : 4000);
     }
 
+    function showSchedulesToast({
+        type = 'info',
+        title = 'Schedules',
+        message = '',
+        duration,
+        persistent = false
+    } = {}) {
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type,
+                title,
+                message,
+                duration,
+                persistent
+            });
+            return;
+        }
+
+        const cleanMessage = String(message || title || '');
+        showMessage(cleanMessage.replace(/[#*_~-]/g, ''), type === 'error' || type === 'warning');
+    }
+
+    function requestActionMessage(action, subject) {
+        return `We couldn't ${action} ${subject}.\nPlease try again in a moment.`;
+    }
+
     function formatDate(value) {
         if (!value) return 'Never';
 
@@ -323,7 +349,10 @@
                 const attr = scheduleMap[id] || null;
 
                 if (!attr) {
-                    showMessage('Could not load that schedule for editing.', true);
+                    showSchedulesToast({
+                        type: 'error',
+                        message: "We couldn't load that schedule for editing.\nPlease try again in a moment."
+                    });
                     return;
                 }
 
@@ -422,7 +451,10 @@
                 const taskId = Number(button.dataset.taskId || 0);
 
                 if (taskId <= 0) {
-                    showMessage('Could not determine that task ID.', true);
+                    showSchedulesToast({
+                        type: 'error',
+                        message: "We couldn't find that task.\nPlease refresh and try again."
+                    });
                     return;
                 }
 
@@ -436,7 +468,10 @@
                 const taskId = Number(button.dataset.taskId || 0);
 
                 if (taskId <= 0) {
-                    showMessage('Could not determine that task ID.', true);
+                    showSchedulesToast({
+                        type: 'error',
+                        message: "We couldn't find that task.\nPlease refresh and try again."
+                    });
                     return;
                 }
 
@@ -704,7 +739,10 @@
         const attr = task?.attributes || null;
 
         if (!taskEditModal || !attr) {
-            showMessage('Could not load that task from the current schedule data.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: "We couldn't load that task for editing.\nPlease refresh and try again."
+            });
             return;
         }
 
@@ -839,7 +877,10 @@
                     );
 
                     closeEditModal();
-                    showMessage(data.message || (isCreateMode ? 'Schedule created successfully.' : 'Schedule updated successfully.'));
+                    showSchedulesToast({
+                        type: 'success',
+                        message: isCreateMode ? 'Schedule created.' : 'Schedule updated.'
+                    });
 
                     if (isCreateMode) {
                         const createdScheduleId = Number(data?.item?.id || 0);
@@ -859,7 +900,10 @@
             );
         } catch (error) {
             console.error(error);
-            showMessage(error.message || (isCreateMode ? 'Failed to create schedule.' : 'Failed to update schedule.'), true);
+            showSchedulesToast({
+                type: 'error',
+                message: requestActionMessage(isCreateMode ? 'create' : 'update', 'that schedule')
+            });
         }
     }
 
@@ -868,7 +912,10 @@
 
         const payload = getTaskPayloadForSubmit();
         if (payload === '') {
-            showMessage('Please enter a command or select a power action.', true);
+            showSchedulesToast({
+                type: 'warning',
+                message: 'Please enter a command or choose a power action.'
+            });
             return;
         }
 
@@ -905,7 +952,10 @@
                     );
 
                     closeTaskEditModal();
-                    showMessage(data.message || (isCreateMode ? 'Task created successfully.' : 'Task updated successfully.'));
+                    showSchedulesToast({
+                        type: 'success',
+                        message: isCreateMode ? 'Task created.' : 'Task updated.'
+                    });
 
                     if (scheduleId > 0) {
                         await loadScheduleDetail(scheduleId);
@@ -914,13 +964,19 @@
             );
         } catch (error) {
             console.error(error);
-            showMessage(error.message || (isCreateMode ? 'Failed to create task.' : 'Failed to update task.'), true);
+            showSchedulesToast({
+                type: 'error',
+                message: requestActionMessage(isCreateMode ? 'create' : 'update', 'that task')
+            });
         }
     }
 
     async function runSchedule(buttonEl = null) {
         if (scheduleId <= 0) {
-            showMessage('Could not determine that schedule ID.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: "We couldn't find that schedule.\nPlease refresh and try again."
+            });
             return;
         }
 
@@ -942,7 +998,10 @@
                     'Invalid JSON from schedule execute endpoint:'
                 );
 
-                showMessage(data.message || 'Schedule started successfully.');
+                showSchedulesToast({
+                    type: 'success',
+                    message: 'Schedule started.'
+                });
 
                 if (scheduleId > 0) {
                     await loadScheduleDetail(scheduleId);
@@ -950,13 +1009,19 @@
             });
         } catch (error) {
             console.error(error);
-            showMessage(error.message || 'Failed to run schedule.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: requestActionMessage('start', 'that schedule')
+            });
         }
     }
 
     async function deleteSchedule(buttonEl = null) {
         if (scheduleId <= 0) {
-            showMessage('Could not determine that schedule ID.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: "We couldn't find that schedule.\nPlease refresh and try again."
+            });
             return;
         }
 
@@ -978,12 +1043,18 @@
                     'Invalid JSON from schedule delete endpoint:'
                 );
 
-                showMessage(data.message || 'Schedule deleted successfully.');
+                showSchedulesToast({
+                    type: 'warning',
+                    message: 'Schedule deleted.'
+                });
                 window.location.href = baseUrl;
             });
         } catch (error) {
             console.error(error);
-            showMessage(error.message || 'Failed to delete schedule.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: requestActionMessage('delete', 'that schedule')
+            });
         }
     }
 
@@ -1007,7 +1078,10 @@
                     'Invalid JSON from task delete endpoint:'
                 );
 
-                showMessage(data.message || 'Task deleted successfully.');
+                showSchedulesToast({
+                    type: 'warning',
+                    message: 'Task deleted.'
+                });
 
                 if (scheduleId > 0) {
                     await loadScheduleDetail(scheduleId);
@@ -1017,7 +1091,10 @@
             });
         } catch (error) {
             console.error(error);
-            showMessage(error.message || 'Failed to delete task.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: requestActionMessage('delete', 'that task')
+            });
         }
     }
 
@@ -1152,7 +1229,10 @@
                     ${escapeHtml(error.message || 'Failed to load schedules.')}
                 </div>
             `;
-            showMessage(error.message || 'Failed to load schedules.', true);
+            showSchedulesToast({
+                type: 'error',
+                message: "We couldn't load schedules.\nPlease refresh and try again."
+            });
         }
     }
 
