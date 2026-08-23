@@ -42,6 +42,7 @@
     --fbg-text-main: #eee;
     --fbg-text-muted: #cfcfcf;
 	--fbg-text-dark: #bdbdbd;
+    --fbg-text-darker: #666666;
     --fbg-border-soft: rgba(255, 255, 255, 0.05);
     --fbg-border-medium: rgba(255, 255, 255, 0.08);
 	--fbg-box-shadow-dark: rgba(0, 0, 0, 0.4);
@@ -4488,7 +4489,7 @@ body.fbg-confirm-open {
 }
 
 .fbg-files-pagination-summary {
-    color: var(--fbg-text-muted);
+    color: var(--fbg-text-darker);
     font-size: 0.95rem;
 }
 
@@ -4517,11 +4518,8 @@ body.fbg-confirm-open {
     outline: none;
 }
 
-.fbg-files-pagination-page {
-    min-width: 100px;
-    text-align: center;
-    color: var(--fbg-white);
-    font-weight: 600;
+.fbg-files-pagination-pages {
+    justify-content: center;
 }
 
 .fbg-files-pagination .btn[disabled] {
@@ -7542,6 +7540,7 @@ textarea.startup-variable-input {
     align-items: center;
     justify-content: flex-end;
     gap: 12px;
+    flex-wrap: wrap;
     color: rgba(255, 255, 255, 0.72);
     font-weight: 700;
 }
@@ -9292,9 +9291,117 @@ textarea.startup-variable-input {
     align-items: center;
 }
 
+.fbg-pagination-footer {
+    justify-content: space-between;
+}
+
 .fbg-admin-form-actions .btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+.fbg-pagination-pages {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.fbg-pagination-controls {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.fbg-pagination-page {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 6px;
+    box-sizing: border-box;
+    color: var(--fbg-text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.82rem;
+    font-weight: 800;
+    justify-content: center;
+    line-height: 1;
+    min-height: 30px;
+    min-width: 30px;
+    padding: 0 9px;
+    text-decoration: none;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease;
+}
+
+.fbg-pagination-page:hover {
+    background: rgba(34, 174, 255, 0.12);
+    border-color: rgba(34, 174, 255, 0.42);
+    color: var(--fbg-white);
+}
+
+.fbg-pagination-page.is-active {
+    background: rgba(34, 174, 255, 0.18);
+    border-color: var(--fbg-brightblue);
+    color: var(--fbg-white);
+    cursor: default;
+    pointer-events: none;
+}
+
+.fbg-pagination-ellipsis {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--fbg-text-dark);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-weight: 800;
+    justify-content: center;
+    line-height: 1;
+    min-height: 30px;
+    min-width: 30px;
+    padding: 0 6px;
+}
+
+.fbg-pagination-ellipsis:hover {
+    background: rgba(34, 174, 255, 0.08);
+    border-color: rgba(34, 174, 255, 0.28);
+    color: var(--fbg-white);
+}
+
+.fbg-pagination-jump-form {
+    display: inline-flex;
+}
+
+.fbg-pagination-jump-input {
+    background: var(--fbg-input-bg);
+    border: 1px solid rgba(34, 174, 255, 0.42);
+    border-radius: 6px;
+    box-sizing: border-box;
+    color: var(--fbg-white);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    height: 30px;
+    outline: none;
+    padding: 0 7px;
+    text-align: center;
+    width: 64px;
+}
+
+.fbg-pagination-jump-input:focus {
+    box-shadow: 0 0 8px var(--fbg-brightblue-hover-glow);
+}
+
+.fbg-pagination-summary {
+    color: var(--fbg-text-darker);
 }
 
 .fbg-admin-table-wrap {

@@ -163,7 +163,7 @@ $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
                 <i class="fas fa-chevron-left"></i> Prev
             </button>
 
-            <div class="fbg-files-pagination-page" id="files-pagination-page">Page 1 of 1</div>
+            <div class="fbg-files-pagination-pages fbg-pagination-pages" id="files-pagination-pages" aria-label="Pagination pages"></div>
 
             <button type="button" class="btn fbg-neutral-button btn-sm" id="files-page-next">
                 Next <i class="fas fa-chevron-right"></i>

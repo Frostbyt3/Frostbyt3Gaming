@@ -16,7 +16,7 @@
 
 ## Shared Frontend Utilities
 
-- [ ] Create proper pagination function/convert current per-page functions to global.
+- [x] Create proper pagination function/convert current per-page functions to global.
 - [ ] Create toast notification function/convert current per-page functions to global.
 
 ## Registration Security

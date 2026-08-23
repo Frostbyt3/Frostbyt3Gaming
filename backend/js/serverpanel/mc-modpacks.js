@@ -16,7 +16,7 @@
     const paginationEl = document.getElementById('modpacks-pagination');
     const prevEl = document.getElementById('modpacks-prev-button');
     const nextEl = document.getElementById('modpacks-next-button');
-    const pageLabelEl = document.getElementById('modpacks-page-label');
+    const paginationPagesEl = document.getElementById('modpacks-pagination-pages');
 
     const modalEl = document.getElementById('modpacks-install-modal');
     const modalCloseEl = document.getElementById('modpacks-install-close');
@@ -232,9 +232,16 @@
         page = state.pagination.currentPage;
         totalPages = state.pagination.totalPages;
 
-        if (paginationEl && pageLabelEl && prevEl && nextEl) {
+        if (paginationEl && paginationPagesEl && prevEl && nextEl) {
             paginationEl.hidden = totalPages <= 1;
-            pageLabelEl.textContent = `Page ${page} of ${totalPages}`;
+            window.FBGPagination?.renderPageNumbers(paginationPagesEl, {
+                currentPage: page,
+                totalPages,
+                onPageChange: (nextPage) => {
+                    page = nextPage;
+                    loadModpacks();
+                },
+            });
             prevEl.disabled = page <= 1;
             nextEl.disabled = page >= totalPages;
         }

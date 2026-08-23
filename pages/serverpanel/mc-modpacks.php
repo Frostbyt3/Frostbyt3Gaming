@@ -62,7 +62,7 @@ $canDeleteFiles = $hasServerPermission('file.delete');
 
     <div class="fbg-modpacks-pagination" id="modpacks-pagination" hidden>
         <button type="button" class="btn fbg-neutral-button btn-sm" id="modpacks-prev-button">Previous</button>
-        <span id="modpacks-page-label">Page 1</span>
+        <span class="fbg-modpacks-pagination-pages fbg-pagination-pages" id="modpacks-pagination-pages" aria-label="Pagination pages"></span>
         <button type="button" class="btn fbg-neutral-button btn-sm" id="modpacks-next-button">Next</button>
     </div>
 </div>

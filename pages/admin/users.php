@@ -8,6 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/pagination.php';
 require_once __DIR__ . '/../../api/pterodactyl.php';
 
 requireLogin();
@@ -574,8 +575,8 @@ if ($editingUser) {
 $search = trim((string)($_GET['q'] ?? ''));
 $sort = strtolower(trim((string)($_GET['sort'] ?? 'id')));
 $direction = strtolower(trim((string)($_GET['dir'] ?? 'asc'))) === 'desc' ? 'desc' : 'asc';
-$pageNum = max(1, (int)($_GET['page_num'] ?? 1));
 $perPage = 25;
+$pageNum = fbgPaginationRequestedPage();
 $offset = ($pageNum - 1) * $perPage;
 
 $sortMap = [
@@ -618,12 +619,10 @@ $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 $countStmt = fbgPteroDb()->prepare("SELECT COUNT(*) FROM users u {$whereSql}");
 $countStmt->execute($params);
 $totalRows = (int)$countStmt->fetchColumn();
-$totalPages = max(1, (int)ceil($totalRows / $perPage));
-
-if ($pageNum > $totalPages) {
-    $pageNum = $totalPages;
-    $offset = ($pageNum - 1) * $perPage;
-}
+$pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
+$pageNum = $pagination['page_num'];
+$totalPages = $pagination['total_pages'];
+$offset = $pagination['offset'];
 
 $orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
 $usersStmt = fbgPteroDb()->prepare("
@@ -772,19 +771,7 @@ function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $c
                     </table>
                 </div>
 
-                <div class="fbg-admin-form-actions">
-                    <?php if ($pageNum > 1): ?>
-                        <?php $prevQuery = array_merge($_GET, ['page_num' => $pageNum - 1]); ?>
-                        <a class="btn fbg-neutral-button" href="./page.php?<?= htmlspecialchars(http_build_query($prevQuery), ENT_QUOTES, 'UTF-8') ?>">Previous</a>
-                    <?php endif; ?>
-
-                    <span><?= number_format($totalRows) ?> total user<?= $totalRows === 1 ? '' : 's' ?>, page <?= $pageNum ?> of <?= $totalPages ?></span>
-
-                    <?php if ($pageNum < $totalPages): ?>
-                        <?php $nextQuery = array_merge($_GET, ['page_num' => $pageNum + 1]); ?>
-                        <a class="btn fbg-neutral-button" href="./page.php?<?= htmlspecialchars(http_build_query($nextQuery), ENT_QUOTES, 'UTF-8') ?>">Next</a>
-                    <?php endif; ?>
-                </div>
+                <?php fbgRenderPagination($pagination, 'user'); ?>
             </section>
 
             <?php if ($editUserId > 0 && !$editingUser): ?>

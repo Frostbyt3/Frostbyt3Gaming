@@ -37,7 +37,7 @@
     const dropzoneHint = document.getElementById('files-dropzone-hint');
     const paginationWrap = document.getElementById('files-pagination');
     const paginationSummary = document.getElementById('files-pagination-summary');
-    const paginationPageLabel = document.getElementById('files-pagination-page');
+    const paginationPages = document.getElementById('files-pagination-pages');
     const paginationPrevButton = document.getElementById('files-page-prev');
     const paginationNextButton = document.getElementById('files-page-next');
     const perPageSelect = document.getElementById('files-per-page');
@@ -1260,7 +1260,7 @@
     }
 
     function updatePaginationControls() {
-        if (!paginationWrap || !paginationSummary || !paginationPageLabel || !paginationPrevButton || !paginationNextButton) {
+        if (!paginationWrap || !paginationSummary || !paginationPages || !paginationPrevButton || !paginationNextButton) {
             return;
         }
 
@@ -1271,7 +1271,10 @@
             paginationSummary.textContent = currentSearchTerm.trim()
                 ? 'Showing 0-0 of 0 matching items'
                 : 'Showing 0-0 of 0 items';
-            paginationPageLabel.textContent = 'Page 1 of 1';
+            window.FBGPagination?.renderPageNumbers(paginationPages, {
+                currentPage: 1,
+                totalPages: 1,
+            });
             paginationPrevButton.disabled = true;
             paginationNextButton.disabled = true;
             return;
@@ -1287,7 +1290,15 @@
             ? `Showing ${startIndex + 1}-${endIndex} of ${totalItems} matching items`
             : `Showing ${startIndex + 1}-${endIndex} of ${totalItems} items`;
 
-        paginationPageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+        window.FBGPagination?.renderPageNumbers(paginationPages, {
+            currentPage,
+            totalPages,
+            onPageChange: (nextPage) => {
+                currentPage = nextPage;
+                renderCurrentPage();
+                scrollToFilesTop();
+            },
+        });
         paginationPrevButton.disabled = currentPage <= 1;
         paginationNextButton.disabled = currentPage >= totalPages;
     }
