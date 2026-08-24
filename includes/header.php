@@ -9,7 +9,7 @@
     <meta property="og:image" content="https://frostbyt3gaming.com/backend/img/Snowflake.png">
     <meta property="og:url" content="https://frostbyt3gaming.com/">
     <meta property="og:type" content="website">
-    <title>Frostbyt3 Gaming - <?php echo getRandomTitle(); ?></title>
+    <title>Frostbyt3 Gaming - Powering the games you love</title>
     <link rel="stylesheet" href="<?php echo asset('/backend/css/style.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('/backend/css/admin.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('/backend/css/mobile.css'); ?>">
