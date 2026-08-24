@@ -141,7 +141,7 @@
     }
 
     .hamburger {
-        display: block;
+        display: flex;
         position: absolute;
         top: 15px;
         right: 20px;
@@ -456,7 +456,7 @@
     }
 
     .hamburger {
-        display: block;
+        display: flex;
         position: absolute;
         top: 15px;
         right: 20px;

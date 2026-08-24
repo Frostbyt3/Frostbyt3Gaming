@@ -14,7 +14,10 @@ function isLocal(): bool
         'localhost',
         '127.0.0.1',
         '192.168.1.149',
-        '10.8.0.2'
+        '10.8.0.1',
+        '10.8.0.2',
+        '10.8.0.3',
+        'dev.frostbyt3gaming.com',
     ], true);
 }
 

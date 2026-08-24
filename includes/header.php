@@ -35,9 +35,13 @@
             </a>
             <h2 class="splashText"><?php echo getRandomTitle(); ?></h2>
         </div>
-        <div class="hamburger" onclick="toggleMenu()">
-            <i class="fas fa-bars"></i>
-        </div>
+        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Toggle navigation">
+            <span class="hamburger-lines" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </span>
+        </button>
         <nav id="navMenu">
             <ul>
                 <li><a href="/page.php?name=home">Home</a></li>
