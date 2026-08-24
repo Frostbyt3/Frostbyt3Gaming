@@ -1,666 +1,666 @@
 <?php
-declare(strict_types=1);
+    declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/pagination.php';
-require_once __DIR__ . '/../../api/pterodactyl.php';
-
-requireLogin();
-
-if (!function_exists('canAccess') || !canAccess(4)) {
-    http_response_code(403);
-    fbgRedirect('/page.php?name=403');
-    return;
-}
-
-$currentAdminPage = 'admin-users';
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-$message = (string)($_SESSION['admin_users_message'] ?? '');
-$messageType = (string)($_SESSION['admin_users_message_type'] ?? 'success');
-unset($_SESSION['admin_users_message'], $_SESSION['admin_users_message_type']);
-
-function fbgAdminUsersRedirect(string $message, string $type = 'success', ?int $editUserId = null): void
-{
-    $_SESSION['admin_users_message'] = $message;
-    $_SESSION['admin_users_message_type'] = $type;
-
-    $url = '/page.php?name=admin-users';
-    if ($editUserId !== null && $editUserId > 0) {
-        $url .= '&edit=' . $editUserId;
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
 
-    fbgRedirect($url);
-    exit;
-}
+    require_once __DIR__ . '/../../includes/db.php';
+    require_once __DIR__ . '/../../includes/auth.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    require_once __DIR__ . '/../../includes/pagination.php';
+    require_once __DIR__ . '/../../api/pterodactyl.php';
 
-function fbgAdminUsersVerifyCsrf(): void
-{
-    $token = (string)($_POST['csrf_token'] ?? '');
+    requireLogin();
 
-    if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
-        fbgAdminUsersRedirect('Security check failed. Please refresh and try again.', 'error');
-    }
-}
-
-function fbgAdminUsersPanelColumns(): array
-{
-    static $columns = null;
-
-    if (is_array($columns)) {
-        return $columns;
-    }
-
-    try {
-        $stmt = fbgPteroDb()->query('SHOW COLUMNS FROM users');
-        $columns = array_flip(array_map(
-            static fn(array $row): string => strtolower((string)$row['Field']),
-            $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []
-        ));
-    } catch (Throwable $e) {
-        $columns = [];
-    }
-
-    return $columns;
-}
-
-function fbgAdminUsersColumnExists(string $column): bool
-{
-    $columns = fbgAdminUsersPanelColumns();
-    return array_key_exists(strtolower($column), $columns);
-}
-
-function fbgAdminUsersSafeDate(mixed $value): string
-{
-    $value = trim((string)$value);
-
-    if ($value === '') {
-        return '-';
-    }
-
-    $timestamp = strtotime($value);
-    return $timestamp ? date('M j, Y g:i A', $timestamp) : $value;
-}
-
-function fbgAdminUsersAccessLevels(array $userIds): array
-{
-    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
-
-    if (empty($userIds)) {
-        return [];
-    }
-
-    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
-    $stmt = db()->prepare("
-        SELECT user_id, access_level, is_active
-        FROM admin_access
-        WHERE user_id IN ({$placeholders})
-    ");
-    $stmt->execute($userIds);
-
-    $levels = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
-        $levels[(int)$row['user_id']] = !empty($row['is_active']) ? (int)$row['access_level'] : 0;
-    }
-
-    return $levels;
-}
-
-function fbgAdminUsersSetAccessLevel(int $userId, int $accessLevel): void
-{
-    $accessLevel = max(0, min(4, $accessLevel));
-    $isActive = $accessLevel > 0 ? 1 : 0;
-
-    $stmt = db()->prepare('SELECT id FROM admin_access WHERE user_id = :user_id LIMIT 1');
-    $stmt->execute(['user_id' => $userId]);
-    $existingId = (int)($stmt->fetchColumn() ?: 0);
-
-    if ($existingId > 0) {
-        $update = db()->prepare("
-            UPDATE admin_access
-            SET access_level = :access_level,
-                is_active = :is_active,
-                updated_at = NOW()
-            WHERE id = :id
-        ");
-        $update->execute([
-            'access_level' => $accessLevel,
-            'is_active' => $isActive,
-            'id' => $existingId,
-        ]);
+    if (!function_exists('canAccess') || !canAccess(4)) {
+        http_response_code(403);
+        fbgRedirect('/page.php?name=403');
         return;
     }
 
-    $insert = db()->prepare("
-        INSERT INTO admin_access (user_id, access_level, is_active, created_at, updated_at)
-        VALUES (:user_id, :access_level, :is_active, NOW(), NOW())
-    ");
-    $insert->execute([
-        'user_id' => $userId,
-        'access_level' => $accessLevel,
-        'is_active' => $isActive,
-    ]);
-}
+    $currentAdminPage = 'admin-users';
 
-function fbgAdminUsersFind(int $userId): ?array
-{
-    if ($userId <= 0) {
-        return null;
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    $columns = [
-        'id',
-        'email',
-        'username',
-        'name_first',
-        'name_last',
-        'language',
-        'root_admin',
-        'use_totp',
-        'totp_secret',
-        'credit',
-        'created_at',
-        'updated_at',
-    ];
+    $message = (string)($_SESSION['admin_users_message'] ?? '');
+    $messageType = (string)($_SESSION['admin_users_message_type'] ?? 'success');
+    unset($_SESSION['admin_users_message'], $_SESSION['admin_users_message_type']);
 
-    foreach (['country', 'zip', 'zip_code', 'address'] as $optionalColumn) {
-        if (fbgAdminUsersColumnExists($optionalColumn)) {
-            $columns[] = $optionalColumn;
+    function fbgAdminUsersRedirect(string $message, string $type = 'success', ?int $editUserId = null): void
+    {
+        $_SESSION['admin_users_message'] = $message;
+        $_SESSION['admin_users_message_type'] = $type;
+
+        $url = '/page.php?name=admin-users';
+        if ($editUserId !== null && $editUserId > 0) {
+            $url .= '&edit=' . $editUserId;
+        }
+
+        fbgRedirect($url);
+        exit;
+    }
+
+    function fbgAdminUsersVerifyCsrf(): void
+    {
+        $token = (string)($_POST['csrf_token'] ?? '');
+
+        if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
+            fbgAdminUsersRedirect('Security check failed. Please refresh and try again.', 'error');
         }
     }
 
-    $select = implode(', ', array_map(static fn(string $column): string => '`' . $column . '`', array_unique($columns)));
-    $stmt = fbgPteroDb()->prepare("SELECT {$select} FROM users WHERE id = :id LIMIT 1");
-    $stmt->execute(['id' => $userId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    function fbgAdminUsersPanelColumns(): array
+    {
+        static $columns = null;
 
-    return $row ?: null;
-}
+        if (is_array($columns)) {
+            return $columns;
+        }
 
-function fbgAdminUsersOwnedServers(int $userId): array
-{
-    $stmt = fbgPteroDb()->prepare("
-        SELECT
-            s.id,
-            s.uuid,
-            s.uuidShort,
-            s.name,
-            s.created_at,
-            s.expired_at,
-            n.name AS node_name
-        FROM servers s
-        LEFT JOIN nodes n ON n.id = s.node_id
-        WHERE s.owner_id = :user_id
-        ORDER BY s.created_at DESC, s.id DESC
-    ");
-    $stmt->execute(['user_id' => $userId]);
+        try {
+            $stmt = fbgPteroDb()->query('SHOW COLUMNS FROM users');
+            $columns = array_flip(array_map(
+                static fn(array $row): string => strtolower((string)$row['Field']),
+                $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []
+            ));
+        } catch (Throwable $e) {
+            $columns = [];
+        }
 
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
-function fbgAdminUsersRootAdminLabel(mixed $value): string
-{
-    return !empty($value) ? 'Administrator' : 'User';
-}
-
-function fbgAdminUsersAccessLabel(int $level): string
-{
-    return match ($level) {
-        4 => 'Administrator',
-        3 => 'Manager',
-        2 => 'Staff',
-        1 => 'Limited',
-        default => 'None',
-    };
-}
-
-function fbgAdminUsersCountries(): array
-{
-    return [
-        'United States',
-        'United Kingdom',
-        'Afghanistan',
-        'Albania',
-        'Algeria',
-        'Andorra',
-        'Angola',
-        'Antigua & Deps',
-        'Argentina',
-        'Armenia',
-        'Australia',
-        'Austria',
-        'Azerbaijan',
-        'Bahamas',
-        'Bahrain',
-        'Bangladesh',
-        'Barbados',
-        'Belarus',
-        'Belgium',
-        'Belize',
-        'Benin',
-        'Bhutan',
-        'Bolivia',
-        'Bosnia Herzegovina',
-        'Botswana',
-        'Brazil',
-        'Brunei',
-        'Bulgaria',
-        'Burkina',
-        'Burundi',
-        'Cambodia',
-        'Cameroon',
-        'Canada',
-        'Cape Verde',
-        'Central African Rep',
-        'Chad',
-        'Chile',
-        'China',
-        'Colombia',
-        'Comoros',
-        'Congo',
-        'Congo {Democratic Rep}',
-        'Costa Rica',
-        'Croatia',
-        'Cuba',
-        'Cyprus',
-        'Czech Republic',
-        'Denmark',
-        'Djibouti',
-        'Dominica',
-        'Dominican Republic',
-        'East Timor',
-        'Ecuador',
-        'Egypt',
-        'El Salvador',
-        'Equatorial Guinea',
-        'Eritrea',
-        'Estonia',
-        'Ethiopia',
-        'Fiji',
-        'Finland',
-        'France',
-        'Gabon',
-        'Gambia',
-        'Georgia',
-        'Germany',
-        'Ghana',
-        'Greece',
-        'Grenada',
-        'Guatemala',
-        'Guinea',
-        'Guinea-Bissau',
-        'Guyana',
-        'Haiti',
-        'Honduras',
-        'Hungary',
-        'Iceland',
-        'India',
-        'Indonesia',
-        'Iran',
-        'Iraq',
-        'Ireland {Republic}',
-        'Israel',
-        'Italy',
-        'Ivory Coast',
-        'Jamaica',
-        'Japan',
-        'Jordan',
-        'Kazakhstan',
-        'Kenya',
-        'Kiribati',
-        'Korea North',
-        'Korea South',
-        'Kosovo',
-        'Kuwait',
-        'Kyrgyzstan',
-        'Laos',
-        'Latvia',
-        'Lebanon',
-        'Lesotho',
-        'Liberia',
-        'Libya',
-        'Liechtenstein',
-        'Lithuania',
-        'Luxembourg',
-        'Macedonia',
-        'Madagascar',
-        'Malawi',
-        'Malaysia',
-        'Maldives',
-        'Mali',
-        'Malta',
-        'Marshall Islands',
-        'Mauritania',
-        'Mauritius',
-        'Mexico',
-        'Micronesia',
-        'Moldova',
-        'Monaco',
-        'Mongolia',
-        'Montenegro',
-        'Morocco',
-        'Mozambique',
-        'Myanmar, {Burma}',
-        'Namibia',
-        'Nauru',
-        'Nepal',
-        'Netherlands',
-        'New Zealand',
-        'Nicaragua',
-        'Niger',
-        'Nigeria',
-        'Norway',
-        'Oman',
-        'Pakistan',
-        'Palau',
-        'Panama',
-        'Papua New Guinea',
-        'Paraguay',
-        'Peru',
-        'Philippines',
-        'Poland',
-        'Portugal',
-        'Qatar',
-        'Romania',
-        'Russian Federation',
-        'Rwanda',
-        'St Kitts & Nevis',
-        'St Lucia',
-        'Saint Vincent & the Grenadines',
-        'Samoa',
-        'San Marino',
-        'Sao Tome & Principe',
-        'Saudi Arabia',
-        'Senegal',
-        'Serbia',
-        'Seychelles',
-        'Sierra Leone',
-        'Singapore',
-        'Slovakia',
-        'Slovenia',
-        'Solomon Islands',
-        'Somalia',
-        'South Africa',
-        'South Sudan',
-        'Spain',
-        'Sri Lanka',
-        'Sudan',
-        'Suriname',
-        'Swaziland',
-        'Sweden',
-        'Switzerland',
-        'Syria',
-        'Taiwan',
-        'Tajikistan',
-        'Tanzania',
-        'Thailand',
-        'Togo',
-        'Tonga',
-        'Trinidad & Tobago',
-        'Tunisia',
-        'Turkey',
-        'Turkmenistan',
-        'Tuvalu',
-        'Uganda',
-        'Ukraine',
-        'United Arab Emirates',
-        'Uruguay',
-        'Uzbekistan',
-        'Vanuatu',
-        'Vatican City',
-        'Venezuela',
-        'Vietnam',
-        'Yemen',
-        'Zambia',
-        'Zimbabwe',
-    ];
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    fbgAdminUsersVerifyCsrf();
-
-    $action = trim((string)($_POST['action'] ?? ''));
-    $userId = (int)($_POST['user_id'] ?? 0);
-    $user = fbgAdminUsersFind($userId);
-
-    if (!$user) {
-        fbgAdminUsersRedirect('User could not be found.', 'error');
+        return $columns;
     }
 
-    if ($action === 'update_user') {
-        $email = trim((string)($_POST['email'] ?? ''));
-        $username = trim((string)($_POST['username'] ?? ''));
-        $firstName = trim((string)($_POST['first_name'] ?? ''));
-        $lastName = trim((string)($_POST['last_name'] ?? ''));
-        $language = trim((string)($_POST['language'] ?? 'en'));
-        $password = (string)($_POST['password'] ?? '');
-        $rootAdmin = (int)($_POST['root_admin'] ?? 0) === 1 ? 1 : 0;
-        $websiteAccessLevel = max(0, min(4, (int)($_POST['website_access_level'] ?? 0)));
-        $credit = trim((string)($_POST['credit'] ?? ''));
+    function fbgAdminUsersColumnExists(string $column): bool
+    {
+        $columns = fbgAdminUsersPanelColumns();
+        return array_key_exists(strtolower($column), $columns);
+    }
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            fbgAdminUsersRedirect('Enter a valid email address.', 'error', $userId);
+    function fbgAdminUsersSafeDate(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        if ($value === '') {
+            return '-';
         }
 
-        if ($username === '' || $firstName === '' || $lastName === '') {
-            fbgAdminUsersRedirect('Username, first name, and last name are required.', 'error', $userId);
+        $timestamp = strtotime($value);
+        return $timestamp ? date('M j, Y g:i A', $timestamp) : $value;
+    }
+
+    function fbgAdminUsersAccessLevels(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
+
+        if (empty($userIds)) {
+            return [];
         }
 
-        if ($language !== 'en') {
-            $language = 'en';
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $stmt = db()->prepare("
+            SELECT user_id, access_level, is_active
+            FROM admin_access
+            WHERE user_id IN ({$placeholders})
+        ");
+        $stmt->execute($userIds);
+
+        $levels = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $levels[(int)$row['user_id']] = !empty($row['is_active']) ? (int)$row['access_level'] : 0;
         }
 
-        if ($password !== '' && strlen($password) < 8) {
-            fbgAdminUsersRedirect('Password must be at least 8 characters when provided.', 'error', $userId);
+        return $levels;
+    }
+
+    function fbgAdminUsersSetAccessLevel(int $userId, int $accessLevel): void
+    {
+        $accessLevel = max(0, min(4, $accessLevel));
+        $isActive = $accessLevel > 0 ? 1 : 0;
+
+        $stmt = db()->prepare('SELECT id FROM admin_access WHERE user_id = :user_id LIMIT 1');
+        $stmt->execute(['user_id' => $userId]);
+        $existingId = (int)($stmt->fetchColumn() ?: 0);
+
+        if ($existingId > 0) {
+            $update = db()->prepare("
+                UPDATE admin_access
+                SET access_level = :access_level,
+                    is_active = :is_active,
+                    updated_at = NOW()
+                WHERE id = :id
+            ");
+            $update->execute([
+                'access_level' => $accessLevel,
+                'is_active' => $isActive,
+                'id' => $existingId,
+            ]);
+            return;
         }
 
-        if ($userId === (int)($_SESSION['user_id'] ?? 0) && $websiteAccessLevel < 4) {
-            fbgAdminUsersRedirect('You cannot lower your own website admin access from this page.', 'error', $userId);
+        $insert = db()->prepare("
+            INSERT INTO admin_access (user_id, access_level, is_active, created_at, updated_at)
+            VALUES (:user_id, :access_level, :is_active, NOW(), NOW())
+        ");
+        $insert->execute([
+            'user_id' => $userId,
+            'access_level' => $accessLevel,
+            'is_active' => $isActive,
+        ]);
+    }
+
+    function fbgAdminUsersFind(int $userId): ?array
+    {
+        if ($userId <= 0) {
+            return null;
         }
 
-        if ($credit !== '' && !is_numeric($credit)) {
-            fbgAdminUsersRedirect('Account balance must be a valid number.', 'error', $userId);
-        }
-
-        $changes = [
-            'email' => $email,
-            'username' => $username,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'language' => $language,
+        $columns = [
+            'id',
+            'email',
+            'username',
+            'name_first',
+            'name_last',
+            'language',
+            'root_admin',
+            'use_totp',
+            'totp_secret',
+            'credit',
+            'created_at',
+            'updated_at',
         ];
 
-        if ($password !== '') {
-            $changes['password'] = $password;
-        }
-
-        $result = pteroUpdatePanelUser($userId, $changes);
-        if (empty($result['ok'])) {
-            fbgAdminUsersRedirect((string)($result['error'] ?? 'Pterodactyl user profile could not be updated.'), 'error', $userId);
-        }
-
-        $pteroUpdates = ['root_admin = :root_admin'];
-        $pteroParams = [
-            'root_admin' => $rootAdmin,
-            'id' => $userId,
-        ];
-
-        if (fbgAdminUsersColumnExists('credit')) {
-            $pteroUpdates[] = 'credit = :credit';
-            $pteroParams['credit'] = number_format((float)$credit, 2, '.', '');
-        }
-
-        $optionalFields = [
-            'country' => 'country',
-            'zip' => 'zip',
-            'zip_code' => 'zip_code',
-            'address' => 'address',
-        ];
-
-        foreach ($optionalFields as $postField => $columnName) {
-            if (fbgAdminUsersColumnExists($columnName)) {
-                $pteroUpdates[] = "`{$columnName}` = :{$columnName}";
-                $pteroParams[$columnName] = trim((string)($_POST[$postField] ?? ''));
+        foreach (['country', 'zip', 'zip_code', 'address'] as $optionalColumn) {
+            if (fbgAdminUsersColumnExists($optionalColumn)) {
+                $columns[] = $optionalColumn;
             }
         }
 
-        $update = fbgPteroDb()->prepare("
-            UPDATE users
-            SET " . implode(', ', $pteroUpdates) . "
-            WHERE id = :id
-        ");
-        $update->execute($pteroParams);
+        $select = implode(', ', array_map(static fn(string $column): string => '`' . $column . '`', array_unique($columns)));
+        $stmt = fbgPteroDb()->prepare("SELECT {$select} FROM users WHERE id = :id LIMIT 1");
+        $stmt->execute(['id' => $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        fbgAdminUsersSetAccessLevel($userId, $websiteAccessLevel);
-
-        fbgAdminUsersRedirect('User updated successfully.');
+        return $row ?: null;
     }
 
-    if ($action === 'delete_user') {
-        $deleteConfirmation = trim((string)($_POST['delete_confirmation'] ?? ''));
-
-        if ($deleteConfirmation !== 'DELETE') {
-            fbgAdminUsersRedirect('Type DELETE to confirm user deletion.', 'error', $userId);
-        }
-
-        $servers = fbgAdminUsersOwnedServers($userId);
-
-        if (!empty($servers)) {
-            fbgAdminUsersRedirect('This user cannot be deleted while they own servers.', 'error', $userId);
-        }
-
-        if ($userId === (int)($_SESSION['user_id'] ?? 0)) {
-            fbgAdminUsersRedirect('You cannot delete your own account from this page.', 'error', $userId);
-        }
-
-        $result = pteroRequest('DELETE', 'users/' . $userId);
-        if (empty($result['ok']) && (int)($result['status'] ?? 0) !== 204) {
-            fbgAdminUsersRedirect((string)($result['error'] ?? 'User could not be deleted from Pterodactyl.'), 'error', $userId);
-        }
-
-        $deleteAccess = db()->prepare('DELETE FROM admin_access WHERE user_id = :user_id');
-        $deleteAccess->execute(['user_id' => $userId]);
-
-        fbgAdminUsersRedirect('User deleted successfully.');
-    }
-
-    fbgAdminUsersRedirect('Unknown user action.', 'error', $userId);
-}
-
-$editUserId = max(0, (int)($_GET['edit'] ?? 0));
-$editingUser = $editUserId > 0 ? fbgAdminUsersFind($editUserId) : null;
-$editingAccessLevel = $editingUser ? getUserAccessLevel($editUserId) : 0;
-$editingServers = $editingUser ? fbgAdminUsersOwnedServers($editUserId) : [];
-$countryOptions = fbgAdminUsersCountries();
-$currentAdminUserId = (int)($_SESSION['user_id'] ?? 0);
-$deleteDisabledReason = '';
-
-if ($editingUser) {
-    if (!empty($editingServers)) {
-        $deleteDisabledReason = 'This user owns ' . count($editingServers) . ' server' . (count($editingServers) === 1 ? '' : 's') . ' and cannot be deleted.';
-    } elseif ((int)$editingUser['id'] === $currentAdminUserId) {
-        $deleteDisabledReason = 'You cannot delete your own account from this page.';
-    }
-}
-
-$search = trim((string)($_GET['q'] ?? ''));
-$sort = strtolower(trim((string)($_GET['sort'] ?? 'id')));
-$direction = strtolower(trim((string)($_GET['dir'] ?? 'asc'))) === 'desc' ? 'desc' : 'asc';
-$perPage = 25;
-$pageNum = fbgPaginationRequestedPage();
-$offset = ($pageNum - 1) * $perPage;
-
-$sortMap = [
-    'id' => 'u.id',
-    'email' => 'u.email',
-    'first' => 'u.name_first',
-    'last' => 'u.name_last',
-    'username' => 'u.username',
-    'servers' => 'server_count',
-    'panel' => 'u.root_admin',
-];
-
-if (!array_key_exists($sort, $sortMap)) {
-    $sort = 'id';
-}
-
-$where = [];
-$params = [];
-
-if ($search !== '') {
-    $where[] = '(
-        u.email LIKE :search_email
-        OR u.username LIKE :search_username
-        OR u.name_first LIKE :search_first
-        OR u.name_last LIKE :search_last
-        OR CAST(u.id AS CHAR) = :exact_search
-    )';
-
-    $searchLike = '%' . $search . '%';
-
-    $params['search_email'] = $searchLike;
-    $params['search_username'] = $searchLike;
-    $params['search_first'] = $searchLike;
-    $params['search_last'] = $searchLike;
-    $params['exact_search'] = $search;
-}
-
-$whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-
-$countStmt = fbgPteroDb()->prepare("SELECT COUNT(*) FROM users u {$whereSql}");
-$countStmt->execute($params);
-$totalRows = (int)$countStmt->fetchColumn();
-$pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
-$pageNum = $pagination['page_num'];
-$totalPages = $pagination['total_pages'];
-$offset = $pagination['offset'];
-
-$orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
-$usersStmt = fbgPteroDb()->prepare("
-    SELECT
-        u.id,
-        u.email,
-        u.username,
-        u.name_first,
-        u.name_last,
-        u.root_admin,
-        u.use_totp,
-        u.totp_secret,
-        u.credit,
-        (
-            SELECT COUNT(*)
+    function fbgAdminUsersOwnedServers(int $userId): array
+    {
+        $stmt = fbgPteroDb()->prepare("
+            SELECT
+                s.id,
+                s.uuid,
+                s.uuidShort,
+                s.name,
+                s.created_at,
+                s.expired_at,
+                n.name AS node_name
             FROM servers s
-            WHERE s.owner_id = u.id
-        ) AS server_count
-    FROM users u
-    {$whereSql}
-    ORDER BY {$orderSql}, u.id ASC
-    LIMIT {$perPage} OFFSET {$offset}
-");
-$usersStmt->execute($params);
-$users = $usersStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-$accessLevels = fbgAdminUsersAccessLevels(array_column($users, 'id'));
+            LEFT JOIN nodes n ON n.id = s.node_id
+            WHERE s.owner_id = :user_id
+            ORDER BY s.created_at DESC, s.id DESC
+        ");
+        $stmt->execute(['user_id' => $userId]);
 
-function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $currentDirection): string
-{
-    $direction = ($targetSort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
-    $query = $_GET;
-    $query['name'] = 'admin-users';
-    $query['sort'] = $targetSort;
-    $query['dir'] = $direction;
-    $query['page_num'] = 1;
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
 
-    return './page.php?' . http_build_query($query);
-}
+    function fbgAdminUsersRootAdminLabel(mixed $value): string
+    {
+        return !empty($value) ? 'Administrator' : 'User';
+    }
+
+    function fbgAdminUsersAccessLabel(int $level): string
+    {
+        return match ($level) {
+            4 => 'Administrator',
+            3 => 'Manager',
+            2 => 'Staff',
+            1 => 'Limited',
+            default => 'None',
+        };
+    }
+
+    function fbgAdminUsersCountries(): array
+    {
+        return [
+            'United States',
+            'United Kingdom',
+            'Afghanistan',
+            'Albania',
+            'Algeria',
+            'Andorra',
+            'Angola',
+            'Antigua & Deps',
+            'Argentina',
+            'Armenia',
+            'Australia',
+            'Austria',
+            'Azerbaijan',
+            'Bahamas',
+            'Bahrain',
+            'Bangladesh',
+            'Barbados',
+            'Belarus',
+            'Belgium',
+            'Belize',
+            'Benin',
+            'Bhutan',
+            'Bolivia',
+            'Bosnia Herzegovina',
+            'Botswana',
+            'Brazil',
+            'Brunei',
+            'Bulgaria',
+            'Burkina',
+            'Burundi',
+            'Cambodia',
+            'Cameroon',
+            'Canada',
+            'Cape Verde',
+            'Central African Rep',
+            'Chad',
+            'Chile',
+            'China',
+            'Colombia',
+            'Comoros',
+            'Congo',
+            'Congo {Democratic Rep}',
+            'Costa Rica',
+            'Croatia',
+            'Cuba',
+            'Cyprus',
+            'Czech Republic',
+            'Denmark',
+            'Djibouti',
+            'Dominica',
+            'Dominican Republic',
+            'East Timor',
+            'Ecuador',
+            'Egypt',
+            'El Salvador',
+            'Equatorial Guinea',
+            'Eritrea',
+            'Estonia',
+            'Ethiopia',
+            'Fiji',
+            'Finland',
+            'France',
+            'Gabon',
+            'Gambia',
+            'Georgia',
+            'Germany',
+            'Ghana',
+            'Greece',
+            'Grenada',
+            'Guatemala',
+            'Guinea',
+            'Guinea-Bissau',
+            'Guyana',
+            'Haiti',
+            'Honduras',
+            'Hungary',
+            'Iceland',
+            'India',
+            'Indonesia',
+            'Iran',
+            'Iraq',
+            'Ireland {Republic}',
+            'Israel',
+            'Italy',
+            'Ivory Coast',
+            'Jamaica',
+            'Japan',
+            'Jordan',
+            'Kazakhstan',
+            'Kenya',
+            'Kiribati',
+            'Korea North',
+            'Korea South',
+            'Kosovo',
+            'Kuwait',
+            'Kyrgyzstan',
+            'Laos',
+            'Latvia',
+            'Lebanon',
+            'Lesotho',
+            'Liberia',
+            'Libya',
+            'Liechtenstein',
+            'Lithuania',
+            'Luxembourg',
+            'Macedonia',
+            'Madagascar',
+            'Malawi',
+            'Malaysia',
+            'Maldives',
+            'Mali',
+            'Malta',
+            'Marshall Islands',
+            'Mauritania',
+            'Mauritius',
+            'Mexico',
+            'Micronesia',
+            'Moldova',
+            'Monaco',
+            'Mongolia',
+            'Montenegro',
+            'Morocco',
+            'Mozambique',
+            'Myanmar, {Burma}',
+            'Namibia',
+            'Nauru',
+            'Nepal',
+            'Netherlands',
+            'New Zealand',
+            'Nicaragua',
+            'Niger',
+            'Nigeria',
+            'Norway',
+            'Oman',
+            'Pakistan',
+            'Palau',
+            'Panama',
+            'Papua New Guinea',
+            'Paraguay',
+            'Peru',
+            'Philippines',
+            'Poland',
+            'Portugal',
+            'Qatar',
+            'Romania',
+            'Russian Federation',
+            'Rwanda',
+            'St Kitts & Nevis',
+            'St Lucia',
+            'Saint Vincent & the Grenadines',
+            'Samoa',
+            'San Marino',
+            'Sao Tome & Principe',
+            'Saudi Arabia',
+            'Senegal',
+            'Serbia',
+            'Seychelles',
+            'Sierra Leone',
+            'Singapore',
+            'Slovakia',
+            'Slovenia',
+            'Solomon Islands',
+            'Somalia',
+            'South Africa',
+            'South Sudan',
+            'Spain',
+            'Sri Lanka',
+            'Sudan',
+            'Suriname',
+            'Swaziland',
+            'Sweden',
+            'Switzerland',
+            'Syria',
+            'Taiwan',
+            'Tajikistan',
+            'Tanzania',
+            'Thailand',
+            'Togo',
+            'Tonga',
+            'Trinidad & Tobago',
+            'Tunisia',
+            'Turkey',
+            'Turkmenistan',
+            'Tuvalu',
+            'Uganda',
+            'Ukraine',
+            'United Arab Emirates',
+            'Uruguay',
+            'Uzbekistan',
+            'Vanuatu',
+            'Vatican City',
+            'Venezuela',
+            'Vietnam',
+            'Yemen',
+            'Zambia',
+            'Zimbabwe',
+        ];
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        fbgAdminUsersVerifyCsrf();
+
+        $action = trim((string)($_POST['action'] ?? ''));
+        $userId = (int)($_POST['user_id'] ?? 0);
+        $user = fbgAdminUsersFind($userId);
+
+        if (!$user) {
+            fbgAdminUsersRedirect('User could not be found.', 'error');
+        }
+
+        if ($action === 'update_user') {
+            $email = trim((string)($_POST['email'] ?? ''));
+            $username = trim((string)($_POST['username'] ?? ''));
+            $firstName = trim((string)($_POST['first_name'] ?? ''));
+            $lastName = trim((string)($_POST['last_name'] ?? ''));
+            $language = trim((string)($_POST['language'] ?? 'en'));
+            $password = (string)($_POST['password'] ?? '');
+            $rootAdmin = (int)($_POST['root_admin'] ?? 0) === 1 ? 1 : 0;
+            $websiteAccessLevel = max(0, min(4, (int)($_POST['website_access_level'] ?? 0)));
+            $credit = trim((string)($_POST['credit'] ?? ''));
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                fbgAdminUsersRedirect('Enter a valid email address.', 'error', $userId);
+            }
+
+            if ($username === '' || $firstName === '' || $lastName === '') {
+                fbgAdminUsersRedirect('Username, first name, and last name are required.', 'error', $userId);
+            }
+
+            if ($language !== 'en') {
+                $language = 'en';
+            }
+
+            if ($password !== '' && strlen($password) < 8) {
+                fbgAdminUsersRedirect('Password must be at least 8 characters when provided.', 'error', $userId);
+            }
+
+            if ($userId === (int)($_SESSION['user_id'] ?? 0) && $websiteAccessLevel < 4) {
+                fbgAdminUsersRedirect('You cannot lower your own website admin access from this page.', 'error', $userId);
+            }
+
+            if ($credit !== '' && !is_numeric($credit)) {
+                fbgAdminUsersRedirect('Account balance must be a valid number.', 'error', $userId);
+            }
+
+            $changes = [
+                'email' => $email,
+                'username' => $username,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'language' => $language,
+            ];
+
+            if ($password !== '') {
+                $changes['password'] = $password;
+            }
+
+            $result = pteroUpdatePanelUser($userId, $changes);
+            if (empty($result['ok'])) {
+                fbgAdminUsersRedirect((string)($result['error'] ?? 'Pterodactyl user profile could not be updated.'), 'error', $userId);
+            }
+
+            $pteroUpdates = ['root_admin = :root_admin'];
+            $pteroParams = [
+                'root_admin' => $rootAdmin,
+                'id' => $userId,
+            ];
+
+            if (fbgAdminUsersColumnExists('credit')) {
+                $pteroUpdates[] = 'credit = :credit';
+                $pteroParams['credit'] = number_format((float)$credit, 2, '.', '');
+            }
+
+            $optionalFields = [
+                'country' => 'country',
+                'zip' => 'zip',
+                'zip_code' => 'zip_code',
+                'address' => 'address',
+            ];
+
+            foreach ($optionalFields as $postField => $columnName) {
+                if (fbgAdminUsersColumnExists($columnName)) {
+                    $pteroUpdates[] = "`{$columnName}` = :{$columnName}";
+                    $pteroParams[$columnName] = trim((string)($_POST[$postField] ?? ''));
+                }
+            }
+
+            $update = fbgPteroDb()->prepare("
+                UPDATE users
+                SET " . implode(', ', $pteroUpdates) . "
+                WHERE id = :id
+            ");
+            $update->execute($pteroParams);
+
+            fbgAdminUsersSetAccessLevel($userId, $websiteAccessLevel);
+
+            fbgAdminUsersRedirect('User updated successfully.');
+        }
+
+        if ($action === 'delete_user') {
+            $deleteConfirmation = trim((string)($_POST['delete_confirmation'] ?? ''));
+
+            if ($deleteConfirmation !== 'DELETE') {
+                fbgAdminUsersRedirect('Type DELETE to confirm user deletion.', 'error', $userId);
+            }
+
+            $servers = fbgAdminUsersOwnedServers($userId);
+
+            if (!empty($servers)) {
+                fbgAdminUsersRedirect('This user cannot be deleted while they own servers.', 'error', $userId);
+            }
+
+            if ($userId === (int)($_SESSION['user_id'] ?? 0)) {
+                fbgAdminUsersRedirect('You cannot delete your own account from this page.', 'error', $userId);
+            }
+
+            $result = pteroRequest('DELETE', 'users/' . $userId);
+            if (empty($result['ok']) && (int)($result['status'] ?? 0) !== 204) {
+                fbgAdminUsersRedirect((string)($result['error'] ?? 'User could not be deleted from Pterodactyl.'), 'error', $userId);
+            }
+
+            $deleteAccess = db()->prepare('DELETE FROM admin_access WHERE user_id = :user_id');
+            $deleteAccess->execute(['user_id' => $userId]);
+
+            fbgAdminUsersRedirect('User deleted successfully.');
+        }
+
+        fbgAdminUsersRedirect('Unknown user action.', 'error', $userId);
+    }
+
+    $editUserId = max(0, (int)($_GET['edit'] ?? 0));
+    $editingUser = $editUserId > 0 ? fbgAdminUsersFind($editUserId) : null;
+    $editingAccessLevel = $editingUser ? getUserAccessLevel($editUserId) : 0;
+    $editingServers = $editingUser ? fbgAdminUsersOwnedServers($editUserId) : [];
+    $countryOptions = fbgAdminUsersCountries();
+    $currentAdminUserId = (int)($_SESSION['user_id'] ?? 0);
+    $deleteDisabledReason = '';
+
+    if ($editingUser) {
+        if (!empty($editingServers)) {
+            $deleteDisabledReason = 'This user owns ' . count($editingServers) . ' server' . (count($editingServers) === 1 ? '' : 's') . ' and cannot be deleted.';
+        } elseif ((int)$editingUser['id'] === $currentAdminUserId) {
+            $deleteDisabledReason = 'You cannot delete your own account from this page.';
+        }
+    }
+
+    $search = trim((string)($_GET['q'] ?? ''));
+    $sort = strtolower(trim((string)($_GET['sort'] ?? 'id')));
+    $direction = strtolower(trim((string)($_GET['dir'] ?? 'asc'))) === 'desc' ? 'desc' : 'asc';
+    $perPage = 25;
+    $pageNum = fbgPaginationRequestedPage();
+    $offset = ($pageNum - 1) * $perPage;
+
+    $sortMap = [
+        'id' => 'u.id',
+        'email' => 'u.email',
+        'first' => 'u.name_first',
+        'last' => 'u.name_last',
+        'username' => 'u.username',
+        'servers' => 'server_count',
+        'panel' => 'u.root_admin',
+    ];
+
+    if (!array_key_exists($sort, $sortMap)) {
+        $sort = 'id';
+    }
+
+    $where = [];
+    $params = [];
+
+    if ($search !== '') {
+        $where[] = '(
+            u.email LIKE :search_email
+            OR u.username LIKE :search_username
+            OR u.name_first LIKE :search_first
+            OR u.name_last LIKE :search_last
+            OR CAST(u.id AS CHAR) = :exact_search
+        )';
+
+        $searchLike = '%' . $search . '%';
+
+        $params['search_email'] = $searchLike;
+        $params['search_username'] = $searchLike;
+        $params['search_first'] = $searchLike;
+        $params['search_last'] = $searchLike;
+        $params['exact_search'] = $search;
+    }
+
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    $countStmt = fbgPteroDb()->prepare("SELECT COUNT(*) FROM users u {$whereSql}");
+    $countStmt->execute($params);
+    $totalRows = (int)$countStmt->fetchColumn();
+    $pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
+    $pageNum = $pagination['page_num'];
+    $totalPages = $pagination['total_pages'];
+    $offset = $pagination['offset'];
+
+    $orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
+    $usersStmt = fbgPteroDb()->prepare("
+        SELECT
+            u.id,
+            u.email,
+            u.username,
+            u.name_first,
+            u.name_last,
+            u.root_admin,
+            u.use_totp,
+            u.totp_secret,
+            u.credit,
+            (
+                SELECT COUNT(*)
+                FROM servers s
+                WHERE s.owner_id = u.id
+            ) AS server_count
+        FROM users u
+        {$whereSql}
+        ORDER BY {$orderSql}, u.id ASC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $usersStmt->execute($params);
+    $users = $usersStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $accessLevels = fbgAdminUsersAccessLevels(array_column($users, 'id'));
+
+    function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $currentDirection): string
+    {
+        $direction = ($targetSort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
+        $query = $_GET;
+        $query['name'] = 'admin-users';
+        $query['sort'] = $targetSort;
+        $query['dir'] = $direction;
+        $query['page_num'] = 1;
+
+        return './page.php?' . http_build_query($query);
+    }
 ?>
 
 <section class="fbg-admin-shell">
@@ -865,14 +865,7 @@ function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $c
                         <div class="fbg-admin-form-grid">
                             <div class="fbg-admin-field">
                                 <label for="edit-country">Country</label>
-                                <input
-                                    id="edit-country"
-                                    name="country"
-                                    type="text"
-                                    list="admin-user-country-options"
-                                    value="<?= htmlspecialchars((string)($editingUser['country'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                    <?= fbgAdminUsersColumnExists('country') ? '' : 'disabled' ?>
-                                >
+                                <input id="edit-country" name="country" type="text" list="admin-user-country-options" value="<?= htmlspecialchars((string)($editingUser['country'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" <?= fbgAdminUsersColumnExists('country') ? '' : 'disabled' ?>>
                                 <datalist id="admin-user-country-options">
                                     <?php foreach ($countryOptions as $country): ?>
                                         <option value="<?= htmlspecialchars($country, ENT_QUOTES, 'UTF-8') ?>"></option>
@@ -901,12 +894,7 @@ function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $c
                             <a class="btn fbg-neutral-button" href="./page.php?name=admin-users">Cancel</a>
 
                             <span class="fbg-admin-user-delete-wrap" title="<?= htmlspecialchars($deleteDisabledReason, ENT_QUOTES, 'UTF-8') ?>">
-                                <button
-                                    type="button"
-                                    class="btn btn-delete fbg-admin-user-delete-button"
-                                    id="admin-user-delete-open"
-                                    <?= $deleteDisabledReason !== '' ? 'disabled' : '' ?>
-                                >
+                                <button type="button" class="btn btn-delete fbg-admin-user-delete-button" id="admin-user-delete-open" <?= $deleteDisabledReason !== '' ? 'disabled' : '' ?>>
                                     Delete User
                                 </button>
 
@@ -989,70 +977,70 @@ function fbgAdminUsersSortUrl(string $targetSort, string $currentSort, string $c
 <?php endif; ?>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const modal = document.getElementById('admin-user-edit-modal');
-    if (!modal) return;
-    const deleteOpen = document.getElementById('admin-user-delete-open');
-    const deleteConfirm = document.getElementById('admin-user-delete-confirm');
-    const deleteCancel = document.getElementById('admin-user-delete-cancel');
-    const deleteInput = document.getElementById('admin-user-delete-confirm-input');
-    const deleteSubmit = document.getElementById('admin-user-delete-submit');
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('admin-user-edit-modal');
+        if (!modal) return;
+        const deleteOpen = document.getElementById('admin-user-delete-open');
+        const deleteConfirm = document.getElementById('admin-user-delete-confirm');
+        const deleteCancel = document.getElementById('admin-user-delete-cancel');
+        const deleteInput = document.getElementById('admin-user-delete-confirm-input');
+        const deleteSubmit = document.getElementById('admin-user-delete-submit');
 
-    document.body.classList.add('fbg-modal-open');
+        document.body.classList.add('fbg-modal-open');
 
-    const closeDeleteConfirm = () => {
-        if (!deleteConfirm) return;
-        deleteConfirm.hidden = true;
-        if (deleteInput) {
-            deleteInput.value = '';
-        }
-        if (deleteSubmit) {
-            deleteSubmit.disabled = true;
-        }
-    };
-
-    if (deleteOpen && deleteConfirm) {
-        deleteOpen.addEventListener('click', () => {
-            deleteConfirm.hidden = false;
+        const closeDeleteConfirm = () => {
+            if (!deleteConfirm) return;
+            deleteConfirm.hidden = true;
             if (deleteInput) {
-                deleteInput.focus();
+                deleteInput.value = '';
             }
-        });
-    }
-
-    if (deleteCancel) {
-        deleteCancel.addEventListener('click', closeDeleteConfirm);
-    }
-
-    if (deleteInput && deleteSubmit) {
-        deleteInput.addEventListener('input', () => {
-            deleteSubmit.disabled = deleteInput.value !== 'DELETE';
-        });
-    }
-
-    if (deleteConfirm) {
-        deleteConfirm.addEventListener('click', (event) => {
-            if (event.target === deleteConfirm) {
-                closeDeleteConfirm();
+            if (deleteSubmit) {
+                deleteSubmit.disabled = true;
             }
-        });
-    }
+        };
 
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            window.location.href = './page.php?name=admin-users';
+        if (deleteOpen && deleteConfirm) {
+            deleteOpen.addEventListener('click', () => {
+                deleteConfirm.hidden = false;
+                if (deleteInput) {
+                    deleteInput.focus();
+                }
+            });
         }
-    });
 
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            if (deleteConfirm && !deleteConfirm.hidden) {
-                closeDeleteConfirm();
-                return;
-            }
-
-            window.location.href = './page.php?name=admin-users';
+        if (deleteCancel) {
+            deleteCancel.addEventListener('click', closeDeleteConfirm);
         }
+
+        if (deleteInput && deleteSubmit) {
+            deleteInput.addEventListener('input', () => {
+                deleteSubmit.disabled = deleteInput.value !== 'DELETE';
+            });
+        }
+
+        if (deleteConfirm) {
+            deleteConfirm.addEventListener('click', (event) => {
+                if (event.target === deleteConfirm) {
+                    closeDeleteConfirm();
+                }
+            });
+        }
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                window.location.href = './page.php?name=admin-users';
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                if (deleteConfirm && !deleteConfirm.hidden) {
+                    closeDeleteConfirm();
+                    return;
+                }
+
+                window.location.href = './page.php?name=admin-users';
+            }
+        });
     });
-});
 </script>

@@ -11,6 +11,10 @@
     <meta property="og:type" content="website">
     <title>Frostbyt3 Gaming - <?php echo getRandomTitle(); ?></title>
     <link rel="stylesheet" href="<?php echo asset('/backend/css/style.css'); ?>">
+    <?php $fbgPageName = (string)($_GET['name'] ?? ''); ?>
+    <?php if (strpos($fbgPageName, 'admin-') === 0): ?>
+        <link rel="stylesheet" href="<?php echo asset('/backend/css/admin.css'); ?>">
+    <?php endif; ?>
     <link rel="stylesheet" href="<?php echo asset('/backend/css/mobile.css'); ?>">
     <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"> -->
     <script src="https://kit.fontawesome.com/8cbb51ac38.js" crossorigin="anonymous"></script>

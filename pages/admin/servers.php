@@ -1,1300 +1,1470 @@
 <?php
-declare(strict_types=1);
+    declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/pagination.php';
-require_once __DIR__ . '/../../api/pterodactyl.php';
-
-requireLogin();
-
-if (!function_exists('canAccess') || !canAccess(4)) {
-    http_response_code(403);
-    fbgRedirect('/page.php?name=403');
-    return;
-}
-
-$currentAdminPage = 'admin-servers';
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-$message = (string)($_SESSION['admin_servers_message'] ?? '');
-$messageType = (string)($_SESSION['admin_servers_message_type'] ?? 'success');
-unset($_SESSION['admin_servers_message'], $_SESSION['admin_servers_message_type']);
-
-function fbgAdminServersRedirect(string $message, string $type = 'success', ?int $editServerId = null, string $tab = 'details', bool $openCreate = false): void
-{
-    $_SESSION['admin_servers_message'] = $message;
-    $_SESSION['admin_servers_message_type'] = $type;
-
-    $url = '/page.php?name=admin-servers';
-    if ($editServerId !== null && $editServerId > 0) {
-        $url .= '&edit=' . $editServerId . '&tab=' . urlencode($tab);
-    } elseif ($openCreate) {
-        $url .= '&create=1';
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
 
-    fbgRedirect($url);
-    exit;
-}
+    require_once __DIR__ . '/../../includes/db.php';
+    require_once __DIR__ . '/../../includes/auth.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    require_once __DIR__ . '/../../includes/pagination.php';
+    require_once __DIR__ . '/../../api/pterodactyl.php';
 
-function fbgAdminServersJsonResponse(array $payload, int $status = 200): void
-{
-    http_response_code($status);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
+    requireLogin();
 
-function fbgAdminServersVerifyCsrf(): void
-{
-    $token = (string)($_POST['csrf_token'] ?? '');
-
-    if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
-        fbgAdminServersRedirect('Security check failed. Please refresh and try again.', 'error');
-    }
-}
-
-function fbgAdminServersSafeDate(mixed $value): string
-{
-    $value = trim((string)$value);
-
-    if ($value === '') {
-        return '-';
+    if (!function_exists('canAccess') || !canAccess(4)) {
+        http_response_code(403);
+        fbgRedirect('/page.php?name=403');
+        return;
     }
 
-    $timestamp = strtotime($value);
-    return $timestamp ? date('M j, Y g:i A', $timestamp) : $value;
-}
+    $currentAdminPage = 'admin-servers';
 
-function fbgAdminServersDatetimeLocalValue(mixed $value): string
-{
-    $value = trim((string)$value);
-
-    if ($value === '') {
-        return '';
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    $timestamp = strtotime($value);
-    return $timestamp ? date('Y-m-d\TH:i', $timestamp) : '';
-}
+    $message = (string)($_SESSION['admin_servers_message'] ?? '');
+    $messageType = (string)($_SESSION['admin_servers_message_type'] ?? 'success');
+    unset($_SESSION['admin_servers_message'], $_SESSION['admin_servers_message_type']);
 
-function fbgAdminServersFormatExpirationForDb(string $value): ?string
-{
-    $value = trim($value);
+    function fbgAdminServersRedirect(string $message, string $type = 'success', ?int $editServerId = null, string $tab = 'details', bool $openCreate = false): void
+    {
+        $_SESSION['admin_servers_message'] = $message;
+        $_SESSION['admin_servers_message_type'] = $type;
 
-    if ($value === '') {
-        return null;
+        $url = '/page.php?name=admin-servers';
+        if ($editServerId !== null && $editServerId > 0) {
+            $url .= '&edit=' . $editServerId . '&tab=' . urlencode($tab);
+        } elseif ($openCreate) {
+            $url .= '&create=1';
+        }
+
+        fbgRedirect($url);
+        exit;
     }
 
-    $timestamp = strtotime($value);
-    return $timestamp ? date('Y-m-d H:i:s', $timestamp) : null;
-}
-
-function fbgAdminServersOwnerOptionLabel(array $user): string
-{
-    $name = trim((string)($user['name_first'] ?? '') . ' ' . (string)($user['name_last'] ?? ''));
-    $username = trim((string)($user['username'] ?? ''));
-    $email = trim((string)($user['email'] ?? ''));
-    $label = $name !== '' ? $name : ($username !== '' ? $username : $email);
-
-    if ($username !== '' && $label !== $username) {
-        $label .= ' (' . $username . ')';
+    function fbgAdminServersJsonResponse(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
-    if ($email !== '') {
-        $label .= ' - ' . $email;
+    function fbgAdminServersVerifyCsrf(): void
+    {
+        $token = (string)($_POST['csrf_token'] ?? '');
+
+        if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
+            fbgAdminServersRedirect('Security check failed. Please refresh and try again.', 'error');
+        }
     }
 
-    return $label . ' [#' . (int)$user['id'] . ']';
-}
+    function fbgAdminServersSafeDate(mixed $value): string
+    {
+        $value = trim((string)$value);
 
-function fbgAdminServersOwnerIdFromInput(string $value): int
-{
-    if (preg_match('/\[#(\d+)\]\s*$/', trim($value), $matches)) {
-        return (int)$matches[1];
+        if ($value === '') {
+            return '-';
+        }
+
+        $timestamp = strtotime($value);
+        return $timestamp ? date('M j, Y g:i A', $timestamp) : $value;
     }
 
-    return 0;
-}
+    function fbgAdminServersDatetimeLocalValue(mixed $value): string
+    {
+        $value = trim((string)$value);
 
-function fbgAdminServersAllocationLabel(array $allocation): string
-{
-    $host = trim((string)($allocation['ip_alias'] ?? ''));
-    if ($host === '') {
-        $host = trim((string)($allocation['ip'] ?? ''));
+        if ($value === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($value);
+        return $timestamp ? date('Y-m-d\TH:i', $timestamp) : '';
     }
 
-    $port = trim((string)($allocation['port'] ?? ''));
-    $label = $host !== '' && $port !== '' ? $host . ':' . $port : 'Allocation #' . (int)($allocation['id'] ?? 0);
-    $notes = trim((string)($allocation['notes'] ?? ''));
+    function fbgAdminServersFormatExpirationForDb(string $value): ?string
+    {
+        $value = trim($value);
 
-    if ($notes !== '') {
-        $label .= ' - ' . $notes;
+        if ($value === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($value);
+        return $timestamp ? date('Y-m-d H:i:s', $timestamp) : null;
     }
 
-    return $label;
-}
+    function fbgAdminServersOwnerOptionLabel(array $user): string
+    {
+        $name = trim((string)($user['name_first'] ?? '') . ' ' . (string)($user['name_last'] ?? ''));
+        $username = trim((string)($user['username'] ?? ''));
+        $email = trim((string)($user['email'] ?? ''));
+        $label = $name !== '' ? $name : ($username !== '' ? $username : $email);
 
-function fbgAdminServersDockerImagesMap(mixed $value): array
-{
-    $raw = trim((string)$value);
+        if ($username !== '' && $label !== $username) {
+            $label .= ' (' . $username . ')';
+        }
 
-    if ($raw === '') {
-        return [];
+        if ($email !== '') {
+            $label .= ' - ' . $email;
+        }
+
+        return $label . ' [#' . (int)$user['id'] . ']';
     }
 
-    $decoded = json_decode($raw, true);
-    $images = [];
+    function fbgAdminServersOwnerIdFromInput(string $value): int
+    {
+        if (preg_match('/\[#(\d+)\]\s*$/', trim($value), $matches)) {
+            return (int)$matches[1];
+        }
 
-    if (is_array($decoded)) {
-        foreach ($decoded as $label => $image) {
-            if (!is_string($image) || trim($image) === '') {
+        return 0;
+    }
+
+    function fbgAdminServersAllocationLabel(array $allocation): string
+    {
+        $host = trim((string)($allocation['ip_alias'] ?? ''));
+        if ($host === '') {
+            $host = trim((string)($allocation['ip'] ?? ''));
+        }
+
+        $port = trim((string)($allocation['port'] ?? ''));
+        $label = $host !== '' && $port !== '' ? $host . ':' . $port : 'Allocation #' . (int)($allocation['id'] ?? 0);
+        $notes = trim((string)($allocation['notes'] ?? ''));
+
+        if ($notes !== '') {
+            $label .= ' - ' . $notes;
+        }
+
+        return $label;
+    }
+
+    function fbgAdminServersDockerImagesMap(mixed $value): array
+    {
+        $raw = trim((string)$value);
+
+        if ($raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        $images = [];
+
+        if (is_array($decoded)) {
+            foreach ($decoded as $label => $image) {
+                if (!is_string($image) || trim($image) === '') {
+                    continue;
+                }
+
+                $image = trim($image);
+                $label = is_string($label) && trim($label) !== '' ? trim($label) : $image;
+                $images[$image] = $label;
+            }
+
+            return $images;
+        }
+
+        return [$raw => $raw];
+    }
+
+    function fbgAdminServersDatabaseHostLabel(array $host): string
+    {
+        $name = trim((string)($host['name'] ?? ''));
+        $address = trim((string)($host['host'] ?? ''));
+        $port = trim((string)($host['port'] ?? ''));
+        $label = $name !== '' ? $name : 'Database Host #' . (int)($host['id'] ?? 0);
+
+        if ($address !== '') {
+            $label .= ' (' . $address . ($port !== '' ? ':' . $port : '') . ')';
+        }
+
+        return $label;
+    }
+
+    function fbgAdminServersDatabaseApiError(array $result, string $fallback): string
+    {
+        if ((int)($result['status'] ?? 0) === 403) {
+            return 'Pterodactyl denied this database action. Check that PTERO_DB_MANAGEMENT_API_KEY has Server Databases read/write permission, then try again.';
+        }
+
+        return (string)($result['error'] ?? $fallback);
+    }
+
+    function fbgAdminServersServerApiError(array $result, string $fallback): string
+    {
+        if ((int)($result['status'] ?? 0) === 403) {
+            return 'Pterodactyl denied this server action. Check that PTERO_API_KEY has the required server permissions, then try again.';
+        }
+
+        return (string)($result['error'] ?? $fallback);
+    }
+
+    function fbgAdminServersFormatMb(mixed $value): string
+    {
+        $megabytes = (int)$value;
+
+        if ($megabytes === 0) {
+            return 'Unlimited';
+        }
+
+        if ($megabytes > 0 && $megabytes % 1024 === 0) {
+            return number_format($megabytes / 1024) . ' GB';
+        }
+
+        return number_format($megabytes) . ' MB';
+    }
+
+    function fbgAdminServersFormatCpu(mixed $value): string
+    {
+        $cpu = (int)$value;
+        return $cpu === 0 ? 'Unlimited' : number_format($cpu) . '%';
+    }
+
+    function fbgAdminServersConnection(array $server): string
+    {
+        $host = trim((string)($server['allocation_alias'] ?? ''));
+        if ($host === '') {
+            $host = trim((string)($server['allocation_ip'] ?? ''));
+        }
+
+        $port = trim((string)($server['allocation_port'] ?? ''));
+
+        if ($host === '' || $port === '') {
+            return '-';
+        }
+
+        return $host . ':' . $port;
+    }
+
+    function fbgAdminServersMountStatusClass(bool $isMounted): string
+    {
+        return $isMounted ? 'is-active' : 'is-installing';
+    }
+
+    function fbgAdminServersStatusLabel(mixed $status): string
+    {
+        $status = strtolower(trim((string)$status));
+
+        return match ($status) {
+            'suspended' => 'Suspended',
+            'installing' => 'Installing',
+            'install_failed' => 'Install Failed',
+            default => 'Active',
+        };
+    }
+
+    function fbgAdminServersStatusClass(mixed $status): string
+    {
+        $status = strtolower(trim((string)$status));
+
+        return match ($status) {
+            'suspended' => 'is-suspended',
+            'installing' => 'is-installing',
+            'install_failed' => 'is-error',
+            default => 'is-active',
+        };
+    }
+
+    function fbgAdminServersBaseQuery(array $overrides = []): string
+    {
+        $query = $_GET;
+        $query['name'] = 'admin-servers';
+
+        foreach ($overrides as $key => $value) {
+            if ($value === null) {
+                unset($query[$key]);
                 continue;
             }
 
-            $image = trim($image);
-            $label = is_string($label) && trim($label) !== '' ? trim($label) : $image;
-            $images[$image] = $label;
+            $query[$key] = $value;
         }
 
-        return $images;
+        return './page.php?' . http_build_query($query);
     }
 
-    return [$raw => $raw];
-}
+    function fbgAdminServersSortUrl(string $targetSort, string $currentSort, string $currentDirection): string
+    {
+        $direction = ($targetSort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
+        $query = $_GET;
+        $query['name'] = 'admin-servers';
+        $query['sort'] = $targetSort;
+        $query['dir'] = $direction;
+        $query['page_num'] = 1;
 
-function fbgAdminServersDatabaseHostLabel(array $host): string
-{
-    $name = trim((string)($host['name'] ?? ''));
-    $address = trim((string)($host['host'] ?? ''));
-    $port = trim((string)($host['port'] ?? ''));
-    $label = $name !== '' ? $name : 'Database Host #' . (int)($host['id'] ?? 0);
-
-    if ($address !== '') {
-        $label .= ' (' . $address . ($port !== '' ? ':' . $port : '') . ')';
+        return './page.php?' . http_build_query($query);
     }
 
-    return $label;
-}
-
-function fbgAdminServersDatabaseApiError(array $result, string $fallback): string
-{
-    if ((int)($result['status'] ?? 0) === 403) {
-        return 'Pterodactyl denied this database action. Check that PTERO_DB_MANAGEMENT_API_KEY has Server Databases read/write permission, then try again.';
-    }
-
-    return (string)($result['error'] ?? $fallback);
-}
-
-function fbgAdminServersServerApiError(array $result, string $fallback): string
-{
-    if ((int)($result['status'] ?? 0) === 403) {
-        return 'Pterodactyl denied this server action. Check that PTERO_API_KEY has the required server permissions, then try again.';
-    }
-
-    return (string)($result['error'] ?? $fallback);
-}
-
-function fbgAdminServersFormatMb(mixed $value): string
-{
-    $megabytes = (int)$value;
-
-    if ($megabytes === 0) {
-        return 'Unlimited';
-    }
-
-    if ($megabytes > 0 && $megabytes % 1024 === 0) {
-        return number_format($megabytes / 1024) . ' GB';
-    }
-
-    return number_format($megabytes) . ' MB';
-}
-
-function fbgAdminServersFormatCpu(mixed $value): string
-{
-    $cpu = (int)$value;
-    return $cpu === 0 ? 'Unlimited' : number_format($cpu) . '%';
-}
-
-function fbgAdminServersConnection(array $server): string
-{
-    $host = trim((string)($server['allocation_alias'] ?? ''));
-    if ($host === '') {
-        $host = trim((string)($server['allocation_ip'] ?? ''));
-    }
-
-    $port = trim((string)($server['allocation_port'] ?? ''));
-
-    if ($host === '' || $port === '') {
-        return '-';
-    }
-
-    return $host . ':' . $port;
-}
-
-function fbgAdminServersMountStatusClass(bool $isMounted): string
-{
-    return $isMounted ? 'is-active' : 'is-installing';
-}
-
-function fbgAdminServersStatusLabel(mixed $status): string
-{
-    $status = strtolower(trim((string)$status));
-
-    return match ($status) {
-        'suspended' => 'Suspended',
-        'installing' => 'Installing',
-        'install_failed' => 'Install Failed',
-        default => 'Active',
-    };
-}
-
-function fbgAdminServersStatusClass(mixed $status): string
-{
-    $status = strtolower(trim((string)$status));
-
-    return match ($status) {
-        'suspended' => 'is-suspended',
-        'installing' => 'is-installing',
-        'install_failed' => 'is-error',
-        default => 'is-active',
-    };
-}
-
-function fbgAdminServersBaseQuery(array $overrides = []): string
-{
-    $query = $_GET;
-    $query['name'] = 'admin-servers';
-
-    foreach ($overrides as $key => $value) {
-        if ($value === null) {
-            unset($query[$key]);
-            continue;
+    function fbgAdminServersFind(int $serverId): ?array
+    {
+        if ($serverId <= 0) {
+            return null;
         }
 
-        $query[$key] = $value;
+        $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
+            ? fbgEnsurePteroServersSuspendManualColumn()
+            : false;
+        $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual,' : '0 AS suspend_manual,';
+
+        $stmt = fbgPteroDb()->prepare("
+            SELECT
+                s.id,
+                s.external_id,
+                s.uuid,
+                s.uuidShort AS identifier,
+                s.node_id,
+                s.name,
+                s.description,
+                s.status,
+                {$suspendManualSelect}
+                s.owner_id,
+                s.memory,
+                s.swap,
+                s.disk,
+                s.io,
+                s.cpu,
+                s.threads,
+                s.oom_disabled,
+                s.allocation_limit,
+                s.database_limit,
+                s.backup_limit,
+                s.product_id,
+                s.allocation_id,
+                s.nest_id,
+                s.egg_id,
+                s.startup,
+                s.image,
+                s.expired_at,
+                s.created_at,
+                s.updated_at,
+                n.name AS node_name,
+                n.fqdn AS node_fqdn,
+                (
+                    SELECT aa.ip_alias
+                    FROM allocations aa
+                    WHERE aa.node_id = s.node_id
+                    AND aa.ip_alias IS NOT NULL
+                    AND aa.ip_alias != ''
+                    ORDER BY aa.id ASC
+                    LIMIT 1
+                ) AS node_allocation_alias,
+                e.name AS egg_name,
+                e.startup AS egg_startup,
+                e.docker_images AS egg_docker_images,
+                ns.name AS nest_name,
+                u.username AS owner_username,
+                u.name_first AS owner_first_name,
+                u.name_last AS owner_last_name,
+                u.email AS owner_email,
+                a.ip AS allocation_ip,
+                a.ip_alias AS allocation_alias,
+                a.port AS allocation_port,
+                g.name AS product_name,
+                gc.title AS product_category_title
+            FROM servers s
+            LEFT JOIN nodes n ON n.id = s.node_id
+            LEFT JOIN eggs e ON e.id = s.egg_id
+            LEFT JOIN nests ns ON ns.id = s.nest_id
+            LEFT JOIN users u ON u.id = s.owner_id
+            LEFT JOIN allocations a ON a.id = s.allocation_id
+            LEFT JOIN games g ON g.id = s.product_id
+            LEFT JOIN game_category gc ON gc.id = g.category_id
+            WHERE s.id = :id
+            LIMIT 1
+        ");
+        $stmt->execute(['id' => $serverId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
     }
 
-    return './page.php?' . http_build_query($query);
-}
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        fbgAdminServersVerifyCsrf();
 
-function fbgAdminServersSortUrl(string $targetSort, string $currentSort, string $currentDirection): string
-{
-    $direction = ($targetSort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
-    $query = $_GET;
-    $query['name'] = 'admin-servers';
-    $query['sort'] = $targetSort;
-    $query['dir'] = $direction;
-    $query['page_num'] = 1;
+        $action = trim((string)($_POST['action'] ?? ''));
 
-    return './page.php?' . http_build_query($query);
-}
+        if ($action === 'create_server') {
+            $name = trim((string)($_POST['create_name'] ?? ''));
+            $description = trim((string)($_POST['create_description'] ?? ''));
+            $ownerInput = trim((string)($_POST['create_owner_search'] ?? ''));
+            $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
+            $nodeId = max(0, (int)($_POST['create_node_id'] ?? 0));
+            $allocationId = max(0, (int)($_POST['create_allocation_id'] ?? 0));
+            $additionalAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['create_allocation_additional'] ?? [])))));
+            $databaseLimit = max(0, (int)($_POST['create_database_limit'] ?? 0));
+            $allocationLimit = max(0, (int)($_POST['create_allocation_limit'] ?? 0));
+            $backupLimit = max(0, (int)($_POST['create_backup_limit'] ?? 0));
+            $cpu = max(0, (int)($_POST['create_cpu'] ?? 0));
+            $threads = trim((string)($_POST['create_threads'] ?? ''));
+            $memory = max(0, (int)($_POST['create_memory'] ?? 0));
+            $swap = max(-1, (int)($_POST['create_swap'] ?? 0));
+            $disk = max(0, (int)($_POST['create_disk'] ?? 0));
+            $io = (int)($_POST['create_io'] ?? 500);
+            $oomDisabled = !isset($_POST['create_enable_oom_killer']);
+            $nestId = max(0, (int)($_POST['create_nest_id'] ?? 0));
+            $eggId = max(0, (int)($_POST['create_egg_id'] ?? 0));
+            $skipScripts = isset($_POST['create_skip_scripts']);
+            $dockerImage = trim((string)($_POST['create_docker_image'] ?? ''));
+            $customImage = trim((string)($_POST['create_custom_image'] ?? ''));
+            $startup = trim((string)($_POST['create_startup'] ?? ''));
+            $startOnCompletion = isset($_POST['create_start_on_completion']);
+            $environment = $_POST['create_environment'] ?? [];
 
-function fbgAdminServersFind(int $serverId): ?array
-{
-    if ($serverId <= 0) {
-        return null;
-    }
+            if ($name === '') {
+                fbgAdminServersRedirect('Server name is required.', 'error', null, 'details', true);
+            }
 
-    $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
-        ? fbgEnsurePteroServersSuspendManualColumn()
-        : false;
-    $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual,' : '0 AS suspend_manual,';
+            if ($ownerId <= 0) {
+                fbgAdminServersRedirect('Select a valid server owner from the owner search list.', 'error', null, 'details', true);
+            }
 
-    $stmt = fbgPteroDb()->prepare("
-        SELECT
-            s.id,
-            s.external_id,
-            s.uuid,
-            s.uuidShort AS identifier,
-            s.node_id,
-            s.name,
-            s.description,
-            s.status,
-            {$suspendManualSelect}
-            s.owner_id,
-            s.memory,
-            s.swap,
-            s.disk,
-            s.io,
-            s.cpu,
-            s.threads,
-            s.oom_disabled,
-            s.allocation_limit,
-            s.database_limit,
-            s.backup_limit,
-            s.product_id,
-            s.allocation_id,
-            s.nest_id,
-            s.egg_id,
-            s.startup,
-            s.image,
-            s.expired_at,
-            s.created_at,
-            s.updated_at,
-            n.name AS node_name,
-            n.fqdn AS node_fqdn,
-            (
-                SELECT aa.ip_alias
-                FROM allocations aa
-                WHERE aa.node_id = s.node_id
-                  AND aa.ip_alias IS NOT NULL
-                  AND aa.ip_alias != ''
-                ORDER BY aa.id ASC
+            if ($nodeId <= 0) {
+                fbgAdminServersRedirect('Select a valid node.', 'error', null, 'details', true);
+            }
+
+            if ($allocationId <= 0) {
+                fbgAdminServersRedirect('Select a valid default port.', 'error', null, 'details', true);
+            }
+
+            if ($nestId <= 0 || $eggId <= 0) {
+                fbgAdminServersRedirect('Select a valid nest and egg.', 'error', null, 'details', true);
+            }
+
+            if ($startup === '') {
+                fbgAdminServersRedirect('Startup command is required.', 'error', null, 'details', true);
+            }
+
+            if ($io < 10 || $io > 1000) {
+                fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', null, 'details', true);
+            }
+
+            $image = $customImage !== '' ? $customImage : $dockerImage;
+            if ($image === '') {
+                fbgAdminServersRedirect('Select a docker image or provide a custom one.', 'error', null, 'details', true);
+            }
+
+            if (in_array($allocationId, $additionalAllocations, true)) {
+                fbgAdminServersRedirect('The default port does not need to be assigned again as an additional port.', 'error', null, 'details', true);
+            }
+
+            $ownerStmt = fbgPteroDb()->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
+            $ownerStmt->execute(['id' => $ownerId]);
+            if ((int)($ownerStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected server owner could not be found.', 'error', null, 'details', true);
+            }
+
+            $nodeStmt = fbgPteroDb()->prepare('SELECT id FROM nodes WHERE id = :id LIMIT 1');
+            $nodeStmt->execute(['id' => $nodeId]);
+            if ((int)($nodeStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected node could not be found.', 'error', null, 'details', true);
+            }
+
+            $eggStmt = fbgPteroDb()->prepare('
+                SELECT id
+                FROM eggs
+                WHERE id = :egg_id
+                AND nest_id = :nest_id
                 LIMIT 1
-            ) AS node_allocation_alias,
-            e.name AS egg_name,
-            e.startup AS egg_startup,
-            e.docker_images AS egg_docker_images,
-            ns.name AS nest_name,
-            u.username AS owner_username,
-            u.name_first AS owner_first_name,
-            u.name_last AS owner_last_name,
-            u.email AS owner_email,
-            a.ip AS allocation_ip,
-            a.ip_alias AS allocation_alias,
-            a.port AS allocation_port,
-            g.name AS product_name,
-            gc.title AS product_category_title
-        FROM servers s
-        LEFT JOIN nodes n ON n.id = s.node_id
-        LEFT JOIN eggs e ON e.id = s.egg_id
-        LEFT JOIN nests ns ON ns.id = s.nest_id
-        LEFT JOIN users u ON u.id = s.owner_id
-        LEFT JOIN allocations a ON a.id = s.allocation_id
-        LEFT JOIN games g ON g.id = s.product_id
-        LEFT JOIN game_category gc ON gc.id = g.category_id
-        WHERE s.id = :id
-        LIMIT 1
-    ");
-    $stmt->execute(['id' => $serverId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            ');
+            $eggStmt->execute([
+                'egg_id' => $eggId,
+                'nest_id' => $nestId,
+            ]);
+            if ((int)($eggStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', null, 'details', true);
+            }
 
-    return $row ?: null;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    fbgAdminServersVerifyCsrf();
-
-    $action = trim((string)($_POST['action'] ?? ''));
-
-    if ($action === 'create_server') {
-        $name = trim((string)($_POST['create_name'] ?? ''));
-        $description = trim((string)($_POST['create_description'] ?? ''));
-        $ownerInput = trim((string)($_POST['create_owner_search'] ?? ''));
-        $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
-        $nodeId = max(0, (int)($_POST['create_node_id'] ?? 0));
-        $allocationId = max(0, (int)($_POST['create_allocation_id'] ?? 0));
-        $additionalAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['create_allocation_additional'] ?? [])))));
-        $databaseLimit = max(0, (int)($_POST['create_database_limit'] ?? 0));
-        $allocationLimit = max(0, (int)($_POST['create_allocation_limit'] ?? 0));
-        $backupLimit = max(0, (int)($_POST['create_backup_limit'] ?? 0));
-        $cpu = max(0, (int)($_POST['create_cpu'] ?? 0));
-        $threads = trim((string)($_POST['create_threads'] ?? ''));
-        $memory = max(0, (int)($_POST['create_memory'] ?? 0));
-        $swap = max(-1, (int)($_POST['create_swap'] ?? 0));
-        $disk = max(0, (int)($_POST['create_disk'] ?? 0));
-        $io = (int)($_POST['create_io'] ?? 500);
-        $oomDisabled = !isset($_POST['create_enable_oom_killer']);
-        $nestId = max(0, (int)($_POST['create_nest_id'] ?? 0));
-        $eggId = max(0, (int)($_POST['create_egg_id'] ?? 0));
-        $skipScripts = isset($_POST['create_skip_scripts']);
-        $dockerImage = trim((string)($_POST['create_docker_image'] ?? ''));
-        $customImage = trim((string)($_POST['create_custom_image'] ?? ''));
-        $startup = trim((string)($_POST['create_startup'] ?? ''));
-        $startOnCompletion = isset($_POST['create_start_on_completion']);
-        $environment = $_POST['create_environment'] ?? [];
-
-        if ($name === '') {
-            fbgAdminServersRedirect('Server name is required.', 'error', null, 'details', true);
-        }
-
-        if ($ownerId <= 0) {
-            fbgAdminServersRedirect('Select a valid server owner from the owner search list.', 'error', null, 'details', true);
-        }
-
-        if ($nodeId <= 0) {
-            fbgAdminServersRedirect('Select a valid node.', 'error', null, 'details', true);
-        }
-
-        if ($allocationId <= 0) {
-            fbgAdminServersRedirect('Select a valid default port.', 'error', null, 'details', true);
-        }
-
-        if ($nestId <= 0 || $eggId <= 0) {
-            fbgAdminServersRedirect('Select a valid nest and egg.', 'error', null, 'details', true);
-        }
-
-        if ($startup === '') {
-            fbgAdminServersRedirect('Startup command is required.', 'error', null, 'details', true);
-        }
-
-        if ($io < 10 || $io > 1000) {
-            fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', null, 'details', true);
-        }
-
-        $image = $customImage !== '' ? $customImage : $dockerImage;
-        if ($image === '') {
-            fbgAdminServersRedirect('Select a docker image or provide a custom one.', 'error', null, 'details', true);
-        }
-
-        if (in_array($allocationId, $additionalAllocations, true)) {
-            fbgAdminServersRedirect('The default port does not need to be assigned again as an additional port.', 'error', null, 'details', true);
-        }
-
-        $ownerStmt = fbgPteroDb()->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
-        $ownerStmt->execute(['id' => $ownerId]);
-        if ((int)($ownerStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected server owner could not be found.', 'error', null, 'details', true);
-        }
-
-        $nodeStmt = fbgPteroDb()->prepare('SELECT id FROM nodes WHERE id = :id LIMIT 1');
-        $nodeStmt->execute(['id' => $nodeId]);
-        if ((int)($nodeStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected node could not be found.', 'error', null, 'details', true);
-        }
-
-        $eggStmt = fbgPteroDb()->prepare('
-            SELECT id
-            FROM eggs
-            WHERE id = :egg_id
-              AND nest_id = :nest_id
-            LIMIT 1
-        ');
-        $eggStmt->execute([
-            'egg_id' => $eggId,
-            'nest_id' => $nestId,
-        ]);
-        if ((int)($eggStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', null, 'details', true);
-        }
-
-        $allocationStmt = fbgPteroDb()->prepare('
-            SELECT id
-            FROM allocations
-            WHERE id = :id
-              AND node_id = :node_id
-              AND server_id IS NULL
-            LIMIT 1
-        ');
-        $allocationStmt->execute([
-            'id' => $allocationId,
-            'node_id' => $nodeId,
-        ]);
-        if ((int)($allocationStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected default port is not available on the chosen node.', 'error', null, 'details', true);
-        }
-
-        if (!empty($additionalAllocations)) {
-            $placeholders = implode(',', array_fill(0, count($additionalAllocations), '?'));
-            $additionalStmt = fbgPteroDb()->prepare("
+            $allocationStmt = fbgPteroDb()->prepare('
                 SELECT id
                 FROM allocations
-                WHERE id IN ({$placeholders})
-                  AND node_id = ?
-                  AND server_id IS NULL
-            ");
-            $additionalStmt->execute([...$additionalAllocations, $nodeId]);
-            $validAdditionalIds = array_map('intval', $additionalStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
-            if (count($validAdditionalIds) !== count($additionalAllocations)) {
-                fbgAdminServersRedirect('One or more additional ports are no longer available on the selected node.', 'error', null, 'details', true);
+                WHERE id = :id
+                AND node_id = :node_id
+                AND server_id IS NULL
+                LIMIT 1
+            ');
+            $allocationStmt->execute([
+                'id' => $allocationId,
+                'node_id' => $nodeId,
+            ]);
+            if ((int)($allocationStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected default port is not available on the chosen node.', 'error', null, 'details', true);
             }
+
+            if (!empty($additionalAllocations)) {
+                $placeholders = implode(',', array_fill(0, count($additionalAllocations), '?'));
+                $additionalStmt = fbgPteroDb()->prepare("
+                    SELECT id
+                    FROM allocations
+                    WHERE id IN ({$placeholders})
+                    AND node_id = ?
+                    AND server_id IS NULL
+                ");
+                $additionalStmt->execute([...$additionalAllocations, $nodeId]);
+                $validAdditionalIds = array_map('intval', $additionalStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+                if (count($validAdditionalIds) !== count($additionalAllocations)) {
+                    fbgAdminServersRedirect('One or more additional ports are no longer available on the selected node.', 'error', null, 'details', true);
+                }
+            }
+
+            if (!is_array($environment)) {
+                $environment = [];
+            }
+
+            $environment = array_map(static fn($value) => is_scalar($value) ? trim((string)$value) : '', $environment);
+
+            $payload = [
+                'name' => $name,
+                'description' => $description !== '' ? $description : null,
+                'user' => $ownerId,
+                'egg' => $eggId,
+                'docker_image' => $image,
+                'startup' => $startup,
+                'environment' => $environment,
+                'skip_scripts' => $skipScripts,
+                'oom_disabled' => $oomDisabled,
+                'limits' => [
+                    'memory' => $memory,
+                    'swap' => $swap,
+                    'disk' => $disk,
+                    'io' => $io,
+                    'threads' => $threads !== '' ? $threads : null,
+                    'cpu' => $cpu,
+                ],
+                'feature_limits' => [
+                    'databases' => $databaseLimit,
+                    'allocations' => $allocationLimit,
+                    'backups' => $backupLimit,
+                ],
+                'allocation' => [
+                    'default' => $allocationId,
+                    'additional' => $additionalAllocations,
+                ],
+                'start_on_completion' => $startOnCompletion,
+            ];
+
+            $result = pteroRequest('POST', 'servers', $payload);
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(
+                    fbgAdminServersServerApiError($result, 'Server could not be created.'),
+                    'error',
+                    null,
+                    'details',
+                    true
+                );
+            }
+
+            $createdServerId = (int)($result['data']['attributes']['id'] ?? 0);
+            if ($createdServerId <= 0) {
+                fbgAdminServersRedirect('Server was created, but the new server ID was not returned by the API.', 'success');
+            }
+
+            fbgAdminServersRedirect('Server created successfully.', 'success', $createdServerId, 'about');
         }
 
-        if (!is_array($environment)) {
-            $environment = [];
+        $serverId = (int)($_POST['server_id'] ?? 0);
+        $server = fbgAdminServersFind($serverId);
+
+        if (!$server) {
+            fbgAdminServersRedirect('Server could not be found.', 'error');
         }
 
-        $environment = array_map(static fn($value) => is_scalar($value) ? trim((string)$value) : '', $environment);
+        if ($action === 'fetch_expiration_history') {
+            $entries = array_map(static function (array $entry): array {
+                return [
+                    'created_at' => fbgAdminServersSafeDate($entry['created_at'] ?? ''),
+                    'action' => fbgServerExpirationActionLabel((string)($entry['action'] ?? '')),
+                    'previous_expiration' => !empty($entry['old_expired_at']) ? fbgAdminServersSafeDate($entry['old_expired_at']) : 'None',
+                    'new_expiration' => !empty($entry['new_expired_at']) ? fbgAdminServersSafeDate($entry['new_expired_at']) : 'None',
+                    'source' => fbgServerExpirationSourceLabel((string)($entry['source'] ?? '')),
+                    'changed_by' => trim((string)($entry['changed_by_label'] ?? '')) !== '' ? (string)$entry['changed_by_label'] : 'System',
+                ];
+            }, fbgGetServerExpirationHistoryEntries($serverId));
 
-        $payload = [
-            'name' => $name,
-            'description' => $description !== '' ? $description : null,
-            'user' => $ownerId,
-            'egg' => $eggId,
-            'docker_image' => $image,
-            'startup' => $startup,
-            'environment' => $environment,
-            'skip_scripts' => $skipScripts,
-            'oom_disabled' => $oomDisabled,
-            'limits' => [
+            fbgAdminServersJsonResponse([
+                'ok' => true,
+                'entries' => $entries,
+            ]);
+        }
+
+        if ($action === 'restore_expiration') {
+            $currentExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
+            $lastKnownExpiration = fbgGetServerLastKnownExpiration($serverId, $currentExpiredAt);
+
+            if ($lastKnownExpiration === null) {
+                fbgAdminServersRedirect('No prior expiration date is available to restore.', 'error', $serverId, 'details');
+            }
+
+            $restoreStmt = fbgPteroDb()->prepare('
+                UPDATE servers
+                SET expired_at = :expired_at,
+                    updated_at = NOW()
+                WHERE id = :id
+            ');
+            $restoreStmt->execute([
+                'expired_at' => $lastKnownExpiration,
+                'id' => $serverId,
+            ]);
+
+            $actor = fbgCurrentExpirationHistoryActor();
+            fbgTryRecordServerExpirationHistory(
+                $serverId,
+                'admin_restore',
+                'admin_restore_control',
+                $currentExpiredAt,
+                $lastKnownExpiration,
+                $actor['user_id'] ?? null,
+                $actor['label'] ?? null
+            );
+
+            fbgAdminServersRedirect('Expiration date restored from history.', 'success', $serverId, 'details');
+        }
+
+        if ($action === 'update_details') {
+            $name = trim((string)($_POST['name'] ?? ''));
+            $externalId = trim((string)($_POST['external_id'] ?? ''));
+            $productId = max(0, (int)($_POST['product_id'] ?? 0));
+            $description = trim((string)($_POST['description'] ?? ''));
+            $ownerInput = trim((string)($_POST['owner_search'] ?? ''));
+            $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
+            $expiredAt = fbgAdminServersFormatExpirationForDb((string)($_POST['expired_at'] ?? ''));
+            $overrideConfirmed = max(0, (int)($_POST['expiration_override_confirmed'] ?? 0)) === 1;
+            $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
+            $oldProductId = max(0, (int)($server['product_id'] ?? 0));
+
+            if ($name === '') {
+                fbgAdminServersRedirect('Server name is required.', 'error', $serverId);
+            }
+
+            if ($ownerId <= 0) {
+                fbgAdminServersRedirect('Select a valid server owner from the owner search list.', 'error', $serverId);
+            }
+
+            $ownerStmt = fbgPteroDb()->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
+            $ownerStmt->execute(['id' => $ownerId]);
+            if ((int)($ownerStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected server owner could not be found.', 'error', $serverId);
+            }
+
+            if ($productId > 0) {
+                $productStmt = fbgPteroDb()->prepare('SELECT id FROM games WHERE id = :id LIMIT 1');
+                $productStmt->execute(['id' => $productId]);
+                if ((int)($productStmt->fetchColumn() ?: 0) <= 0) {
+                    fbgAdminServersRedirect('Selected server plan could not be found.', 'error', $serverId);
+                }
+            }
+
+            if ($productId > 0 && $expiredAt === null && !$overrideConfirmed) {
+                $warningMessage = $oldExpiredAt !== null
+                    ? 'You are about to remove the expiration date from a shop-linked server.'
+                    : 'This shop-linked server is currently missing an expiration date.';
+
+                fbgAdminServersRedirect($warningMessage . ' Confirm the override to save without an expiration.', 'error', $serverId, 'details');
+            }
+
+            $detailsPayload = [
+                'name' => $name,
+                'user' => $ownerId,
+                'description' => $description,
+            ];
+
+            $detailsPayload['external_id'] = $externalId !== '' ? $externalId : null;
+
+            $result = pteroRequest('PATCH', "servers/{$serverId}/details", $detailsPayload);
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect((string)($result['error'] ?? 'Server details could not be updated.'), 'error', $serverId);
+            }
+
+            $expireStmt = fbgPteroDb()->prepare('
+                UPDATE servers
+                SET product_id = :product_id,
+                    expired_at = :expired_at,
+                    updated_at = NOW()
+                WHERE id = :id
+            ');
+            $expireStmt->execute([
+                'product_id' => $productId > 0 ? $productId : null,
+                'expired_at' => $expiredAt,
+                'id' => $serverId,
+            ]);
+
+            $actor = fbgCurrentExpirationHistoryActor();
+            $shouldLogExpirationChange =
+                $oldExpiredAt !== $expiredAt
+                || ($productId > 0 && $expiredAt === null && $overrideConfirmed)
+                || ($oldProductId > 0 && $productId === 0 && $oldExpiredAt !== $expiredAt);
+
+            if ($shouldLogExpirationChange) {
+                $historyAction = ($oldExpiredAt !== null && $expiredAt === null)
+                    ? 'admin_clear'
+                    : 'admin_edit';
+
+                fbgTryRecordServerExpirationHistory(
+                    $serverId,
+                    $historyAction,
+                    'admin_server_editor',
+                    $oldExpiredAt,
+                    $expiredAt,
+                    $actor['user_id'] ?? null,
+                    $actor['label'] ?? null
+                );
+            }
+
+            fbgAdminServersRedirect('Server details updated successfully.', 'success', $serverId);
+        }
+
+        if ($action === 'update_build') {
+            $allocationId = max(0, (int)($_POST['allocation_id'] ?? 0));
+            $memory = max(0, (int)($_POST['memory'] ?? 0));
+            $swap = max(-1, (int)($_POST['swap'] ?? 0));
+            $disk = max(0, (int)($_POST['disk'] ?? 0));
+            $io = (int)($_POST['io'] ?? 500);
+            $cpu = max(0, (int)($_POST['cpu'] ?? 0));
+            $threads = trim((string)($_POST['threads'] ?? ''));
+            $oomDisabled = isset($_POST['oom_disabled']);
+            $databaseLimit = max(0, (int)($_POST['database_limit'] ?? 0));
+            $allocationLimit = max(0, (int)($_POST['allocation_limit'] ?? 0));
+            $backupLimit = max(0, (int)($_POST['backup_limit'] ?? 0));
+            $addAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['add_allocations'] ?? [])))));
+            $removeAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['remove_allocations'] ?? [])))));
+
+            if ($allocationId <= 0) {
+                fbgAdminServersRedirect('Select a valid default game port.', 'error', $serverId, 'build');
+            }
+
+            if ($io < 10 || $io > 1000) {
+                fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', $serverId, 'build');
+            }
+
+            if (in_array($allocationId, $removeAllocations, true)) {
+                fbgAdminServersRedirect('The default game port cannot also be removed.', 'error', $serverId, 'build');
+            }
+
+            if (in_array($allocationId, $addAllocations, true)) {
+                fbgAdminServersRedirect('The default game port does not need to be assigned as an additional port.', 'error', $serverId, 'build');
+            }
+
+            $allocationStmt = fbgPteroDb()->prepare('
+                SELECT id, server_id
+                FROM allocations
+                WHERE id = :id
+                AND node_id = :node_id
+                AND server_id = :server_id
+                LIMIT 1
+            ');
+            $allocationStmt->execute([
+                'id' => $allocationId,
+                'node_id' => (int)$server['node_id'],
+                'server_id' => $serverId,
+            ]);
+
+            if (!$allocationStmt->fetch(PDO::FETCH_ASSOC)) {
+                fbgAdminServersRedirect('Selected default game port is not assigned to this server.', 'error', $serverId, 'build');
+            }
+
+            if (!empty($addAllocations)) {
+                $placeholders = implode(',', array_fill(0, count($addAllocations), '?'));
+                $addStmt = fbgPteroDb()->prepare("
+                    SELECT id
+                    FROM allocations
+                    WHERE id IN ({$placeholders})
+                    AND node_id = ?
+                    AND server_id IS NULL
+                ");
+                $addStmt->execute([...$addAllocations, (int)$server['node_id']]);
+                $validAddIds = array_map('intval', $addStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+                if (count($validAddIds) !== count($addAllocations)) {
+                    fbgAdminServersRedirect('One or more selected ports are no longer available to assign.', 'error', $serverId, 'build');
+                }
+            }
+
+            if (!empty($removeAllocations)) {
+                $placeholders = implode(',', array_fill(0, count($removeAllocations), '?'));
+                $removeStmt = fbgPteroDb()->prepare("
+                    SELECT id
+                    FROM allocations
+                    WHERE id IN ({$placeholders})
+                    AND server_id = ?
+                ");
+                $removeStmt->execute([...$removeAllocations, $serverId]);
+                $validRemoveIds = array_map('intval', $removeStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+                if (count($validRemoveIds) !== count($removeAllocations)) {
+                    fbgAdminServersRedirect('One or more selected ports are not assigned to this server.', 'error', $serverId, 'build');
+                }
+            }
+
+            $buildPayload = [
+                'allocation' => $allocationId,
                 'memory' => $memory,
                 'swap' => $swap,
                 'disk' => $disk,
                 'io' => $io,
-                'threads' => $threads !== '' ? $threads : null,
                 'cpu' => $cpu,
-            ],
-            'feature_limits' => [
-                'databases' => $databaseLimit,
-                'allocations' => $allocationLimit,
-                'backups' => $backupLimit,
-            ],
-            'allocation' => [
-                'default' => $allocationId,
-                'additional' => $additionalAllocations,
-            ],
-            'start_on_completion' => $startOnCompletion,
-        ];
-
-        $result = pteroRequest('POST', 'servers', $payload);
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect(
-                fbgAdminServersServerApiError($result, 'Server could not be created.'),
-                'error',
-                null,
-                'details',
-                true
-            );
-        }
-
-        $createdServerId = (int)($result['data']['attributes']['id'] ?? 0);
-        if ($createdServerId <= 0) {
-            fbgAdminServersRedirect('Server was created, but the new server ID was not returned by the API.', 'success');
-        }
-
-        fbgAdminServersRedirect('Server created successfully.', 'success', $createdServerId, 'about');
-    }
-
-    $serverId = (int)($_POST['server_id'] ?? 0);
-    $server = fbgAdminServersFind($serverId);
-
-    if (!$server) {
-        fbgAdminServersRedirect('Server could not be found.', 'error');
-    }
-
-    if ($action === 'fetch_expiration_history') {
-        $entries = array_map(static function (array $entry): array {
-            return [
-                'created_at' => fbgAdminServersSafeDate($entry['created_at'] ?? ''),
-                'action' => fbgServerExpirationActionLabel((string)($entry['action'] ?? '')),
-                'previous_expiration' => !empty($entry['old_expired_at']) ? fbgAdminServersSafeDate($entry['old_expired_at']) : 'None',
-                'new_expiration' => !empty($entry['new_expired_at']) ? fbgAdminServersSafeDate($entry['new_expired_at']) : 'None',
-                'source' => fbgServerExpirationSourceLabel((string)($entry['source'] ?? '')),
-                'changed_by' => trim((string)($entry['changed_by_label'] ?? '')) !== '' ? (string)$entry['changed_by_label'] : 'System',
+                'threads' => $threads !== '' ? $threads : null,
+                'oom_disabled' => $oomDisabled,
+                'feature_limits' => [
+                    'databases' => $databaseLimit,
+                    'allocations' => $allocationLimit,
+                    'backups' => $backupLimit,
+                ],
             ];
-        }, fbgGetServerExpirationHistoryEntries($serverId));
 
-        fbgAdminServersJsonResponse([
-            'ok' => true,
-            'entries' => $entries,
-        ]);
-    }
-
-    if ($action === 'restore_expiration') {
-        $currentExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
-        $lastKnownExpiration = fbgGetServerLastKnownExpiration($serverId, $currentExpiredAt);
-
-        if ($lastKnownExpiration === null) {
-            fbgAdminServersRedirect('No prior expiration date is available to restore.', 'error', $serverId, 'details');
-        }
-
-        $restoreStmt = fbgPteroDb()->prepare('
-            UPDATE servers
-            SET expired_at = :expired_at,
-                updated_at = NOW()
-            WHERE id = :id
-        ');
-        $restoreStmt->execute([
-            'expired_at' => $lastKnownExpiration,
-            'id' => $serverId,
-        ]);
-
-        $actor = fbgCurrentExpirationHistoryActor();
-        fbgTryRecordServerExpirationHistory(
-            $serverId,
-            'admin_restore',
-            'admin_restore_control',
-            $currentExpiredAt,
-            $lastKnownExpiration,
-            $actor['user_id'] ?? null,
-            $actor['label'] ?? null
-        );
-
-        fbgAdminServersRedirect('Expiration date restored from history.', 'success', $serverId, 'details');
-    }
-
-    if ($action === 'update_details') {
-        $name = trim((string)($_POST['name'] ?? ''));
-        $externalId = trim((string)($_POST['external_id'] ?? ''));
-        $productId = max(0, (int)($_POST['product_id'] ?? 0));
-        $description = trim((string)($_POST['description'] ?? ''));
-        $ownerInput = trim((string)($_POST['owner_search'] ?? ''));
-        $ownerId = fbgAdminServersOwnerIdFromInput($ownerInput);
-        $expiredAt = fbgAdminServersFormatExpirationForDb((string)($_POST['expired_at'] ?? ''));
-        $overrideConfirmed = max(0, (int)($_POST['expiration_override_confirmed'] ?? 0)) === 1;
-        $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($server['expired_at'] ?? ''));
-        $oldProductId = max(0, (int)($server['product_id'] ?? 0));
-
-        if ($name === '') {
-            fbgAdminServersRedirect('Server name is required.', 'error', $serverId);
-        }
-
-        if ($ownerId <= 0) {
-            fbgAdminServersRedirect('Select a valid server owner from the owner search list.', 'error', $serverId);
-        }
-
-        $ownerStmt = fbgPteroDb()->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
-        $ownerStmt->execute(['id' => $ownerId]);
-        if ((int)($ownerStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected server owner could not be found.', 'error', $serverId);
-        }
-
-        if ($productId > 0) {
-            $productStmt = fbgPteroDb()->prepare('SELECT id FROM games WHERE id = :id LIMIT 1');
-            $productStmt->execute(['id' => $productId]);
-            if ((int)($productStmt->fetchColumn() ?: 0) <= 0) {
-                fbgAdminServersRedirect('Selected server plan could not be found.', 'error', $serverId);
-            }
-        }
-
-        if ($productId > 0 && $expiredAt === null && !$overrideConfirmed) {
-            $warningMessage = $oldExpiredAt !== null
-                ? 'You are about to remove the expiration date from a shop-linked server.'
-                : 'This shop-linked server is currently missing an expiration date.';
-
-            fbgAdminServersRedirect($warningMessage . ' Confirm the override to save without an expiration.', 'error', $serverId, 'details');
-        }
-
-        $detailsPayload = [
-            'name' => $name,
-            'user' => $ownerId,
-            'description' => $description,
-        ];
-
-        $detailsPayload['external_id'] = $externalId !== '' ? $externalId : null;
-
-        $result = pteroRequest('PATCH', "servers/{$serverId}/details", $detailsPayload);
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect((string)($result['error'] ?? 'Server details could not be updated.'), 'error', $serverId);
-        }
-
-        $expireStmt = fbgPteroDb()->prepare('
-            UPDATE servers
-            SET product_id = :product_id,
-                expired_at = :expired_at,
-                updated_at = NOW()
-            WHERE id = :id
-        ');
-        $expireStmt->execute([
-            'product_id' => $productId > 0 ? $productId : null,
-            'expired_at' => $expiredAt,
-            'id' => $serverId,
-        ]);
-
-        $actor = fbgCurrentExpirationHistoryActor();
-        $shouldLogExpirationChange =
-            $oldExpiredAt !== $expiredAt
-            || ($productId > 0 && $expiredAt === null && $overrideConfirmed)
-            || ($oldProductId > 0 && $productId === 0 && $oldExpiredAt !== $expiredAt);
-
-        if ($shouldLogExpirationChange) {
-            $historyAction = ($oldExpiredAt !== null && $expiredAt === null)
-                ? 'admin_clear'
-                : 'admin_edit';
-
-            fbgTryRecordServerExpirationHistory(
-                $serverId,
-                $historyAction,
-                'admin_server_editor',
-                $oldExpiredAt,
-                $expiredAt,
-                $actor['user_id'] ?? null,
-                $actor['label'] ?? null
-            );
-        }
-
-        fbgAdminServersRedirect('Server details updated successfully.', 'success', $serverId);
-    }
-
-    if ($action === 'update_build') {
-        $allocationId = max(0, (int)($_POST['allocation_id'] ?? 0));
-        $memory = max(0, (int)($_POST['memory'] ?? 0));
-        $swap = max(-1, (int)($_POST['swap'] ?? 0));
-        $disk = max(0, (int)($_POST['disk'] ?? 0));
-        $io = (int)($_POST['io'] ?? 500);
-        $cpu = max(0, (int)($_POST['cpu'] ?? 0));
-        $threads = trim((string)($_POST['threads'] ?? ''));
-        $oomDisabled = isset($_POST['oom_disabled']);
-        $databaseLimit = max(0, (int)($_POST['database_limit'] ?? 0));
-        $allocationLimit = max(0, (int)($_POST['allocation_limit'] ?? 0));
-        $backupLimit = max(0, (int)($_POST['backup_limit'] ?? 0));
-        $addAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['add_allocations'] ?? [])))));
-        $removeAllocations = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['remove_allocations'] ?? [])))));
-
-        if ($allocationId <= 0) {
-            fbgAdminServersRedirect('Select a valid default game port.', 'error', $serverId, 'build');
-        }
-
-        if ($io < 10 || $io > 1000) {
-            fbgAdminServersRedirect('Block IO weight must be between 10 and 1000.', 'error', $serverId, 'build');
-        }
-
-        if (in_array($allocationId, $removeAllocations, true)) {
-            fbgAdminServersRedirect('The default game port cannot also be removed.', 'error', $serverId, 'build');
-        }
-
-        if (in_array($allocationId, $addAllocations, true)) {
-            fbgAdminServersRedirect('The default game port does not need to be assigned as an additional port.', 'error', $serverId, 'build');
-        }
-
-        $allocationStmt = fbgPteroDb()->prepare('
-            SELECT id, server_id
-            FROM allocations
-            WHERE id = :id
-              AND node_id = :node_id
-              AND server_id = :server_id
-            LIMIT 1
-        ');
-        $allocationStmt->execute([
-            'id' => $allocationId,
-            'node_id' => (int)$server['node_id'],
-            'server_id' => $serverId,
-        ]);
-
-        if (!$allocationStmt->fetch(PDO::FETCH_ASSOC)) {
-            fbgAdminServersRedirect('Selected default game port is not assigned to this server.', 'error', $serverId, 'build');
-        }
-
-        if (!empty($addAllocations)) {
-            $placeholders = implode(',', array_fill(0, count($addAllocations), '?'));
-            $addStmt = fbgPteroDb()->prepare("
-                SELECT id
-                FROM allocations
-                WHERE id IN ({$placeholders})
-                  AND node_id = ?
-                  AND server_id IS NULL
-            ");
-            $addStmt->execute([...$addAllocations, (int)$server['node_id']]);
-            $validAddIds = array_map('intval', $addStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
-
-            if (count($validAddIds) !== count($addAllocations)) {
-                fbgAdminServersRedirect('One or more selected ports are no longer available to assign.', 'error', $serverId, 'build');
-            }
-        }
-
-        if (!empty($removeAllocations)) {
-            $placeholders = implode(',', array_fill(0, count($removeAllocations), '?'));
-            $removeStmt = fbgPteroDb()->prepare("
-                SELECT id
-                FROM allocations
-                WHERE id IN ({$placeholders})
-                  AND server_id = ?
-            ");
-            $removeStmt->execute([...$removeAllocations, $serverId]);
-            $validRemoveIds = array_map('intval', $removeStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
-
-            if (count($validRemoveIds) !== count($removeAllocations)) {
-                fbgAdminServersRedirect('One or more selected ports are not assigned to this server.', 'error', $serverId, 'build');
-            }
-        }
-
-        $buildPayload = [
-            'allocation' => $allocationId,
-            'memory' => $memory,
-            'swap' => $swap,
-            'disk' => $disk,
-            'io' => $io,
-            'cpu' => $cpu,
-            'threads' => $threads !== '' ? $threads : null,
-            'oom_disabled' => $oomDisabled,
-            'feature_limits' => [
-                'databases' => $databaseLimit,
-                'allocations' => $allocationLimit,
-                'backups' => $backupLimit,
-            ],
-        ];
-
-        if (!empty($addAllocations)) {
-            $buildPayload['add_allocations'] = $addAllocations;
-        }
-
-        if (!empty($removeAllocations)) {
-            $buildPayload['remove_allocations'] = $removeAllocations;
-        }
-
-        $result = pteroRequest('PATCH', "servers/{$serverId}/build", $buildPayload);
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect((string)($result['error'] ?? 'Server build configuration could not be updated.'), 'error', $serverId, 'build');
-        }
-
-        fbgAdminServersRedirect('Server build configuration updated successfully.', 'success', $serverId, 'build');
-    }
-
-    if ($action === 'update_startup') {
-        $startupCommand = trim((string)($_POST['startup'] ?? ''));
-        $nestId = max(0, (int)($_POST['nest_id'] ?? 0));
-        $eggId = max(0, (int)($_POST['egg_id'] ?? 0));
-        $dockerImageSelect = trim((string)($_POST['docker_image'] ?? ''));
-        $dockerImageCustom = trim((string)($_POST['docker_image_custom'] ?? ''));
-        $dockerImage = $dockerImageCustom !== '' ? $dockerImageCustom : $dockerImageSelect;
-        $skipScripts = isset($_POST['skip_scripts']);
-
-        if ($startupCommand === '') {
-            fbgAdminServersRedirect('Startup command is required.', 'error', $serverId, 'startup');
-        }
-
-        if ($nestId <= 0 || $eggId <= 0) {
-            fbgAdminServersRedirect('Select a valid nest and egg.', 'error', $serverId, 'startup');
-        }
-
-        $eggStmt = fbgPteroDb()->prepare('
-            SELECT id, nest_id, name, startup, docker_images
-            FROM eggs
-            WHERE id = :egg_id
-              AND nest_id = :nest_id
-            LIMIT 1
-        ');
-        $eggStmt->execute([
-            'egg_id' => $eggId,
-            'nest_id' => $nestId,
-        ]);
-        $egg = $eggStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$egg) {
-            fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', $serverId, 'startup');
-        }
-
-        if ($dockerImage === '') {
-            $dockerImages = fbgAdminServersDockerImagesMap($egg['docker_images'] ?? '');
-            $dockerImage = (string)array_key_first($dockerImages);
-        }
-
-        if ($dockerImage === '') {
-            fbgAdminServersRedirect('Docker image is required.', 'error', $serverId, 'startup');
-        }
-
-        $variablesStmt = fbgPteroDb()->prepare('
-            SELECT env_variable, default_value
-            FROM egg_variables
-            WHERE egg_id = :egg_id
-            ORDER BY name ASC
-        ');
-        $variablesStmt->execute(['egg_id' => $eggId]);
-        $postedEnvironment = is_array($_POST['environment'] ?? null) ? $_POST['environment'] : [];
-        $environment = [];
-
-        foreach (($variablesStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
-            $key = trim((string)($variable['env_variable'] ?? ''));
-            if ($key === '') {
-                continue;
+            if (!empty($addAllocations)) {
+                $buildPayload['add_allocations'] = $addAllocations;
             }
 
-            $environment[$key] = array_key_exists($key, $postedEnvironment)
-                ? (string)$postedEnvironment[$key]
-                : (string)($variable['default_value'] ?? '');
-        }
-
-        $result = pteroRequest('PATCH', "servers/{$serverId}/startup", [
-            'startup' => $startupCommand,
-            'environment' => $environment,
-            'egg' => $eggId,
-            'image' => $dockerImage,
-            'skip_scripts' => $skipScripts,
-        ]);
-
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect((string)($result['error'] ?? 'Server startup configuration could not be updated.'), 'error', $serverId, 'startup');
-        }
-
-        fbgAdminServersRedirect('Server startup configuration updated successfully.', 'success', $serverId, 'startup');
-    }
-
-    if ($action === 'create_database') {
-        $databaseHostId = max(0, (int)($_POST['database_host_id'] ?? 0));
-        $databaseName = trim((string)($_POST['database_name'] ?? ''));
-        $remote = trim((string)($_POST['remote'] ?? '%'));
-
-        if ($databaseHostId <= 0) {
-            fbgAdminServersRedirect('Select a valid database host.', 'error', $serverId, 'database');
-        }
-
-        $serverDatabaseLimit = $server['database_limit'] !== null ? (int)$server['database_limit'] : null;
-        if ($serverDatabaseLimit !== null) {
-            $databaseCountStmt = fbgPteroDb()->prepare('SELECT COUNT(*) FROM `databases` WHERE server_id = :server_id');
-            $databaseCountStmt->execute(['server_id' => $serverId]);
-            $serverDatabaseCount = (int)$databaseCountStmt->fetchColumn();
-
-            if ($serverDatabaseCount >= $serverDatabaseLimit) {
-                $limitLabel = $serverDatabaseLimit === 1 ? '1 database' : $serverDatabaseLimit . ' databases';
-                fbgAdminServersRedirect("This server is already at its database limit of {$limitLabel}. Increase the Database Limit on the Build Configuration tab first.", 'error', $serverId, 'database');
+            if (!empty($removeAllocations)) {
+                $buildPayload['remove_allocations'] = $removeAllocations;
             }
+
+            $result = pteroRequest('PATCH', "servers/{$serverId}/build", $buildPayload);
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect((string)($result['error'] ?? 'Server build configuration could not be updated.'), 'error', $serverId, 'build');
+            }
+
+            fbgAdminServersRedirect('Server build configuration updated successfully.', 'success', $serverId, 'build');
         }
 
-        if ($databaseName === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $databaseName)) {
-            fbgAdminServersRedirect('Database name may only contain letters, numbers, dashes, and underscores.', 'error', $serverId, 'database');
-        }
+        if ($action === 'update_startup') {
+            $startupCommand = trim((string)($_POST['startup'] ?? ''));
+            $nestId = max(0, (int)($_POST['nest_id'] ?? 0));
+            $eggId = max(0, (int)($_POST['egg_id'] ?? 0));
+            $dockerImageSelect = trim((string)($_POST['docker_image'] ?? ''));
+            $dockerImageCustom = trim((string)($_POST['docker_image_custom'] ?? ''));
+            $dockerImage = $dockerImageCustom !== '' ? $dockerImageCustom : $dockerImageSelect;
+            $skipScripts = isset($_POST['skip_scripts']);
 
-        $prefix = 's' . $serverId . '_';
-        if (strlen($prefix . $databaseName) > 48) {
-            fbgAdminServersRedirect('Database name is too long for this server prefix.', 'error', $serverId, 'database');
-        }
+            if ($startupCommand === '') {
+                fbgAdminServersRedirect('Startup command is required.', 'error', $serverId, 'startup');
+            }
 
-        if ($remote === '') {
-            $remote = '%';
-        }
+            if ($nestId <= 0 || $eggId <= 0) {
+                fbgAdminServersRedirect('Select a valid nest and egg.', 'error', $serverId, 'startup');
+            }
 
-        if (!preg_match('/^[0-9%.]{1,15}$/', $remote)) {
-            fbgAdminServersRedirect('Connections From must be a valid IP address pattern or % wildcard.', 'error', $serverId, 'database');
-        }
+            $eggStmt = fbgPteroDb()->prepare('
+                SELECT id, nest_id, name, startup, docker_images
+                FROM eggs
+                WHERE id = :egg_id
+                AND nest_id = :nest_id
+                LIMIT 1
+            ');
+            $eggStmt->execute([
+                'egg_id' => $eggId,
+                'nest_id' => $nestId,
+            ]);
+            $egg = $eggStmt->fetch(PDO::FETCH_ASSOC);
 
-        $hostStmt = fbgPteroDb()->prepare('SELECT id FROM database_hosts WHERE id = :id LIMIT 1');
-        $hostStmt->execute(['id' => $databaseHostId]);
-        if ((int)($hostStmt->fetchColumn() ?: 0) <= 0) {
-            fbgAdminServersRedirect('Selected database host could not be found.', 'error', $serverId, 'database');
-        }
+            if (!$egg) {
+                fbgAdminServersRedirect('Selected egg does not belong to the selected nest.', 'error', $serverId, 'startup');
+            }
 
-        $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases", [
-            'database' => $databaseName,
-            'remote' => $remote,
-            'host' => $databaseHostId,
-        ]);
+            if ($dockerImage === '') {
+                $dockerImages = fbgAdminServersDockerImagesMap($egg['docker_images'] ?? '');
+                $dockerImage = (string)array_key_first($dockerImages);
+            }
 
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be created.'), 'error', $serverId, 'database');
-        }
+            if ($dockerImage === '') {
+                fbgAdminServersRedirect('Docker image is required.', 'error', $serverId, 'startup');
+            }
 
-        fbgAdminServersRedirect('Database created successfully.', 'success', $serverId, 'database');
-    }
+            $variablesStmt = fbgPteroDb()->prepare('
+                SELECT env_variable, default_value
+                FROM egg_variables
+                WHERE egg_id = :egg_id
+                ORDER BY name ASC
+            ');
+            $variablesStmt->execute(['egg_id' => $eggId]);
+            $postedEnvironment = is_array($_POST['environment'] ?? null) ? $_POST['environment'] : [];
+            $environment = [];
 
-    if ($action === 'reset_database_password' || $action === 'delete_database') {
-        $databaseId = max(0, (int)($_POST['database_id'] ?? 0));
+            foreach (($variablesStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+                $key = trim((string)($variable['env_variable'] ?? ''));
+                if ($key === '') {
+                    continue;
+                }
 
-        if ($databaseId <= 0) {
-            fbgAdminServersRedirect('Select a valid database.', 'error', $serverId, 'database');
-        }
+                $environment[$key] = array_key_exists($key, $postedEnvironment)
+                    ? (string)$postedEnvironment[$key]
+                    : (string)($variable['default_value'] ?? '');
+            }
 
-        $databaseStmt = fbgPteroDb()->prepare('
-            SELECT id, database
-            FROM `databases`
-            WHERE id = :id
-              AND server_id = :server_id
-            LIMIT 1
-        ');
-        $databaseStmt->execute([
-            'id' => $databaseId,
-            'server_id' => $serverId,
-        ]);
-        $database = $databaseStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$database) {
-            fbgAdminServersRedirect('Selected database could not be found for this server.', 'error', $serverId, 'database');
-        }
-
-        if ($action === 'reset_database_password') {
-            $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases/{$databaseId}/reset-password");
+            $result = pteroRequest('PATCH', "servers/{$serverId}/startup", [
+                'startup' => $startupCommand,
+                'environment' => $environment,
+                'egg' => $eggId,
+                'image' => $dockerImage,
+                'skip_scripts' => $skipScripts,
+            ]);
 
             if (empty($result['ok'])) {
-                fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database password could not be reset.'), 'error', $serverId, 'database');
+                fbgAdminServersRedirect((string)($result['error'] ?? 'Server startup configuration could not be updated.'), 'error', $serverId, 'startup');
             }
 
-            fbgAdminServersRedirect('Database password reset successfully.', 'success', $serverId, 'database');
+            fbgAdminServersRedirect('Server startup configuration updated successfully.', 'success', $serverId, 'startup');
         }
 
-        $result = pteroDatabaseManagementRequest('DELETE', "servers/{$serverId}/databases/{$databaseId}");
+        if ($action === 'create_database') {
+            $databaseHostId = max(0, (int)($_POST['database_host_id'] ?? 0));
+            $databaseName = trim((string)($_POST['database_name'] ?? ''));
+            $remote = trim((string)($_POST['remote'] ?? '%'));
 
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be deleted.'), 'error', $serverId, 'database');
-        }
-
-        fbgAdminServersRedirect('Database deleted successfully.', 'success', $serverId, 'database');
-    }
-
-    if ($action === 'attach_mount' || $action === 'detach_mount') {
-        $mountId = max(0, (int)($_POST['mount_id'] ?? 0));
-
-        if ($mountId <= 0) {
-            fbgAdminServersRedirect('Select a valid mount.', 'error', $serverId, 'mounts');
-        }
-
-        $mountStmt = fbgPteroDb()->prepare('
-            SELECT m.id, m.name
-            FROM mounts m
-            INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
-            INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
-            WHERE m.id = :mount_id
-            LIMIT 1
-        ');
-        $mountStmt->execute([
-            'egg_id' => (int)$server['egg_id'],
-            'node_id' => (int)$server['node_id'],
-            'mount_id' => $mountId,
-        ]);
-        $mount = $mountStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$mount) {
-            fbgAdminServersRedirect('Selected mount is not available for this server.', 'error', $serverId, 'mounts');
-        }
-
-        $mountedStmt = fbgPteroDb()->prepare('
-            SELECT 1
-            FROM mount_server
-            WHERE server_id = :server_id
-              AND mount_id = :mount_id
-            LIMIT 1
-        ');
-        $mountedStmt->execute([
-            'server_id' => $serverId,
-            'mount_id' => $mountId,
-        ]);
-        $isMounted = (bool)$mountedStmt->fetchColumn();
-
-        if ($action === 'attach_mount') {
-            if ($isMounted) {
-                fbgAdminServersRedirect('This mount is already attached to the server.', 'error', $serverId, 'mounts');
+            if ($databaseHostId <= 0) {
+                fbgAdminServersRedirect('Select a valid database host.', 'error', $serverId, 'database');
             }
 
-            $attachStmt = fbgPteroDb()->prepare('
-                INSERT INTO mount_server (mount_id, server_id)
-                VALUES (:mount_id, :server_id)
+            $serverDatabaseLimit = $server['database_limit'] !== null ? (int)$server['database_limit'] : null;
+            if ($serverDatabaseLimit !== null) {
+                $databaseCountStmt = fbgPteroDb()->prepare('SELECT COUNT(*) FROM `databases` WHERE server_id = :server_id');
+                $databaseCountStmt->execute(['server_id' => $serverId]);
+                $serverDatabaseCount = (int)$databaseCountStmt->fetchColumn();
+
+                if ($serverDatabaseCount >= $serverDatabaseLimit) {
+                    $limitLabel = $serverDatabaseLimit === 1 ? '1 database' : $serverDatabaseLimit . ' databases';
+                    fbgAdminServersRedirect("This server is already at its database limit of {$limitLabel}. Increase the Database Limit on the Build Configuration tab first.", 'error', $serverId, 'database');
+                }
+            }
+
+            if ($databaseName === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $databaseName)) {
+                fbgAdminServersRedirect('Database name may only contain letters, numbers, dashes, and underscores.', 'error', $serverId, 'database');
+            }
+
+            $prefix = 's' . $serverId . '_';
+            if (strlen($prefix . $databaseName) > 48) {
+                fbgAdminServersRedirect('Database name is too long for this server prefix.', 'error', $serverId, 'database');
+            }
+
+            if ($remote === '') {
+                $remote = '%';
+            }
+
+            if (!preg_match('/^[0-9%.]{1,15}$/', $remote)) {
+                fbgAdminServersRedirect('Connections From must be a valid IP address pattern or % wildcard.', 'error', $serverId, 'database');
+            }
+
+            $hostStmt = fbgPteroDb()->prepare('SELECT id FROM database_hosts WHERE id = :id LIMIT 1');
+            $hostStmt->execute(['id' => $databaseHostId]);
+            if ((int)($hostStmt->fetchColumn() ?: 0) <= 0) {
+                fbgAdminServersRedirect('Selected database host could not be found.', 'error', $serverId, 'database');
+            }
+
+            $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases", [
+                'database' => $databaseName,
+                'remote' => $remote,
+                'host' => $databaseHostId,
+            ]);
+
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be created.'), 'error', $serverId, 'database');
+            }
+
+            fbgAdminServersRedirect('Database created successfully.', 'success', $serverId, 'database');
+        }
+
+        if ($action === 'reset_database_password' || $action === 'delete_database') {
+            $databaseId = max(0, (int)($_POST['database_id'] ?? 0));
+
+            if ($databaseId <= 0) {
+                fbgAdminServersRedirect('Select a valid database.', 'error', $serverId, 'database');
+            }
+
+            $databaseStmt = fbgPteroDb()->prepare('
+                SELECT id, database
+                FROM `databases`
+                WHERE id = :id
+                AND server_id = :server_id
+                LIMIT 1
             ');
-            $attachStmt->execute([
+            $databaseStmt->execute([
+                'id' => $databaseId,
+                'server_id' => $serverId,
+            ]);
+            $database = $databaseStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$database) {
+                fbgAdminServersRedirect('Selected database could not be found for this server.', 'error', $serverId, 'database');
+            }
+
+            if ($action === 'reset_database_password') {
+                $result = pteroDatabaseManagementRequest('POST', "servers/{$serverId}/databases/{$databaseId}/reset-password");
+
+                if (empty($result['ok'])) {
+                    fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database password could not be reset.'), 'error', $serverId, 'database');
+                }
+
+                fbgAdminServersRedirect('Database password reset successfully.', 'success', $serverId, 'database');
+            }
+
+            $result = pteroDatabaseManagementRequest('DELETE', "servers/{$serverId}/databases/{$databaseId}");
+
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be deleted.'), 'error', $serverId, 'database');
+            }
+
+            fbgAdminServersRedirect('Database deleted successfully.', 'success', $serverId, 'database');
+        }
+
+        if ($action === 'attach_mount' || $action === 'detach_mount') {
+            $mountId = max(0, (int)($_POST['mount_id'] ?? 0));
+
+            if ($mountId <= 0) {
+                fbgAdminServersRedirect('Select a valid mount.', 'error', $serverId, 'mounts');
+            }
+
+            $mountStmt = fbgPteroDb()->prepare('
+                SELECT m.id, m.name
+                FROM mounts m
+                INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
+                INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
+                WHERE m.id = :mount_id
+                LIMIT 1
+            ');
+            $mountStmt->execute([
+                'egg_id' => (int)$server['egg_id'],
+                'node_id' => (int)$server['node_id'],
+                'mount_id' => $mountId,
+            ]);
+            $mount = $mountStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$mount) {
+                fbgAdminServersRedirect('Selected mount is not available for this server.', 'error', $serverId, 'mounts');
+            }
+
+            $mountedStmt = fbgPteroDb()->prepare('
+                SELECT 1
+                FROM mount_server
+                WHERE server_id = :server_id
+                AND mount_id = :mount_id
+                LIMIT 1
+            ');
+            $mountedStmt->execute([
+                'server_id' => $serverId,
+                'mount_id' => $mountId,
+            ]);
+            $isMounted = (bool)$mountedStmt->fetchColumn();
+
+            if ($action === 'attach_mount') {
+                if ($isMounted) {
+                    fbgAdminServersRedirect('This mount is already attached to the server.', 'error', $serverId, 'mounts');
+                }
+
+                $attachStmt = fbgPteroDb()->prepare('
+                    INSERT INTO mount_server (mount_id, server_id)
+                    VALUES (:mount_id, :server_id)
+                ');
+                $attachStmt->execute([
+                    'mount_id' => $mountId,
+                    'server_id' => $serverId,
+                ]);
+
+                fbgAdminServersRedirect('Mount attached successfully.', 'success', $serverId, 'mounts');
+            }
+
+            if (!$isMounted) {
+                fbgAdminServersRedirect('This mount is not currently attached to the server.', 'error', $serverId, 'mounts');
+            }
+
+            $detachStmt = fbgPteroDb()->prepare('
+                DELETE FROM mount_server
+                WHERE mount_id = :mount_id
+                AND server_id = :server_id
+            ');
+            $detachStmt->execute([
                 'mount_id' => $mountId,
                 'server_id' => $serverId,
             ]);
 
-            fbgAdminServersRedirect('Mount attached successfully.', 'success', $serverId, 'mounts');
+            fbgAdminServersRedirect('Mount removed successfully.', 'success', $serverId, 'mounts');
         }
 
-        if (!$isMounted) {
-            fbgAdminServersRedirect('This mount is not currently attached to the server.', 'error', $serverId, 'mounts');
+        if ($action === 'reinstall_server') {
+            $result = pteroReinstallServer($serverId);
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect((string)($result['error'] ?? 'Server reinstall could not be started.'), 'error', $serverId, 'manage');
+            }
+
+            fbgAdminServersRedirect('Server reinstall started successfully.', 'success', $serverId, 'manage');
         }
 
-        $detachStmt = fbgPteroDb()->prepare('
-            DELETE FROM mount_server
-            WHERE mount_id = :mount_id
-              AND server_id = :server_id
-        ');
-        $detachStmt->execute([
-            'mount_id' => $mountId,
-            'server_id' => $serverId,
-        ]);
+        if ($action === 'toggle_install_status') {
+            $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
 
-        fbgAdminServersRedirect('Mount removed successfully.', 'success', $serverId, 'mounts');
-    }
+            if ($currentStatus === 'install_failed') {
+                fbgAdminServersRedirect('Install status cannot be toggled while the server is marked as install failed.', 'error', $serverId, 'manage');
+            }
 
-    if ($action === 'reinstall_server') {
-        $result = pteroReinstallServer($serverId);
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect((string)($result['error'] ?? 'Server reinstall could not be started.'), 'error', $serverId, 'manage');
-        }
-
-        fbgAdminServersRedirect('Server reinstall started successfully.', 'success', $serverId, 'manage');
-    }
-
-    if ($action === 'toggle_install_status') {
-        $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
-
-        if ($currentStatus === 'install_failed') {
-            fbgAdminServersRedirect('Install status cannot be toggled while the server is marked as install failed.', 'error', $serverId, 'manage');
-        }
-
-        $nextStatus = $currentStatus === 'installing' ? null : 'installing';
-        $toggleInstallStmt = fbgPteroDb()->prepare('
-            UPDATE servers
-            SET status = :status,
-                updated_at = NOW()
-            WHERE id = :id
-        ');
-        $toggleInstallStmt->bindValue(':status', $nextStatus, $nextStatus === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
-        $toggleInstallStmt->bindValue(':id', $serverId, PDO::PARAM_INT);
-        $toggleInstallStmt->execute();
-
-        fbgAdminServersRedirect(
-            $nextStatus === 'installing'
-                ? 'Server marked as installing.'
-                : 'Server marked as installed.',
-            'success',
-            $serverId,
-            'manage'
-        );
-    }
-
-    if ($action === 'toggle_suspend_server') {
-        $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
-        $isSuspended = $currentStatus === 'suspended';
-        $result = $isSuspended
-            ? pteroUnsuspendServer($serverId)
-            : pteroRequest('POST', "servers/{$serverId}/suspend");
-
-        if (empty($result['ok'])) {
-            fbgAdminServersRedirect((string)($result['error'] ?? 'Suspension state could not be changed.'), 'error', $serverId, 'manage');
-        }
-
-        if (function_exists('fbgEnsurePteroServersSuspendManualColumn') && fbgEnsurePteroServersSuspendManualColumn()) {
-            $manualSuspendStmt = fbgPteroDb()->prepare('
+            $nextStatus = $currentStatus === 'installing' ? null : 'installing';
+            $toggleInstallStmt = fbgPteroDb()->prepare('
                 UPDATE servers
-                SET suspend_manual = :suspend_manual
+                SET status = :status,
+                    updated_at = NOW()
                 WHERE id = :id
             ');
-            $manualSuspendStmt->execute([
-                ':suspend_manual' => $isSuspended ? 0 : 1,
-                ':id' => $serverId,
-            ]);
-        }
+            $toggleInstallStmt->bindValue(':status', $nextStatus, $nextStatus === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+            $toggleInstallStmt->bindValue(':id', $serverId, PDO::PARAM_INT);
+            $toggleInstallStmt->execute();
 
-        fbgAdminServersRedirect(
-            $isSuspended ? 'Server unsuspended successfully.' : 'Server suspended successfully.',
-            'success',
-            $serverId,
-            'manage'
-        );
-    }
-
-    if ($action === 'transfer_server') {
-        fbgAdminServersRedirect('Transfer execution has not been reconnected yet. The transfer modal UI is available, but the backend workflow still needs to be wired back in.', 'error', $serverId, 'manage');
-    }
-
-    if ($action === 'delete_server') {
-        $result = pteroRequest('DELETE', "servers/{$serverId}");
-        if (empty($result['ok'])) {
             fbgAdminServersRedirect(
-                fbgAdminServersServerApiError($result, 'The server could not be safely deleted.'),
-                'error',
+                $nextStatus === 'installing'
+                    ? 'Server marked as installing.'
+                    : 'Server marked as installed.',
+                'success',
                 $serverId,
-                'delete'
+                'manage'
             );
         }
 
-        fbgAdminServersRedirect('Server deleted successfully.', 'success');
-    }
+        if ($action === 'toggle_suspend_server') {
+            $currentStatus = strtolower(trim((string)($server['status'] ?? '')));
+            $isSuspended = $currentStatus === 'suspended';
+            $result = $isSuspended
+                ? pteroUnsuspendServer($serverId)
+                : pteroRequest('POST', "servers/{$serverId}/suspend");
 
-    if ($action === 'force_delete_server') {
-        $result = pteroRequest('DELETE', "servers/{$serverId}/force");
-        if (empty($result['ok'])) {
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect((string)($result['error'] ?? 'Suspension state could not be changed.'), 'error', $serverId, 'manage');
+            }
+
+            if (function_exists('fbgEnsurePteroServersSuspendManualColumn') && fbgEnsurePteroServersSuspendManualColumn()) {
+                $manualSuspendStmt = fbgPteroDb()->prepare('
+                    UPDATE servers
+                    SET suspend_manual = :suspend_manual
+                    WHERE id = :id
+                ');
+                $manualSuspendStmt->execute([
+                    ':suspend_manual' => $isSuspended ? 0 : 1,
+                    ':id' => $serverId,
+                ]);
+            }
+
             fbgAdminServersRedirect(
-                fbgAdminServersServerApiError($result, 'The server could not be forcibly deleted.'),
-                'error',
+                $isSuspended ? 'Server unsuspended successfully.' : 'Server suspended successfully.',
+                'success',
                 $serverId,
-                'delete'
+                'manage'
             );
         }
 
-        fbgAdminServersRedirect('Server force deleted successfully.', 'success');
+        if ($action === 'transfer_server') {
+            fbgAdminServersRedirect('Transfer execution has not been reconnected yet. The transfer modal UI is available, but the backend workflow still needs to be wired back in.', 'error', $serverId, 'manage');
+        }
+
+        if ($action === 'delete_server') {
+            $result = pteroRequest('DELETE', "servers/{$serverId}");
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(
+                    fbgAdminServersServerApiError($result, 'The server could not be safely deleted.'),
+                    'error',
+                    $serverId,
+                    'delete'
+                );
+            }
+
+            fbgAdminServersRedirect('Server deleted successfully.', 'success');
+        }
+
+        if ($action === 'force_delete_server') {
+            $result = pteroRequest('DELETE', "servers/{$serverId}/force");
+            if (empty($result['ok'])) {
+                fbgAdminServersRedirect(
+                    fbgAdminServersServerApiError($result, 'The server could not be forcibly deleted.'),
+                    'error',
+                    $serverId,
+                    'delete'
+                );
+            }
+
+            fbgAdminServersRedirect('Server force deleted successfully.', 'success');
+        }
+
+        fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
     }
 
-    fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
-}
+    $editServerId = max(0, (int)($_GET['edit'] ?? 0));
+    $createMode = max(0, (int)($_GET['create'] ?? 0)) === 1;
+    $editingServer = $editServerId > 0 ? fbgAdminServersFind($editServerId) : null;
+    $activeServerTab = strtolower(trim((string)($_GET['tab'] ?? 'about')));
 
-$editServerId = max(0, (int)($_GET['edit'] ?? 0));
-$createMode = max(0, (int)($_GET['create'] ?? 0)) === 1;
-$editingServer = $editServerId > 0 ? fbgAdminServersFind($editServerId) : null;
-$activeServerTab = strtolower(trim((string)($_GET['tab'] ?? 'about')));
+    if (!in_array($activeServerTab, ['about', 'details', 'build', 'startup', 'database', 'mounts', 'manage', 'delete'], true)) {
+        $activeServerTab = 'about';
+    }
 
-if (!in_array($activeServerTab, ['about', 'details', 'build', 'startup', 'database', 'mounts', 'manage', 'delete'], true)) {
-    $activeServerTab = 'about';
-}
+    $ownerOptions = [];
+    $planOptionsByCategory = [];
+    $defaultAllocationOptions = [];
+    $availableAllocationOptions = [];
+    $assignedAllocationOptions = [];
+    $nestOptions = [];
+    $eggOptions = [];
+    $startupEggData = [];
+    $databaseHosts = [];
+    $serverDatabases = [];
+    $serverMounts = [];
+    $transferNodes = [];
+    $transferAllocationMap = [];
+    $expirationHistoryCount = 0;
+    $lastKnownExpiration = null;
+    if ($editingServer) {
+        $ownerStmt = fbgPteroDb()->query("
+            SELECT id, username, email, name_first, name_last
+            FROM users
+            ORDER BY name_first ASC, name_last ASC, username ASC
+        ");
+        $ownerOptions = $ownerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-$ownerOptions = [];
-$planOptionsByCategory = [];
-$defaultAllocationOptions = [];
-$availableAllocationOptions = [];
-$assignedAllocationOptions = [];
-$nestOptions = [];
-$eggOptions = [];
-$startupEggData = [];
-$databaseHosts = [];
-$serverDatabases = [];
-$serverMounts = [];
-$transferNodes = [];
-$transferAllocationMap = [];
-$expirationHistoryCount = 0;
-$lastKnownExpiration = null;
-if ($editingServer) {
-    $ownerStmt = fbgPteroDb()->query("
+        $planStmt = fbgPteroDb()->query("
+            SELECT
+                g.id,
+                g.name,
+                g.price,
+                g.hide,
+                c.title AS category_title
+            FROM games g
+            LEFT JOIN game_category c ON c.id = g.category_id
+            ORDER BY COALESCE(c.sort, 999999) ASC, c.title ASC, COALESCE(g.sort, 999999) ASC, g.name ASC
+        ");
+
+        foreach (($planStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $planOption) {
+            $categoryTitle = trim((string)($planOption['category_title'] ?? 'Uncategorized'));
+            if ($categoryTitle === '') {
+                $categoryTitle = 'Uncategorized';
+            }
+
+            $planOptionsByCategory[$categoryTitle][] = $planOption;
+        }
+
+        $availableAllocationStmt = fbgPteroDb()->prepare('
+            SELECT id, ip, ip_alias, port, server_id, notes
+            FROM allocations
+            WHERE node_id = :node_id
+            AND server_id IS NULL
+            ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
+        ');
+        $availableAllocationStmt->execute(['node_id' => (int)$editingServer['node_id']]);
+        $availableAllocationOptions = $availableAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $assignedAllocationStmt = fbgPteroDb()->prepare('
+            SELECT id, ip, ip_alias, port, server_id, notes
+            FROM allocations
+            WHERE server_id = :server_id
+            ORDER BY CASE WHEN id = :allocation_id THEN 0 ELSE 1 END, COALESCE(ip_alias, ip) ASC, port ASC
+        ');
+        $assignedAllocationStmt->execute([
+            'server_id' => (int)$editingServer['id'],
+            'allocation_id' => (int)$editingServer['allocation_id'],
+        ]);
+        $assignedAllocationOptions = $assignedAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $defaultAllocationOptions = $assignedAllocationOptions;
+
+        $nestStmt = fbgPteroDb()->query('
+            SELECT id, name
+            FROM nests
+            ORDER BY name ASC
+        ');
+        $nestOptions = $nestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $serverVariableStmt = fbgPteroDb()->prepare('
+            SELECT variable_id, variable_value
+            FROM server_variables
+            WHERE server_id = :server_id
+        ');
+        $serverVariableStmt->execute(['server_id' => (int)$editingServer['id']]);
+        $serverVariableValues = [];
+        foreach (($serverVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $serverVariable) {
+            $serverVariableValues[(int)$serverVariable['variable_id']] = (string)($serverVariable['variable_value'] ?? '');
+        }
+
+        $eggStmt = fbgPteroDb()->query('
+            SELECT
+                e.id,
+                e.nest_id,
+                e.name,
+                e.startup,
+                e.docker_images,
+                n.name AS nest_name
+            FROM eggs e
+            LEFT JOIN nests n ON n.id = e.nest_id
+            ORDER BY n.name ASC, e.name ASC
+        ');
+
+        foreach (($eggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
+            $eggId = (int)$eggOption['id'];
+            $eggOptions[] = $eggOption;
+            $startupEggData[$eggId] = [
+                'id' => $eggId,
+                'nest_id' => (int)$eggOption['nest_id'],
+                'name' => (string)($eggOption['name'] ?? ''),
+                'startup' => (string)($eggOption['startup'] ?? ''),
+                'docker_images' => fbgAdminServersDockerImagesMap($eggOption['docker_images'] ?? ''),
+                'variables' => [],
+            ];
+        }
+
+        $eggVariableStmt = fbgPteroDb()->query('
+            SELECT id, egg_id, name, description, env_variable, default_value, user_viewable, user_editable, rules
+            FROM egg_variables
+            ORDER BY name ASC
+        ');
+
+        foreach (($eggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+            $eggId = (int)($variable['egg_id'] ?? 0);
+            if (!isset($startupEggData[$eggId])) {
+                continue;
+            }
+
+            $variableId = (int)$variable['id'];
+            $value = (int)$editingServer['egg_id'] === $eggId && array_key_exists($variableId, $serverVariableValues)
+                ? $serverVariableValues[$variableId]
+                : (string)($variable['default_value'] ?? '');
+
+            $startupEggData[$eggId]['variables'][] = [
+                'id' => $variableId,
+                'name' => (string)($variable['name'] ?? ''),
+                'description' => (string)($variable['description'] ?? ''),
+                'env_variable' => (string)($variable['env_variable'] ?? ''),
+                'default_value' => (string)($variable['default_value'] ?? ''),
+                'value' => $value,
+                'user_viewable' => (int)($variable['user_viewable'] ?? 0) === 1,
+                'user_editable' => (int)($variable['user_editable'] ?? 0) === 1,
+                'rules' => (string)($variable['rules'] ?? ''),
+            ];
+        }
+
+        $databaseHostStmt = fbgPteroDb()->query('
+            SELECT
+                dh.id,
+                dh.name,
+                dh.host,
+                dh.port,
+                dh.max_databases,
+                COUNT(d.id) AS database_count
+            FROM database_hosts dh
+            LEFT JOIN `databases` d ON d.database_host_id = dh.id
+            GROUP BY dh.id, dh.name, dh.host, dh.port, dh.max_databases
+            ORDER BY dh.name ASC, dh.host ASC
+        ');
+        $databaseHosts = $databaseHostStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $serverDatabasesStmt = fbgPteroDb()->prepare('
+            SELECT
+                d.id,
+                d.database,
+                d.username,
+                d.remote,
+                d.max_connections,
+                d.created_at,
+                dh.name AS host_name,
+                dh.host AS host_address,
+                dh.port AS host_port
+            FROM `databases` d
+            LEFT JOIN database_hosts dh ON dh.id = d.database_host_id
+            WHERE d.server_id = :server_id
+            ORDER BY d.database ASC
+        ');
+        $serverDatabasesStmt->execute(['server_id' => (int)$editingServer['id']]);
+        $serverDatabases = $serverDatabasesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $mountStmt = fbgPteroDb()->prepare('
+            SELECT
+                m.id,
+                m.name,
+                m.source,
+                m.target,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM mount_server ms
+                        WHERE ms.server_id = :server_id
+                        AND ms.mount_id = m.id
+                    ) THEN 1
+                    ELSE 0
+                END AS is_mounted
+            FROM mounts m
+            INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
+            INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
+            ORDER BY m.name ASC, m.id ASC
+        ');
+        $mountStmt->execute([
+            'server_id' => (int)$editingServer['id'],
+            'egg_id' => (int)$editingServer['egg_id'],
+            'node_id' => (int)$editingServer['node_id'],
+        ]);
+        $serverMounts = $mountStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $transferNodesStmt = fbgPteroDb()->prepare('
+            SELECT id, name
+            FROM nodes
+            WHERE id != :node_id
+            ORDER BY name ASC
+        ');
+        $transferNodesStmt->execute(['node_id' => (int)$editingServer['node_id']]);
+        $transferNodes = $transferNodesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        if (!empty($transferNodes)) {
+            $transferAllocationStmt = fbgPteroDb()->prepare('
+                SELECT id, node_id, ip, ip_alias, port, notes
+                FROM allocations
+                WHERE server_id IS NULL
+                AND node_id = :node_id
+                ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
+            ');
+
+            foreach ($transferNodes as $transferNode) {
+                $nodeId = (int)($transferNode['id'] ?? 0);
+                if ($nodeId <= 0) {
+                    continue;
+                }
+
+                $transferAllocationStmt->execute(['node_id' => $nodeId]);
+                $transferAllocationMap[$nodeId] = $transferAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            }
+        }
+
+        $expirationHistoryCount = fbgGetServerExpirationHistoryCount((int)$editingServer['id']);
+        $currentExpirationValue = fbgNormalizeExpirationHistoryValue((string)($editingServer['expired_at'] ?? ''));
+        $lastKnownExpiration = fbgGetServerLastKnownExpiration((int)$editingServer['id'], $currentExpirationValue);
+    }
+
+    $createOwnerOptions = [];
+    $createNestOptions = [];
+    $createEggOptions = [];
+    $createStartupEggData = [];
+    $createNodeOptions = [];
+    $createAllocationMap = [];
+
+    $createOwnerStmt = fbgPteroDb()->query("
         SELECT id, username, email, name_first, name_last
         FROM users
         ORDER BY name_first ASC, name_last ASC, username ASC
     ");
-    $ownerOptions = $ownerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $createOwnerOptions = $createOwnerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $planStmt = fbgPteroDb()->query("
-        SELECT
-            g.id,
-            g.name,
-            g.price,
-            g.hide,
-            c.title AS category_title
-        FROM games g
-        LEFT JOIN game_category c ON c.id = g.category_id
-        ORDER BY COALESCE(c.sort, 999999) ASC, c.title ASC, COALESCE(g.sort, 999999) ASC, g.name ASC
-    ");
-
-    foreach (($planStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $planOption) {
-        $categoryTitle = trim((string)($planOption['category_title'] ?? 'Uncategorized'));
-        if ($categoryTitle === '') {
-            $categoryTitle = 'Uncategorized';
-        }
-
-        $planOptionsByCategory[$categoryTitle][] = $planOption;
-    }
-
-    $availableAllocationStmt = fbgPteroDb()->prepare('
-        SELECT id, ip, ip_alias, port, server_id, notes
-        FROM allocations
-        WHERE node_id = :node_id
-          AND server_id IS NULL
-        ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
-    ');
-    $availableAllocationStmt->execute(['node_id' => (int)$editingServer['node_id']]);
-    $availableAllocationOptions = $availableAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $assignedAllocationStmt = fbgPteroDb()->prepare('
-        SELECT id, ip, ip_alias, port, server_id, notes
-        FROM allocations
-        WHERE server_id = :server_id
-        ORDER BY CASE WHEN id = :allocation_id THEN 0 ELSE 1 END, COALESCE(ip_alias, ip) ASC, port ASC
-    ');
-    $assignedAllocationStmt->execute([
-        'server_id' => (int)$editingServer['id'],
-        'allocation_id' => (int)$editingServer['allocation_id'],
-    ]);
-    $assignedAllocationOptions = $assignedAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    $defaultAllocationOptions = $assignedAllocationOptions;
-
-    $nestStmt = fbgPteroDb()->query('
+    $createNestStmt = fbgPteroDb()->query('
         SELECT id, name
         FROM nests
         ORDER BY name ASC
     ');
-    $nestOptions = $nestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $createNestOptions = $createNestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $serverVariableStmt = fbgPteroDb()->prepare('
-        SELECT variable_id, variable_value
-        FROM server_variables
-        WHERE server_id = :server_id
-    ');
-    $serverVariableStmt->execute(['server_id' => (int)$editingServer['id']]);
-    $serverVariableValues = [];
-    foreach (($serverVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $serverVariable) {
-        $serverVariableValues[(int)$serverVariable['variable_id']] = (string)($serverVariable['variable_value'] ?? '');
-    }
-
-    $eggStmt = fbgPteroDb()->query('
+    $createEggStmt = fbgPteroDb()->query('
         SELECT
             e.id,
             e.nest_id,
             e.name,
             e.startup,
-            e.docker_images,
-            n.name AS nest_name
+            e.docker_images
         FROM eggs e
-        LEFT JOIN nests n ON n.id = e.nest_id
-        ORDER BY n.name ASC, e.name ASC
+        ORDER BY e.nest_id ASC, e.name ASC
     ');
 
-    foreach (($eggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
+    foreach (($createEggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
         $eggId = (int)$eggOption['id'];
-        $eggOptions[] = $eggOption;
-        $startupEggData[$eggId] = [
+        $createEggOptions[] = $eggOption;
+        $createStartupEggData[$eggId] = [
             'id' => $eggId,
             'nest_id' => (int)$eggOption['nest_id'],
             'name' => (string)($eggOption['name'] ?? ''),
@@ -1304,351 +1474,181 @@ if ($editingServer) {
         ];
     }
 
-    $eggVariableStmt = fbgPteroDb()->query('
+    $createEggVariableStmt = fbgPteroDb()->query('
         SELECT id, egg_id, name, description, env_variable, default_value, user_viewable, user_editable, rules
         FROM egg_variables
-        ORDER BY name ASC
+        ORDER BY egg_id ASC, name ASC
     ');
 
-    foreach (($eggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
+    foreach (($createEggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
         $eggId = (int)($variable['egg_id'] ?? 0);
-        if (!isset($startupEggData[$eggId])) {
+        if (!isset($createStartupEggData[$eggId])) {
             continue;
         }
 
-        $variableId = (int)$variable['id'];
-        $value = (int)$editingServer['egg_id'] === $eggId && array_key_exists($variableId, $serverVariableValues)
-            ? $serverVariableValues[$variableId]
-            : (string)($variable['default_value'] ?? '');
-
-        $startupEggData[$eggId]['variables'][] = [
-            'id' => $variableId,
+        $createStartupEggData[$eggId]['variables'][] = [
+            'id' => (int)$variable['id'],
             'name' => (string)($variable['name'] ?? ''),
             'description' => (string)($variable['description'] ?? ''),
             'env_variable' => (string)($variable['env_variable'] ?? ''),
             'default_value' => (string)($variable['default_value'] ?? ''),
-            'value' => $value,
+            'value' => (string)($variable['default_value'] ?? ''),
             'user_viewable' => (int)($variable['user_viewable'] ?? 0) === 1,
             'user_editable' => (int)($variable['user_editable'] ?? 0) === 1,
             'rules' => (string)($variable['rules'] ?? ''),
         ];
     }
 
-    $databaseHostStmt = fbgPteroDb()->query('
+    $createNodeStmt = fbgPteroDb()->query("
         SELECT
-            dh.id,
-            dh.name,
-            dh.host,
-            dh.port,
-            dh.max_databases,
-            COUNT(d.id) AS database_count
-        FROM database_hosts dh
-        LEFT JOIN `databases` d ON d.database_host_id = dh.id
-        GROUP BY dh.id, dh.name, dh.host, dh.port, dh.max_databases
-        ORDER BY dh.name ASC, dh.host ASC
-    ');
-    $databaseHosts = $databaseHostStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            n.id,
+            n.name,
+            COUNT(a.id) AS allocation_count
+        FROM nodes n
+        LEFT JOIN allocations a
+            ON a.node_id = n.id
+        AND a.server_id IS NULL
+        GROUP BY n.id, n.name
+        HAVING allocation_count > 0
+        ORDER BY n.name ASC
+    ");
+    $createNodeOptions = $createNodeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $serverDatabasesStmt = fbgPteroDb()->prepare('
-        SELECT
-            d.id,
-            d.database,
-            d.username,
-            d.remote,
-            d.max_connections,
-            d.created_at,
-            dh.name AS host_name,
-            dh.host AS host_address,
-            dh.port AS host_port
-        FROM `databases` d
-        LEFT JOIN database_hosts dh ON dh.id = d.database_host_id
-        WHERE d.server_id = :server_id
-        ORDER BY d.database ASC
-    ');
-    $serverDatabasesStmt->execute(['server_id' => (int)$editingServer['id']]);
-    $serverDatabases = $serverDatabasesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $mountStmt = fbgPteroDb()->prepare('
-        SELECT
-            m.id,
-            m.name,
-            m.source,
-            m.target,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM mount_server ms
-                    WHERE ms.server_id = :server_id
-                      AND ms.mount_id = m.id
-                ) THEN 1
-                ELSE 0
-            END AS is_mounted
-        FROM mounts m
-        INNER JOIN egg_mount em ON em.mount_id = m.id AND em.egg_id = :egg_id
-        INNER JOIN mount_node mn ON mn.mount_id = m.id AND mn.node_id = :node_id
-        ORDER BY m.name ASC, m.id ASC
-    ');
-    $mountStmt->execute([
-        'server_id' => (int)$editingServer['id'],
-        'egg_id' => (int)$editingServer['egg_id'],
-        'node_id' => (int)$editingServer['node_id'],
-    ]);
-    $serverMounts = $mountStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $transferNodesStmt = fbgPteroDb()->prepare('
-        SELECT id, name
-        FROM nodes
-        WHERE id != :node_id
-        ORDER BY name ASC
-    ');
-    $transferNodesStmt->execute(['node_id' => (int)$editingServer['node_id']]);
-    $transferNodes = $transferNodesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    if (!empty($transferNodes)) {
-        $transferAllocationStmt = fbgPteroDb()->prepare('
+    if (!empty($createNodeOptions)) {
+        $createAllocationStmt = fbgPteroDb()->prepare('
             SELECT id, node_id, ip, ip_alias, port, notes
             FROM allocations
-            WHERE server_id IS NULL
-              AND node_id = :node_id
+            WHERE node_id = :node_id
+            AND server_id IS NULL
             ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
         ');
 
-        foreach ($transferNodes as $transferNode) {
-            $nodeId = (int)($transferNode['id'] ?? 0);
-            if ($nodeId <= 0) {
+        foreach ($createNodeOptions as $createNode) {
+            $createNodeId = (int)($createNode['id'] ?? 0);
+            if ($createNodeId <= 0) {
                 continue;
             }
 
-            $transferAllocationStmt->execute(['node_id' => $nodeId]);
-            $transferAllocationMap[$nodeId] = $transferAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $createAllocationStmt->execute(['node_id' => $createNodeId]);
+            $createAllocationMap[$createNodeId] = $createAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         }
     }
 
-    $expirationHistoryCount = fbgGetServerExpirationHistoryCount((int)$editingServer['id']);
-    $currentExpirationValue = fbgNormalizeExpirationHistoryValue((string)($editingServer['expired_at'] ?? ''));
-    $lastKnownExpiration = fbgGetServerLastKnownExpiration((int)$editingServer['id'], $currentExpirationValue);
-}
+    $search = trim((string)($_GET['q'] ?? ''));
+    $statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
+    $nodeFilter = max(0, (int)($_GET['node_id'] ?? 0));
+    $sort = strtolower(trim((string)($_GET['sort'] ?? 'name')));
+    $direction = strtolower(trim((string)($_GET['dir'] ?? 'asc'))) === 'desc' ? 'desc' : 'asc';
+    $perPage = 25;
+    $pageNum = fbgPaginationRequestedPage();
+    $offset = ($pageNum - 1) * $perPage;
 
-$createOwnerOptions = [];
-$createNestOptions = [];
-$createEggOptions = [];
-$createStartupEggData = [];
-$createNodeOptions = [];
-$createAllocationMap = [];
-
-$createOwnerStmt = fbgPteroDb()->query("
-    SELECT id, username, email, name_first, name_last
-    FROM users
-    ORDER BY name_first ASC, name_last ASC, username ASC
-");
-$createOwnerOptions = $createOwnerStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-$createNestStmt = fbgPteroDb()->query('
-    SELECT id, name
-    FROM nests
-    ORDER BY name ASC
-');
-$createNestOptions = $createNestStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-$createEggStmt = fbgPteroDb()->query('
-    SELECT
-        e.id,
-        e.nest_id,
-        e.name,
-        e.startup,
-        e.docker_images
-    FROM eggs e
-    ORDER BY e.nest_id ASC, e.name ASC
-');
-
-foreach (($createEggStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $eggOption) {
-    $eggId = (int)$eggOption['id'];
-    $createEggOptions[] = $eggOption;
-    $createStartupEggData[$eggId] = [
-        'id' => $eggId,
-        'nest_id' => (int)$eggOption['nest_id'],
-        'name' => (string)($eggOption['name'] ?? ''),
-        'startup' => (string)($eggOption['startup'] ?? ''),
-        'docker_images' => fbgAdminServersDockerImagesMap($eggOption['docker_images'] ?? ''),
-        'variables' => [],
+    $sortMap = [
+        'name' => 's.name',
+        'uuid' => 's.uuid',
+        'owner_username' => 'u.username',
+        'owner_name' => 'u.name_last',
+        'node' => 'n.name',
+        'connection' => 'a.ip_alias',
+        'status' => 's.status',
+        'created' => 's.created_at',
     ];
-}
 
-$createEggVariableStmt = fbgPteroDb()->query('
-    SELECT id, egg_id, name, description, env_variable, default_value, user_viewable, user_editable, rules
-    FROM egg_variables
-    ORDER BY egg_id ASC, name ASC
-');
-
-foreach (($createEggVariableStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $variable) {
-    $eggId = (int)($variable['egg_id'] ?? 0);
-    if (!isset($createStartupEggData[$eggId])) {
-        continue;
+    if (!array_key_exists($sort, $sortMap)) {
+        $sort = 'name';
     }
 
-    $createStartupEggData[$eggId]['variables'][] = [
-        'id' => (int)$variable['id'],
-        'name' => (string)($variable['name'] ?? ''),
-        'description' => (string)($variable['description'] ?? ''),
-        'env_variable' => (string)($variable['env_variable'] ?? ''),
-        'default_value' => (string)($variable['default_value'] ?? ''),
-        'value' => (string)($variable['default_value'] ?? ''),
-        'user_viewable' => (int)($variable['user_viewable'] ?? 0) === 1,
-        'user_editable' => (int)($variable['user_editable'] ?? 0) === 1,
-        'rules' => (string)($variable['rules'] ?? ''),
-    ];
-}
+    if (!in_array($statusFilter, ['all', 'active', 'suspended', 'installing'], true)) {
+        $statusFilter = 'all';
+    }
 
-$createNodeStmt = fbgPteroDb()->query("
-    SELECT
-        n.id,
-        n.name,
-        COUNT(a.id) AS allocation_count
-    FROM nodes n
-    LEFT JOIN allocations a
-        ON a.node_id = n.id
-       AND a.server_id IS NULL
-    GROUP BY n.id, n.name
-    HAVING allocation_count > 0
-    ORDER BY n.name ASC
-");
-$createNodeOptions = $createNodeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $nodesStmt = fbgPteroDb()->query('SELECT id, name FROM nodes ORDER BY name ASC');
+    $nodes = $nodesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-if (!empty($createNodeOptions)) {
-    $createAllocationStmt = fbgPteroDb()->prepare('
-        SELECT id, node_id, ip, ip_alias, port, notes
-        FROM allocations
-        WHERE node_id = :node_id
-          AND server_id IS NULL
-        ORDER BY COALESCE(ip_alias, ip) ASC, port ASC
-    ');
+    $where = [];
+    $params = [];
 
-    foreach ($createNodeOptions as $createNode) {
-        $createNodeId = (int)($createNode['id'] ?? 0);
-        if ($createNodeId <= 0) {
-            continue;
+    if ($search !== '') {
+        $searchColumns = [
+            's.name',
+            's.uuid',
+            's.uuidShort',
+            'u.username',
+            'u.name_first',
+            'u.name_last',
+            'n.name',
+            'a.ip_alias',
+            'a.ip',
+            'CAST(a.port AS CHAR)',
+        ];
+        $searchParts = [];
+
+        foreach ($searchColumns as $index => $column) {
+            $placeholder = 'search_' . $index;
+            $searchParts[] = "{$column} LIKE :{$placeholder}";
+            $params[$placeholder] = '%' . $search . '%';
         }
 
-        $createAllocationStmt->execute(['node_id' => $createNodeId]);
-        $createAllocationMap[$createNodeId] = $createAllocationStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    }
-}
-
-$search = trim((string)($_GET['q'] ?? ''));
-$statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
-$nodeFilter = max(0, (int)($_GET['node_id'] ?? 0));
-$sort = strtolower(trim((string)($_GET['sort'] ?? 'name')));
-$direction = strtolower(trim((string)($_GET['dir'] ?? 'asc'))) === 'desc' ? 'desc' : 'asc';
-$perPage = 25;
-$pageNum = fbgPaginationRequestedPage();
-$offset = ($pageNum - 1) * $perPage;
-
-$sortMap = [
-    'name' => 's.name',
-    'uuid' => 's.uuid',
-    'owner_username' => 'u.username',
-    'owner_name' => 'u.name_last',
-    'node' => 'n.name',
-    'connection' => 'a.ip_alias',
-    'status' => 's.status',
-    'created' => 's.created_at',
-];
-
-if (!array_key_exists($sort, $sortMap)) {
-    $sort = 'name';
-}
-
-if (!in_array($statusFilter, ['all', 'active', 'suspended', 'installing'], true)) {
-    $statusFilter = 'all';
-}
-
-$nodesStmt = fbgPteroDb()->query('SELECT id, name FROM nodes ORDER BY name ASC');
-$nodes = $nodesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-$where = [];
-$params = [];
-
-if ($search !== '') {
-    $searchColumns = [
-        's.name',
-        's.uuid',
-        's.uuidShort',
-        'u.username',
-        'u.name_first',
-        'u.name_last',
-        'n.name',
-        'a.ip_alias',
-        'a.ip',
-        'CAST(a.port AS CHAR)',
-    ];
-    $searchParts = [];
-
-    foreach ($searchColumns as $index => $column) {
-        $placeholder = 'search_' . $index;
-        $searchParts[] = "{$column} LIKE :{$placeholder}";
-        $params[$placeholder] = '%' . $search . '%';
+        $where[] = "(
+            " . implode("\n        OR ", $searchParts) . "
+        )";
     }
 
-    $where[] = "(
-        " . implode("\n        OR ", $searchParts) . "
-    )";
-}
+    if ($statusFilter === 'active') {
+        $where[] = "(s.status IS NULL OR s.status = '')";
+    } elseif ($statusFilter !== 'all') {
+        $where[] = 's.status = :status';
+        $params['status'] = $statusFilter;
+    }
 
-if ($statusFilter === 'active') {
-    $where[] = "(s.status IS NULL OR s.status = '')";
-} elseif ($statusFilter !== 'all') {
-    $where[] = 's.status = :status';
-    $params['status'] = $statusFilter;
-}
+    if ($nodeFilter > 0) {
+        $where[] = 's.node_id = :node_id';
+        $params['node_id'] = $nodeFilter;
+    }
 
-if ($nodeFilter > 0) {
-    $where[] = 's.node_id = :node_id';
-    $params['node_id'] = $nodeFilter;
-}
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-$whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+    $countStmt = fbgPteroDb()->prepare("
+        SELECT COUNT(*)
+        FROM servers s
+        LEFT JOIN nodes n ON n.id = s.node_id
+        LEFT JOIN users u ON u.id = s.owner_id
+        LEFT JOIN allocations a ON a.id = s.allocation_id
+        {$whereSql}
+    ");
+    $countStmt->execute($params);
+    $totalRows = (int)$countStmt->fetchColumn();
+    $pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
+    $pageNum = $pagination['page_num'];
+    $totalPages = $pagination['total_pages'];
+    $offset = $pagination['offset'];
 
-$countStmt = fbgPteroDb()->prepare("
-    SELECT COUNT(*)
-    FROM servers s
-    LEFT JOIN nodes n ON n.id = s.node_id
-    LEFT JOIN users u ON u.id = s.owner_id
-    LEFT JOIN allocations a ON a.id = s.allocation_id
-    {$whereSql}
-");
-$countStmt->execute($params);
-$totalRows = (int)$countStmt->fetchColumn();
-$pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
-$pageNum = $pagination['page_num'];
-$totalPages = $pagination['total_pages'];
-$offset = $pagination['offset'];
-
-$orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
-$serversStmt = fbgPteroDb()->prepare("
-    SELECT
-        s.id,
-        s.uuid,
-        s.uuidShort AS identifier,
-        s.name,
-        s.status,
-        s.owner_id,
-        n.name AS node_name,
-        u.username AS owner_username,
-        u.name_first AS owner_first_name,
-        u.name_last AS owner_last_name,
-        a.ip AS allocation_ip,
-        a.ip_alias AS allocation_alias,
-        a.port AS allocation_port
-    FROM servers s
-    LEFT JOIN nodes n ON n.id = s.node_id
-    LEFT JOIN users u ON u.id = s.owner_id
-    LEFT JOIN allocations a ON a.id = s.allocation_id
-    {$whereSql}
-    ORDER BY {$orderSql}, s.id ASC
-    LIMIT {$perPage} OFFSET {$offset}
-");
-$serversStmt->execute($params);
-$servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
+    $serversStmt = fbgPteroDb()->prepare("
+        SELECT
+            s.id,
+            s.uuid,
+            s.uuidShort AS identifier,
+            s.name,
+            s.status,
+            s.owner_id,
+            n.name AS node_name,
+            u.username AS owner_username,
+            u.name_first AS owner_first_name,
+            u.name_last AS owner_last_name,
+            a.ip AS allocation_ip,
+            a.ip_alias AS allocation_alias,
+            a.port AS allocation_port
+        FROM servers s
+        LEFT JOIN nodes n ON n.id = s.node_id
+        LEFT JOIN users u ON u.id = s.owner_id
+        LEFT JOIN allocations a ON a.id = s.allocation_id
+        {$whereSql}
+        ORDER BY {$orderSql}, s.id ASC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $serversStmt->execute($params);
+    $servers = $serversStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 ?>
 
 <section class="fbg-admin-shell">

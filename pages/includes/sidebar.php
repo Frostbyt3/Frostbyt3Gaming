@@ -1,31 +1,31 @@
 <?php
-declare(strict_types=1);
+    declare(strict_types=1);
 
-$fbgSidebarPageName = strtolower(trim((string)($_GET['name'] ?? '')));
+    $fbgSidebarPageName = strtolower(trim((string)($_GET['name'] ?? '')));
 
-if ($fbgSidebarPageName === '') {
-    $fbgSidebarPageName = strtolower(pathinfo((string)($_SERVER['SCRIPT_NAME'] ?? ''), PATHINFO_FILENAME));
-}
+    if ($fbgSidebarPageName === '') {
+        $fbgSidebarPageName = strtolower(pathinfo((string)($_SERVER['SCRIPT_NAME'] ?? ''), PATHINFO_FILENAME));
+    }
 
-if ($fbgSidebarPageName === 'credit') {
-    $fbgSidebarPageName = 'wallet';
-}
+    if ($fbgSidebarPageName === 'credit') {
+        $fbgSidebarPageName = 'wallet';
+    }
 
-$fbgSidebarTitles = [
-    'dashboard' => 'Dashboard',
-    'servers' => 'Game Servers',
-    'account' => 'User Profile',
-    'wallet' => 'Manage Wallet',
-];
+    $fbgSidebarTitles = [
+        'dashboard' => 'Dashboard',
+        'servers' => 'Game Servers',
+        'account' => 'User Profile',
+        'wallet' => 'Manage Wallet',
+    ];
 
-$fbgSidebarCurrent = isset($fbgSidebarCurrent) ? (string)$fbgSidebarCurrent : $fbgSidebarPageName;
-$fbgSidebarTitle = isset($fbgSidebarTitle) ? (string)$fbgSidebarTitle : ($fbgSidebarTitles[$fbgSidebarCurrent] ?? 'Dashboard');
-$fbgSidebarEyebrow = isset($fbgSidebarEyebrow) ? (string)$fbgSidebarEyebrow : 'Server Panel';
-$fbgSidebarDashboardUrl = './page.php?name=dashboard';
-$fbgSidebarServersUrl = './page.php?name=servers';
-$fbgSidebarAccountUrl = './page.php?name=account';
-$fbgSidebarCreditUrl = './page.php?name=wallet';
-$fbgSidebarDiscordUrl = 'https://frostbyt3gaming.com/discord';
+    $fbgSidebarCurrent = isset($fbgSidebarCurrent) ? (string)$fbgSidebarCurrent : $fbgSidebarPageName;
+    $fbgSidebarTitle = isset($fbgSidebarTitle) ? (string)$fbgSidebarTitle : ($fbgSidebarTitles[$fbgSidebarCurrent] ?? 'Dashboard');
+    $fbgSidebarEyebrow = isset($fbgSidebarEyebrow) ? (string)$fbgSidebarEyebrow : 'Server Panel';
+    $fbgSidebarDashboardUrl = './page.php?name=dashboard';
+    $fbgSidebarServersUrl = './page.php?name=servers';
+    $fbgSidebarAccountUrl = './page.php?name=account';
+    $fbgSidebarCreditUrl = './page.php?name=wallet';
+    $fbgSidebarDiscordUrl = 'https://frostbyt3gaming.com/discord';
 ?>
 <button
     type="button"
@@ -92,60 +92,60 @@ $fbgSidebarDiscordUrl = 'https://frostbyt3gaming.com/discord';
 </aside>
 
 <script>
-(() => {
-    if (window.__fbgMobileSidebarBound) {
-        return;
-    }
-
-    window.__fbgMobileSidebarBound = true;
-
-    const body = document.body;
-    const toggle = document.getElementById('fbg-sidebar-mobile-toggle');
-    const close = document.getElementById('fbg-sidebar-mobile-close');
-    const sidebar = document.getElementById('fbg-shared-sidebar');
-    const backdrop = document.getElementById('fbg-sidebar-mobile-backdrop');
-    const mobileQuery = window.matchMedia('(max-width: 900px)');
-
-    if (!toggle || !close || !sidebar || !backdrop) {
-        return;
-    }
-
-    const setOpen = (isOpen) => {
-        const shouldOpen = Boolean(isOpen) && mobileQuery.matches;
-
-        body.classList.toggle('fbg-sidebar-mobile-open', shouldOpen);
-        toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-        sidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : (mobileQuery.matches ? 'true' : 'false'));
-        toggle.hidden = shouldOpen && mobileQuery.matches;
-        backdrop.hidden = !shouldOpen;
-    };
-
-    const syncDesktopState = () => {
-        if (!mobileQuery.matches) {
-            body.classList.remove('fbg-sidebar-mobile-open');
-            toggle.hidden = true;
-            backdrop.hidden = true;
-            toggle.setAttribute('aria-expanded', 'false');
-            sidebar.setAttribute('aria-hidden', 'false');
+    (() => {
+        if (window.__fbgMobileSidebarBound) {
             return;
         }
 
-        toggle.hidden = body.classList.contains('fbg-sidebar-mobile-open');
-        backdrop.hidden = !body.classList.contains('fbg-sidebar-mobile-open');
-        sidebar.setAttribute('aria-hidden', body.classList.contains('fbg-sidebar-mobile-open') ? 'false' : 'true');
-    };
+        window.__fbgMobileSidebarBound = true;
 
-    toggle.addEventListener('click', () => setOpen(true));
-    close.addEventListener('click', () => setOpen(false));
-    backdrop.addEventListener('click', () => setOpen(false));
+        const body = document.body;
+        const toggle = document.getElementById('fbg-sidebar-mobile-toggle');
+        const close = document.getElementById('fbg-sidebar-mobile-close');
+        const sidebar = document.getElementById('fbg-shared-sidebar');
+        const backdrop = document.getElementById('fbg-sidebar-mobile-backdrop');
+        const mobileQuery = window.matchMedia('(max-width: 900px)');
 
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            setOpen(false);
+        if (!toggle || !close || !sidebar || !backdrop) {
+            return;
         }
-    });
 
-    mobileQuery.addEventListener('change', syncDesktopState);
-    syncDesktopState();
-})();
+        const setOpen = (isOpen) => {
+            const shouldOpen = Boolean(isOpen) && mobileQuery.matches;
+
+            body.classList.toggle('fbg-sidebar-mobile-open', shouldOpen);
+            toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            sidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : (mobileQuery.matches ? 'true' : 'false'));
+            toggle.hidden = shouldOpen && mobileQuery.matches;
+            backdrop.hidden = !shouldOpen;
+        };
+
+        const syncDesktopState = () => {
+            if (!mobileQuery.matches) {
+                body.classList.remove('fbg-sidebar-mobile-open');
+                toggle.hidden = true;
+                backdrop.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
+                sidebar.setAttribute('aria-hidden', 'false');
+                return;
+            }
+
+            toggle.hidden = body.classList.contains('fbg-sidebar-mobile-open');
+            backdrop.hidden = !body.classList.contains('fbg-sidebar-mobile-open');
+            sidebar.setAttribute('aria-hidden', body.classList.contains('fbg-sidebar-mobile-open') ? 'false' : 'true');
+        };
+
+        toggle.addEventListener('click', () => setOpen(true));
+        close.addEventListener('click', () => setOpen(false));
+        backdrop.addEventListener('click', () => setOpen(false));
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        });
+
+        mobileQuery.addEventListener('change', syncDesktopState);
+        syncDesktopState();
+    })();
 </script>

@@ -1021,25 +1021,3 @@
         font-size: 0.92rem;
     }
 }
-
-/* ==============
-   ADMIN PAGES
-   ============== */
-
-@media (max-width: 768px) {
-    .fbg-admin-main {
-        padding: 20px;
-    }
-
-    .fbg-admin-card-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .fbg-admin-form-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .fbg-admin-field-full {
-        grid-column: span 1;
-    }
-}

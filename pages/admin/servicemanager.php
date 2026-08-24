@@ -33,8 +33,6 @@ function serviceCardsVerifyCsrf(): void
 
 function serviceCardsTableName(): string
 {
-    // Your screenshot shows mainsite.servercards.
-    // If you ever rename it later, this is the one place to update.
     return 'server_cards';
 }
 

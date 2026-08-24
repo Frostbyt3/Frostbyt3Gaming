@@ -1,160 +1,189 @@
 <?php
-declare(strict_types=1);
+    declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/pagination.php';
-require_once __DIR__ . '/../../includes/registration.php';
-require_once __DIR__ . '/../../includes/mailer.php';
-
-requireLogin();
-
-if (!canAccess(4)) {
-    http_response_code(403);
-    fbgRedirect('/page.php?name=403');
-    return;
-}
-
-$currentAdminPage = 'admin-registrations';
-
-fbgEnsurePendingRegistrationSecuritySchema();
-fbgDeleteExpiredPendingRegistrations();
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-$message = (string)($_SESSION['admin_registration_message'] ?? '');
-$messageType = (string)($_SESSION['admin_registration_message_type'] ?? 'success');
-unset($_SESSION['admin_registration_message'], $_SESSION['admin_registration_message_type']);
-
-function fbgAdminRegistrationRedirect(string $message, string $type = 'success'): void
-{
-    $_SESSION['admin_registration_message'] = $message;
-    $_SESSION['admin_registration_message_type'] = $type;
-    fbgRedirect('/page.php?name=admin-registrations');
-    exit;
-}
-
-function fbgAdminRegistrationVerifyCsrf(): void
-{
-    $token = (string)($_POST['csrf_token'] ?? '');
-
-    if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
-        fbgAdminRegistrationRedirect('Security check failed. Please refresh and try again.', 'error');
-    }
-}
-
-function fbgAdminRegistrationVerificationUrl(string $selector, string $token): string
-{
-    return fbgRegistrationBaseUrl()
-        . '/page.php?name=verify'
-        . '&selector=' . urlencode($selector)
-        . '&token=' . urlencode($token);
-}
-
-function fbgAdminRegistrationSendVerification(array $pendingRegistration, string $selector, string $token): bool
-{
-    return fbgSendVerificationEmail([
-        'to_email' => (string)$pendingRegistration['email'],
-        'first_name' => (string)($pendingRegistration['first_name'] ?? ''),
-        'verification_url' => fbgAdminRegistrationVerificationUrl($selector, $token),
-    ]);
-}
-
-function fbgAdminRegistrationSendCompletion(array $pendingRegistration, string $selector, string $token): bool
-{
-    return fbgSendRegistrationCompletionEmail([
-        'to_email' => (string)$pendingRegistration['email'],
-        'first_name' => (string)($pendingRegistration['first_name'] ?? ''),
-        'completion_url' => fbgAdminRegistrationVerificationUrl($selector, $token),
-    ]);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    fbgAdminRegistrationVerifyCsrf();
-
-    $action = trim((string)($_POST['action'] ?? ''));
-
-    if ($action === 'cleanup_registrations') {
-        $marked = fbgMarkExpiredPendingRegistrations();
-        $deleted = fbgCleanupExpiredPendingRegistrations();
-
-        fbgAdminRegistrationRedirect(
-            'Registration cleanup complete. Marked ' . $marked . ' expired and deleted ' . $deleted . ' retained row(s).'
-        );
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
 
-    $registrationId = (int)($_POST['registration_id'] ?? 0);
-    $pending = fbgFindPendingRegistrationById($registrationId);
+    require_once __DIR__ . '/../../includes/db.php';
+    require_once __DIR__ . '/../../includes/auth.php';
+    require_once __DIR__ . '/../../includes/functions.php';
+    require_once __DIR__ . '/../../includes/pagination.php';
+    require_once __DIR__ . '/../../includes/registration.php';
+    require_once __DIR__ . '/../../includes/mailer.php';
 
-    if (!$pending) {
-        fbgAdminRegistrationRedirect('Registration could not be found.', 'error');
+    requireLogin();
+
+    if (!canAccess(4)) {
+        http_response_code(403);
+        fbgRedirect('/page.php?name=403');
+        return;
     }
 
-    if (!empty($pending['consumed_at'])) {
-        fbgAdminRegistrationRedirect('That registration has already been completed.', 'error');
+    $currentAdminPage = 'admin-registrations';
+
+    fbgEnsurePendingRegistrationSecuritySchema();
+    fbgDeleteExpiredPendingRegistrations();
+
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    if ($action === 'delete_registration') {
-        $deleted = fbgDeletePendingRegistration((int)$pending['id']);
+    $message = (string)($_SESSION['admin_registration_message'] ?? '');
+    $messageType = (string)($_SESSION['admin_registration_message_type'] ?? 'success');
+    unset($_SESSION['admin_registration_message'], $_SESSION['admin_registration_message_type']);
 
-        fbgAdminRegistrationRedirect(
-            $deleted ? 'Pending registration deleted.' : 'Pending registration could not be deleted.',
-            $deleted ? 'success' : 'error'
-        );
+    function fbgAdminRegistrationRedirect(string $message, string $type = 'success'): void
+    {
+        $_SESSION['admin_registration_message'] = $message;
+        $_SESSION['admin_registration_message_type'] = $type;
+        fbgRedirect('/page.php?name=admin-registrations');
+        exit;
     }
 
-    if (!empty($pending['rejected_at'])) {
-        fbgAdminRegistrationRedirect('Rejected or expired registrations cannot be modified here.', 'error');
+    function fbgAdminRegistrationVerifyCsrf(): void
+    {
+        $token = (string)($_POST['csrf_token'] ?? '');
+
+        if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
+            fbgAdminRegistrationRedirect('Security check failed. Please refresh and try again.', 'error');
+        }
     }
 
-    if ($action === 'resend_verification') {
-        $refresh = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
+    function fbgAdminRegistrationVerificationUrl(string $selector, string $token): string
+    {
+        return fbgRegistrationBaseUrl()
+            . '/page.php?name=verify'
+            . '&selector=' . urlencode($selector)
+            . '&token=' . urlencode($token);
+    }
 
-        if (empty($refresh['ok'])) {
-            fbgAdminRegistrationRedirect($refresh['error'] ?? 'Verification email could not be prepared.', 'error');
+    function fbgAdminRegistrationSendVerification(array $pendingRegistration, string $selector, string $token): bool
+    {
+        return fbgSendVerificationEmail([
+            'to_email' => (string)$pendingRegistration['email'],
+            'first_name' => (string)($pendingRegistration['first_name'] ?? ''),
+            'verification_url' => fbgAdminRegistrationVerificationUrl($selector, $token),
+        ]);
+    }
+
+    function fbgAdminRegistrationSendCompletion(array $pendingRegistration, string $selector, string $token): bool
+    {
+        return fbgSendRegistrationCompletionEmail([
+            'to_email' => (string)$pendingRegistration['email'],
+            'first_name' => (string)($pendingRegistration['first_name'] ?? ''),
+            'completion_url' => fbgAdminRegistrationVerificationUrl($selector, $token),
+        ]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        fbgAdminRegistrationVerifyCsrf();
+
+        $action = trim((string)($_POST['action'] ?? ''));
+
+        if ($action === 'cleanup_registrations') {
+            $marked = fbgMarkExpiredPendingRegistrations();
+            $deleted = fbgCleanupExpiredPendingRegistrations();
+
+            fbgAdminRegistrationRedirect(
+                'Registration cleanup complete. Marked ' . $marked . ' expired and deleted ' . $deleted . ' retained row(s).'
+            );
         }
 
-        try {
-            $sent = fbgAdminRegistrationSendVerification($pending, (string)$refresh['selector'], (string)$refresh['token']);
-        } catch (Throwable $e) {
-            $sent = false;
+        $registrationId = (int)($_POST['registration_id'] ?? 0);
+        $pending = fbgFindPendingRegistrationById($registrationId);
+
+        if (!$pending) {
+            fbgAdminRegistrationRedirect('Registration could not be found.', 'error');
         }
 
-        fbgAdminRegistrationRedirect(
-            $sent ? 'Verification email sent.' : 'Verification token was refreshed, but the email could not be sent.',
-            $sent ? 'success' : 'error'
-        );
-    }
-
-    if (in_array($action, ['manual_approval', 'manual_approval_email', 'manual_approval_set_password'], true)) {
-        $reason = trim((string)($_POST['manual_approval_reason'] ?? ''));
-
-        if ($reason === '') {
-            fbgAdminRegistrationRedirect('Manual approval requires a reason.', 'error');
+        if (!empty($pending['consumed_at'])) {
+            fbgAdminRegistrationRedirect('That registration has already been completed.', 'error');
         }
 
-        if (pteroFindUserByEmail((string)$pending['email'])) {
-            fbgAdminRegistrationRedirect('A Pterodactyl account already exists with that email.', 'error');
+        if ($action === 'delete_registration') {
+            $deleted = fbgDeletePendingRegistration((int)$pending['id']);
+
+            fbgAdminRegistrationRedirect(
+                $deleted ? 'Pending registration deleted.' : 'Pending registration could not be deleted.',
+                $deleted ? 'success' : 'error'
+            );
         }
 
-        if (function_exists('pteroFindUserByUsername') && pteroFindUserByUsername((string)$pending['username'])) {
-            fbgAdminRegistrationRedirect('A Pterodactyl account already exists with that username.', 'error');
+        if (!empty($pending['rejected_at'])) {
+            fbgAdminRegistrationRedirect('Rejected or expired registrations cannot be modified here.', 'error');
         }
 
-        if ($action === 'manual_approval_set_password') {
-            $password = (string)($_POST['manual_approval_password'] ?? '');
-            $confirmPassword = (string)($_POST['manual_approval_confirm_password'] ?? '');
-            $passwordErrors = fbgValidatePassword($password, $confirmPassword);
+        if ($action === 'resend_verification') {
+            $refresh = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
 
-            if (!empty($passwordErrors)) {
-                fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
+            if (empty($refresh['ok'])) {
+                fbgAdminRegistrationRedirect($refresh['error'] ?? 'Verification email could not be prepared.', 'error');
+            }
+
+            try {
+                $sent = fbgAdminRegistrationSendVerification($pending, (string)$refresh['selector'], (string)$refresh['token']);
+            } catch (Throwable $e) {
+                $sent = false;
+            }
+
+            fbgAdminRegistrationRedirect(
+                $sent ? 'Verification email sent.' : 'Verification token was refreshed, but the email could not be sent.',
+                $sent ? 'success' : 'error'
+            );
+        }
+
+        if (in_array($action, ['manual_approval', 'manual_approval_email', 'manual_approval_set_password'], true)) {
+            $reason = trim((string)($_POST['manual_approval_reason'] ?? ''));
+
+            if ($reason === '') {
+                fbgAdminRegistrationRedirect('Manual approval requires a reason.', 'error');
+            }
+
+            if (pteroFindUserByEmail((string)$pending['email'])) {
+                fbgAdminRegistrationRedirect('A Pterodactyl account already exists with that email.', 'error');
+            }
+
+            if (function_exists('pteroFindUserByUsername') && pteroFindUserByUsername((string)$pending['username'])) {
+                fbgAdminRegistrationRedirect('A Pterodactyl account already exists with that username.', 'error');
+            }
+
+            if ($action === 'manual_approval_set_password') {
+                $password = (string)($_POST['manual_approval_password'] ?? '');
+                $confirmPassword = (string)($_POST['manual_approval_confirm_password'] ?? '');
+                $passwordErrors = fbgValidatePassword($password, $confirmPassword);
+
+                if (!empty($passwordErrors)) {
+                    fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
+                }
+
+                $approved = fbgMarkPendingRegistrationManuallyApproved(
+                    (int)$pending['id'],
+                    (int)($_SESSION['user_id'] ?? 0),
+                    $reason
+                );
+
+                if (!$approved) {
+                    fbgAdminRegistrationRedirect('Registration could not be manually approved.', 'error');
+                }
+
+                $approvedPending = fbgFindPendingRegistrationById((int)$pending['id']);
+                if (!$approvedPending) {
+                    fbgAdminRegistrationRedirect('Approved registration could not be reloaded.', 'error');
+                }
+
+                $created = fbgCreatePterodactylUserFromPendingRegistration($approvedPending, $password);
+
+                if (empty($created['ok'])) {
+                    fbgAdminRegistrationRedirect($created['error'] ?? 'Account could not be created.', 'error');
+                }
+
+                fbgAdminRegistrationRedirect('Registration approved and account created.');
+            }
+
+            $refresh = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
+            if (empty($refresh['ok'])) {
+                fbgAdminRegistrationRedirect($refresh['error'] ?? 'Completion email could not be prepared.', 'error');
             }
 
             $approved = fbgMarkPendingRegistrationManuallyApproved(
@@ -167,193 +196,164 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 fbgAdminRegistrationRedirect('Registration could not be manually approved.', 'error');
             }
 
-            $approvedPending = fbgFindPendingRegistrationById((int)$pending['id']);
-            if (!$approvedPending) {
-                fbgAdminRegistrationRedirect('Approved registration could not be reloaded.', 'error');
+            try {
+                $sent = fbgAdminRegistrationSendCompletion($pending, (string)$refresh['selector'], (string)$refresh['token']);
+            } catch (Throwable $e) {
+                $sent = false;
             }
 
-            $created = fbgCreatePterodactylUserFromPendingRegistration($approvedPending, $password);
+            fbgAdminRegistrationRedirect(
+                $sent ? 'Registration approved and completion email sent.' : 'Registration approved, but the completion email could not be sent.',
+                $sent ? 'success' : 'error'
+            );
+        }
+
+        if ($action === 'set_password') {
+            if (empty($pending['email_verified_at'])) {
+                fbgAdminRegistrationRedirect('Registration must be verified or manually approved before setting a password.', 'error');
+            }
+
+            $password = (string)($_POST['set_password'] ?? '');
+            $confirmPassword = (string)($_POST['set_confirm_password'] ?? '');
+            $passwordErrors = fbgValidatePassword($password, $confirmPassword);
+
+            if (!empty($passwordErrors)) {
+                fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
+            }
+
+            $created = fbgCreatePterodactylUserFromPendingRegistration($pending, $password);
 
             if (empty($created['ok'])) {
                 fbgAdminRegistrationRedirect($created['error'] ?? 'Account could not be created.', 'error');
             }
 
-            fbgAdminRegistrationRedirect('Registration approved and account created.');
+            fbgAdminRegistrationRedirect('Password set and account created.');
         }
 
-        $refresh = fbgRefreshPendingRegistrationVerificationToken((int)$pending['id']);
-        if (empty($refresh['ok'])) {
-            fbgAdminRegistrationRedirect($refresh['error'] ?? 'Completion email could not be prepared.', 'error');
+        fbgAdminRegistrationRedirect('Unknown registration action.', 'error');
+    }
+
+    function fbgAdminRegistrationStatus(array $row): string
+    {
+        if (!empty($row['consumed_at'])) {
+            return 'Completed';
         }
 
-        $approved = fbgMarkPendingRegistrationManuallyApproved(
-            (int)$pending['id'],
-            (int)($_SESSION['user_id'] ?? 0),
-            $reason
-        );
+        if (!empty($row['rejected_at'])) {
+            return (string)($row['rejection_reason'] ?? '') === FbgRegistrationRejectionReason::VERIFICATION_EXPIRED
+                ? 'Expired'
+                : 'Rejected';
+        }
 
-        if (!$approved) {
-            fbgAdminRegistrationRedirect('Registration could not be manually approved.', 'error');
+        if (!empty($row['email_verified_at'])) {
+            return 'Verified';
+        }
+
+        return 'Pending';
+    }
+
+    function fbgAdminRegistrationDate(?string $value): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '-';
         }
 
         try {
-            $sent = fbgAdminRegistrationSendCompletion($pending, (string)$refresh['selector'], (string)$refresh['token']);
+            return (new DateTimeImmutable($value))->format('M j, Y g:i A');
         } catch (Throwable $e) {
-            $sent = false;
+            return $value;
         }
-
-        fbgAdminRegistrationRedirect(
-            $sent ? 'Registration approved and completion email sent.' : 'Registration approved, but the completion email could not be sent.',
-            $sent ? 'success' : 'error'
-        );
     }
 
-    if ($action === 'set_password') {
-        if (empty($pending['email_verified_at'])) {
-            fbgAdminRegistrationRedirect('Registration must be verified or manually approved before setting a password.', 'error');
-        }
+    function fbgAdminRegistrationSortUrl(string $sort, string $currentSort, string $currentDirection): string
+    {
+        $direction = ($sort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
+        $query = $_GET;
+        $query['sort'] = $sort;
+        $query['dir'] = $direction;
+        $query['page_num'] = 1;
 
-        $password = (string)($_POST['set_password'] ?? '');
-        $confirmPassword = (string)($_POST['set_confirm_password'] ?? '');
-        $passwordErrors = fbgValidatePassword($password, $confirmPassword);
-
-        if (!empty($passwordErrors)) {
-            fbgAdminRegistrationRedirect(implode(' ', $passwordErrors), 'error');
-        }
-
-        $created = fbgCreatePterodactylUserFromPendingRegistration($pending, $password);
-
-        if (empty($created['ok'])) {
-            fbgAdminRegistrationRedirect($created['error'] ?? 'Account could not be created.', 'error');
-        }
-
-        fbgAdminRegistrationRedirect('Password set and account created.');
+        return './page.php?' . http_build_query($query);
     }
 
-    fbgAdminRegistrationRedirect('Unknown registration action.', 'error');
-}
+    $search = trim((string)($_GET['q'] ?? ''));
+    $filter = strtolower(trim((string)($_GET['status'] ?? 'active')));
+    $sort = strtolower(trim((string)($_GET['sort'] ?? 'created')));
+    $direction = strtolower(trim((string)($_GET['dir'] ?? 'desc'))) === 'asc' ? 'asc' : 'desc';
+    $perPage = 25;
+    $pageNum = fbgPaginationRequestedPage();
+    $offset = ($pageNum - 1) * $perPage;
 
-function fbgAdminRegistrationStatus(array $row): string
-{
-    if (!empty($row['consumed_at'])) {
-        return 'Completed';
+    $allowedFilters = ['all', 'active', 'pending', 'verified', 'expired', 'rejected', 'completed'];
+    if (!in_array($filter, $allowedFilters, true)) {
+        $filter = 'active';
     }
 
-    if (!empty($row['rejected_at'])) {
-        return (string)($row['rejection_reason'] ?? '') === FbgRegistrationRejectionReason::VERIFICATION_EXPIRED
-            ? 'Expired'
-            : 'Rejected';
+    $createdSortColumn = fbgPendingRegistrationColumnExists('created_at') ? 'created_at' : 'id';
+    $sortMap = [
+        'created' => $createdSortColumn,
+        'username' => 'username',
+        'email' => 'email',
+        'expires' => 'verification_expires_at',
+        'status' => "CASE
+            WHEN consumed_at IS NOT NULL THEN 5
+            WHEN rejected_at IS NOT NULL THEN 4
+            WHEN email_verified_at IS NOT NULL THEN 3
+            WHEN verification_expires_at < UTC_TIMESTAMP() THEN 2
+            ELSE 1
+        END",
+    ];
+
+    if (!array_key_exists($sort, $sortMap)) {
+        $sort = 'created';
     }
 
-    if (!empty($row['email_verified_at'])) {
-        return 'Verified';
+    $where = [];
+    $params = [];
+
+    if ($search !== '') {
+        $where[] = '(username LIKE :search OR email LIKE :search OR first_name LIKE :search OR last_name LIKE :search OR ip_address LIKE :search)';
+        $params['search'] = '%' . $search . '%';
     }
 
-    return 'Pending';
-}
-
-function fbgAdminRegistrationDate(?string $value): string
-{
-    $value = trim((string)$value);
-    if ($value === '') {
-        return '-';
+    if ($filter === 'active') {
+        $where[] = 'consumed_at IS NULL AND rejected_at IS NULL';
+    } elseif ($filter === 'pending') {
+        $where[] = 'consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NULL AND verification_expires_at >= UTC_TIMESTAMP()';
+    } elseif ($filter === 'verified') {
+        $where[] = 'consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NOT NULL';
+    } elseif ($filter === 'expired') {
+        $where[] = "consumed_at IS NULL AND ((rejected_at IS NOT NULL AND rejection_reason = :expired_reason) OR (email_verified_at IS NULL AND verification_expires_at < UTC_TIMESTAMP()))";
+        $params['expired_reason'] = FbgRegistrationRejectionReason::VERIFICATION_EXPIRED;
+    } elseif ($filter === 'rejected') {
+        $where[] = 'rejected_at IS NOT NULL AND (rejection_reason IS NULL OR rejection_reason <> :expired_reason)';
+        $params['expired_reason'] = FbgRegistrationRejectionReason::VERIFICATION_EXPIRED;
+    } elseif ($filter === 'completed') {
+        $where[] = 'consumed_at IS NOT NULL';
     }
 
-    try {
-        return (new DateTimeImmutable($value))->format('M j, Y g:i A');
-    } catch (Throwable $e) {
-        return $value;
-    }
-}
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+    $orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
+    $pdo = db();
 
-function fbgAdminRegistrationSortUrl(string $sort, string $currentSort, string $currentDirection): string
-{
-    $direction = ($sort === $currentSort && $currentDirection === 'asc') ? 'desc' : 'asc';
-    $query = $_GET;
-    $query['sort'] = $sort;
-    $query['dir'] = $direction;
-    $query['page_num'] = 1;
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM pending_registrations {$whereSql}");
+    $countStmt->execute($params);
+    $totalRows = (int)$countStmt->fetchColumn();
+    $pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
+    $pageNum = $pagination['page_num'];
+    $totalPages = $pagination['total_pages'];
+    $offset = $pagination['offset'];
 
-    return './page.php?' . http_build_query($query);
-}
-
-$search = trim((string)($_GET['q'] ?? ''));
-$filter = strtolower(trim((string)($_GET['status'] ?? 'active')));
-$sort = strtolower(trim((string)($_GET['sort'] ?? 'created')));
-$direction = strtolower(trim((string)($_GET['dir'] ?? 'desc'))) === 'asc' ? 'asc' : 'desc';
-$perPage = 25;
-$pageNum = fbgPaginationRequestedPage();
-$offset = ($pageNum - 1) * $perPage;
-
-$allowedFilters = ['all', 'active', 'pending', 'verified', 'expired', 'rejected', 'completed'];
-if (!in_array($filter, $allowedFilters, true)) {
-    $filter = 'active';
-}
-
-$createdSortColumn = fbgPendingRegistrationColumnExists('created_at') ? 'created_at' : 'id';
-$sortMap = [
-    'created' => $createdSortColumn,
-    'username' => 'username',
-    'email' => 'email',
-    'expires' => 'verification_expires_at',
-    'status' => "CASE
-        WHEN consumed_at IS NOT NULL THEN 5
-        WHEN rejected_at IS NOT NULL THEN 4
-        WHEN email_verified_at IS NOT NULL THEN 3
-        WHEN verification_expires_at < UTC_TIMESTAMP() THEN 2
-        ELSE 1
-    END",
-];
-
-if (!array_key_exists($sort, $sortMap)) {
-    $sort = 'created';
-}
-
-$where = [];
-$params = [];
-
-if ($search !== '') {
-    $where[] = '(username LIKE :search OR email LIKE :search OR first_name LIKE :search OR last_name LIKE :search OR ip_address LIKE :search)';
-    $params['search'] = '%' . $search . '%';
-}
-
-if ($filter === 'active') {
-    $where[] = 'consumed_at IS NULL AND rejected_at IS NULL';
-} elseif ($filter === 'pending') {
-    $where[] = 'consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NULL AND verification_expires_at >= UTC_TIMESTAMP()';
-} elseif ($filter === 'verified') {
-    $where[] = 'consumed_at IS NULL AND rejected_at IS NULL AND email_verified_at IS NOT NULL';
-} elseif ($filter === 'expired') {
-    $where[] = "consumed_at IS NULL AND ((rejected_at IS NOT NULL AND rejection_reason = :expired_reason) OR (email_verified_at IS NULL AND verification_expires_at < UTC_TIMESTAMP()))";
-    $params['expired_reason'] = FbgRegistrationRejectionReason::VERIFICATION_EXPIRED;
-} elseif ($filter === 'rejected') {
-    $where[] = 'rejected_at IS NOT NULL AND (rejection_reason IS NULL OR rejection_reason <> :expired_reason)';
-    $params['expired_reason'] = FbgRegistrationRejectionReason::VERIFICATION_EXPIRED;
-} elseif ($filter === 'completed') {
-    $where[] = 'consumed_at IS NOT NULL';
-}
-
-$whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-$orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
-$pdo = db();
-
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM pending_registrations {$whereSql}");
-$countStmt->execute($params);
-$totalRows = (int)$countStmt->fetchColumn();
-$pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
-$pageNum = $pagination['page_num'];
-$totalPages = $pagination['total_pages'];
-$offset = $pagination['offset'];
-
-$listStmt = $pdo->prepare("
-    SELECT *
-    FROM pending_registrations
-    {$whereSql}
-    ORDER BY {$orderSql}, id DESC
-    LIMIT {$perPage} OFFSET {$offset}
-");
-$listStmt->execute($params);
-$registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $listStmt = $pdo->prepare("
+        SELECT *
+        FROM pending_registrations
+        {$whereSql}
+        ORDER BY {$orderSql}, id DESC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $listStmt->execute($params);
+    $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 ?>
 
 <section class="fbg-admin-shell">
@@ -652,254 +652,162 @@ $registrations = $listStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     </div>
 </div>
 
-<style>
-.fbg-registration-actions-menu {
-    position: relative;
-    display: inline-flex;
-    justify-content: flex-end;
-}
-
-.fbg-registration-table-wrap {
-    overflow: visible;
-}
-
-.fbg-registration-actions-trigger {
-    align-items: center;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    color: #f5f5f5;
-    cursor: pointer;
-    display: inline-flex;
-    height: 34px;
-    justify-content: center;
-    padding: 0;
-    width: 34px;
-}
-
-.fbg-registration-actions-trigger:hover {
-    background: rgba(34, 174, 255, 0.16);
-    border-color: rgba(34, 174, 255, 0.4);
-}
-
-.fbg-registration-actions-dropdown {
-    background: #161616;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
-    display: none;
-    min-width: 190px;
-    padding: 8px;
-    position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
-    z-index: 50;
-}
-
-.fbg-registration-actions-menu.is-open .fbg-registration-actions-dropdown {
-    display: grid;
-    gap: 4px;
-}
-
-.fbg-registration-actions-dropdown button {
-    background: transparent;
-    border: 0;
-    border-radius: 6px;
-    color: #e7e7e7;
-    cursor: pointer;
-    display: block;
-    font: inherit;
-    padding: 10px 12px;
-    text-align: left;
-    width: 100%;
-}
-
-.fbg-registration-actions-dropdown button:hover {
-    background: rgba(34, 174, 255, 0.14);
-    color: #ffffff;
-}
-
-.fbg-registration-actions-dropdown button.fbg-registration-action-danger {
-    color: #ffb8b8;
-}
-
-.fbg-registration-actions-dropdown button.fbg-registration-action-danger:hover {
-    background: rgba(255, 74, 74, 0.14);
-    color: #ffffff;
-}
-
-.fbg-registration-actions-form {
-    margin: 0;
-}
-
-.fbg-registration-approval-modal {
-    max-width: 520px;
-    width: min(520px, calc(100vw - 32px));
-}
-
-.fbg-registration-approval-passwords {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    display: grid;
-    gap: 14px;
-    padding-top: 14px;
-}
-</style>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const menus = Array.from(document.querySelectorAll('[data-registration-actions]'));
-    const modal = document.getElementById('registration-approval-modal');
-    const modalClose = document.getElementById('registration-approval-close');
-    const modalCancel = document.getElementById('registration-approval-cancel');
-    const modalId = document.getElementById('registration-approval-id');
-    const modalLabel = document.getElementById('registration-approval-label');
-    const modalReason = document.getElementById('registration-approval-reason');
-    const modalDescription = document.getElementById('registration-approval-description');
-    const modalPassword = document.getElementById('registration-approval-password');
-    const modalConfirmPassword = document.getElementById('registration-approval-confirm-password');
-    const emailSubmit = document.querySelector('[data-approval-email-submit]');
-    const passwordSubmit = document.querySelector('[data-approval-password-submit]');
-    const setPasswordModal = document.getElementById('registration-password-modal');
-    const setPasswordClose = document.getElementById('registration-password-close');
-    const setPasswordCancel = document.getElementById('registration-password-cancel');
-    const setPasswordId = document.getElementById('registration-password-id');
-    const setPasswordLabel = document.getElementById('registration-password-label');
-    const setPasswordDescription = document.getElementById('registration-password-description');
-    const setPasswordInput = document.getElementById('registration-password');
-    const setConfirmPasswordInput = document.getElementById('registration-confirm-password');
+    document.addEventListener('DOMContentLoaded', () => {
+        const menus = Array.from(document.querySelectorAll('[data-registration-actions]'));
+        const modal = document.getElementById('registration-approval-modal');
+        const modalClose = document.getElementById('registration-approval-close');
+        const modalCancel = document.getElementById('registration-approval-cancel');
+        const modalId = document.getElementById('registration-approval-id');
+        const modalLabel = document.getElementById('registration-approval-label');
+        const modalReason = document.getElementById('registration-approval-reason');
+        const modalDescription = document.getElementById('registration-approval-description');
+        const modalPassword = document.getElementById('registration-approval-password');
+        const modalConfirmPassword = document.getElementById('registration-approval-confirm-password');
+        const emailSubmit = document.querySelector('[data-approval-email-submit]');
+        const passwordSubmit = document.querySelector('[data-approval-password-submit]');
+        const setPasswordModal = document.getElementById('registration-password-modal');
+        const setPasswordClose = document.getElementById('registration-password-close');
+        const setPasswordCancel = document.getElementById('registration-password-cancel');
+        const setPasswordId = document.getElementById('registration-password-id');
+        const setPasswordLabel = document.getElementById('registration-password-label');
+        const setPasswordDescription = document.getElementById('registration-password-description');
+        const setPasswordInput = document.getElementById('registration-password');
+        const setConfirmPasswordInput = document.getElementById('registration-confirm-password');
 
-    const setPasswordRequired = (isRequired) => {
-        if (modalPassword) {
-            modalPassword.required = isRequired;
-        }
+        const setPasswordRequired = (isRequired) => {
+            if (modalPassword) {
+                modalPassword.required = isRequired;
+            }
 
-        if (modalConfirmPassword) {
-            modalConfirmPassword.required = isRequired;
-        }
-    };
+            if (modalConfirmPassword) {
+                modalConfirmPassword.required = isRequired;
+            }
+        };
 
-    const closeMenus = () => {
+        const closeMenus = () => {
+            menus.forEach((menu) => {
+                menu.classList.remove('is-open');
+                const trigger = menu.querySelector('[data-registration-actions-trigger]');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        };
+
         menus.forEach((menu) => {
-            menu.classList.remove('is-open');
             const trigger = menu.querySelector('[data-registration-actions-trigger]');
-            if (trigger) {
-                trigger.setAttribute('aria-expanded', 'false');
+            if (!trigger) return;
+
+            trigger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const shouldOpen = !menu.classList.contains('is-open');
+                closeMenus();
+                menu.classList.toggle('is-open', shouldOpen);
+                trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            });
+        });
+
+        const openApprovalModal = (button) => {
+            if (!modal || !modalId || !modalLabel || !modalReason) return;
+
+            const label = button.dataset.registrationLabel || 'registration';
+            const email = button.dataset.registrationEmail || '';
+
+            modalId.value = button.dataset.registrationId || '';
+            modalLabel.value = email !== '' ? `${label} (${email})` : label;
+            if (modalDescription) {
+                modalDescription.textContent = `Approve ${label}, then either email a password setup link or set the password now.`;
+            }
+            modalReason.value = '';
+            if (modalPassword) modalPassword.value = '';
+            if (modalConfirmPassword) modalConfirmPassword.value = '';
+            setPasswordRequired(false);
+            modal.hidden = false;
+            document.body.classList.add('fbg-modal-open');
+            closeMenus();
+            modalReason.focus();
+        };
+
+        const closeApprovalModal = () => {
+            if (!modal) return;
+            modal.hidden = true;
+            document.body.classList.remove('fbg-modal-open');
+        };
+
+        const openSetPasswordModal = (button) => {
+            if (!setPasswordModal || !setPasswordId || !setPasswordLabel) return;
+
+            const label = button.dataset.registrationLabel || 'registration';
+            const email = button.dataset.registrationEmail || '';
+
+            setPasswordId.value = button.dataset.registrationId || '';
+            setPasswordLabel.value = email !== '' ? `${label} (${email})` : label;
+            if (setPasswordDescription) {
+                setPasswordDescription.textContent = `Set a password for ${label} and finish creating this user's account.`;
+            }
+            if (setPasswordInput) setPasswordInput.value = '';
+            if (setConfirmPasswordInput) setConfirmPasswordInput.value = '';
+            setPasswordModal.hidden = false;
+            document.body.classList.add('fbg-modal-open');
+            closeMenus();
+            if (setPasswordInput) setPasswordInput.focus();
+        };
+
+        const closeSetPasswordModal = () => {
+            if (!setPasswordModal) return;
+            setPasswordModal.hidden = true;
+            document.body.classList.remove('fbg-modal-open');
+        };
+
+        document.querySelectorAll('[data-registration-approve-trigger]').forEach((button) => {
+            button.addEventListener('click', () => openApprovalModal(button));
+        });
+
+        document.querySelectorAll('[data-registration-password-trigger]').forEach((button) => {
+            button.addEventListener('click', () => openSetPasswordModal(button));
+        });
+
+        if (emailSubmit) {
+            emailSubmit.addEventListener('click', () => setPasswordRequired(false));
+        }
+
+        if (passwordSubmit) {
+            passwordSubmit.addEventListener('click', () => setPasswordRequired(true));
+        }
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('[data-registration-actions]')) {
+                closeMenus();
             }
         });
-    };
 
-    menus.forEach((menu) => {
-        const trigger = menu.querySelector('[data-registration-actions-trigger]');
-        if (!trigger) return;
-
-        trigger.addEventListener('click', (event) => {
-            event.stopPropagation();
-            const shouldOpen = !menu.classList.contains('is-open');
-            closeMenus();
-            menu.classList.toggle('is-open', shouldOpen);
-            trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-        });
-    });
-
-    const openApprovalModal = (button) => {
-        if (!modal || !modalId || !modalLabel || !modalReason) return;
-
-        const label = button.dataset.registrationLabel || 'registration';
-        const email = button.dataset.registrationEmail || '';
-
-        modalId.value = button.dataset.registrationId || '';
-        modalLabel.value = email !== '' ? `${label} (${email})` : label;
-        if (modalDescription) {
-            modalDescription.textContent = `Approve ${label}, then either email a password setup link or set the password now.`;
-        }
-        modalReason.value = '';
-        if (modalPassword) modalPassword.value = '';
-        if (modalConfirmPassword) modalConfirmPassword.value = '';
-        setPasswordRequired(false);
-        modal.hidden = false;
-        document.body.classList.add('fbg-modal-open');
-        closeMenus();
-        modalReason.focus();
-    };
-
-    const closeApprovalModal = () => {
-        if (!modal) return;
-        modal.hidden = true;
-        document.body.classList.remove('fbg-modal-open');
-    };
-
-    const openSetPasswordModal = (button) => {
-        if (!setPasswordModal || !setPasswordId || !setPasswordLabel) return;
-
-        const label = button.dataset.registrationLabel || 'registration';
-        const email = button.dataset.registrationEmail || '';
-
-        setPasswordId.value = button.dataset.registrationId || '';
-        setPasswordLabel.value = email !== '' ? `${label} (${email})` : label;
-        if (setPasswordDescription) {
-            setPasswordDescription.textContent = `Set a password for ${label} and finish creating this user's account.`;
-        }
-        if (setPasswordInput) setPasswordInput.value = '';
-        if (setConfirmPasswordInput) setConfirmPasswordInput.value = '';
-        setPasswordModal.hidden = false;
-        document.body.classList.add('fbg-modal-open');
-        closeMenus();
-        if (setPasswordInput) setPasswordInput.focus();
-    };
-
-    const closeSetPasswordModal = () => {
-        if (!setPasswordModal) return;
-        setPasswordModal.hidden = true;
-        document.body.classList.remove('fbg-modal-open');
-    };
-
-    document.querySelectorAll('[data-registration-approve-trigger]').forEach((button) => {
-        button.addEventListener('click', () => openApprovalModal(button));
-    });
-
-    document.querySelectorAll('[data-registration-password-trigger]').forEach((button) => {
-        button.addEventListener('click', () => openSetPasswordModal(button));
-    });
-
-    if (emailSubmit) {
-        emailSubmit.addEventListener('click', () => setPasswordRequired(false));
-    }
-
-    if (passwordSubmit) {
-        passwordSubmit.addEventListener('click', () => setPasswordRequired(true));
-    }
-
-    document.addEventListener('click', (event) => {
-        if (!event.target.closest('[data-registration-actions]')) {
-            closeMenus();
-        }
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            closeMenus();
-            closeApprovalModal();
-            closeSetPasswordModal();
-        }
-    });
-
-    if (modalClose) modalClose.addEventListener('click', closeApprovalModal);
-    if (modalCancel) modalCancel.addEventListener('click', closeApprovalModal);
-    if (setPasswordClose) setPasswordClose.addEventListener('click', closeSetPasswordModal);
-    if (setPasswordCancel) setPasswordCancel.addEventListener('click', closeSetPasswordModal);
-    if (modal) {
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeMenus();
                 closeApprovalModal();
-            }
-        });
-    }
-    if (setPasswordModal) {
-        setPasswordModal.addEventListener('click', (event) => {
-            if (event.target === setPasswordModal) {
                 closeSetPasswordModal();
             }
         });
-    }
-});
+
+        if (modalClose) modalClose.addEventListener('click', closeApprovalModal);
+        if (modalCancel) modalCancel.addEventListener('click', closeApprovalModal);
+        if (setPasswordClose) setPasswordClose.addEventListener('click', closeSetPasswordModal);
+        if (setPasswordCancel) setPasswordCancel.addEventListener('click', closeSetPasswordModal);
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeApprovalModal();
+                }
+            });
+        }
+        if (setPasswordModal) {
+            setPasswordModal.addEventListener('click', (event) => {
+                if (event.target === setPasswordModal) {
+                    closeSetPasswordModal();
+                }
+            });
+        }
+    });
 </script>

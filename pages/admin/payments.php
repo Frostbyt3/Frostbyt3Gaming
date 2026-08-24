@@ -339,100 +339,37 @@ $invoiceSettings = [
     </div>
 </section>
 
-<style>
-.fbg-tinymce-wrap {
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    background: #101010;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.fbg-tinymce-wrap:focus-within {
-    border-color: rgba(0, 174, 239, 0.72);
-    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.16);
-}
-
-.fbg-tinymce-wrap .tox.tox-tinymce {
-    border: 0;
-    border-radius: 0;
-    font-family: inherit;
-}
-
-.fbg-tinymce-wrap .tox .tox-editor-header,
-.fbg-tinymce-wrap .tox .tox-toolbar-overlord,
-.fbg-tinymce-wrap .tox .tox-toolbar,
-.fbg-tinymce-wrap .tox .tox-toolbar__overflow,
-.fbg-tinymce-wrap .tox .tox-toolbar__primary {
-    background: #181818;
-}
-
-.fbg-tinymce-wrap .tox .tox-menubar,
-.fbg-tinymce-wrap .tox .tox-statusbar {
-    background: #141414;
-}
-
-.fbg-tinymce-wrap .tox .tox-edit-area::before {
-    border: 0;
-}
-
-.fbg-tinymce-wrap .tox .tox-statusbar {
-    border-top-color: rgba(255, 255, 255, 0.1);
-    color: #aeb7c2;
-}
-
-.fbg-tinymce-wrap .tox .tox-tbtn,
-.fbg-tinymce-wrap .tox .tox-mbtn {
-    border-radius: 6px;
-}
-
-.fbg-tinymce-wrap .tox .tox-tbtn:hover,
-.fbg-tinymce-wrap .tox .tox-tbtn--enabled,
-.fbg-tinymce-wrap .tox .tox-mbtn:hover:not(:disabled):not(.tox-mbtn--active) {
-    background: rgba(0, 174, 239, 0.16);
-}
-
-.fbg-tinymce-wrap .tox .tox-tbtn svg {
-    fill: #d8e0e8;
-}
-
-.fbg-tinymce-wrap .tox .tox-tbtn:hover svg,
-.fbg-tinymce-wrap .tox .tox-tbtn--enabled svg {
-    fill: #ffffff;
-}
-</style>
-
 <script src="https://cdn.tiny.cloud/1/xxgyxwiaqqglhni5qardovr11rmsswgfu5ahsnrtcphvyyun/tinymce/8/tinymce.min.js" referrerpolicy="origin" crossorigin="anonymous"></script>
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    if (!window.tinymce) return;
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!window.tinymce) return;
 
-    tinymce.init({
-        selector: "#payment-tos-content",
-        height: 440,
-        menubar: "file edit view insert format table help",
-        plugins: "advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount help autoresize",
-        toolbar: "undo redo | blocks | bold italic underline strikethrough | alignleft aligncenter alignright | bullist numlist outdent indent | link image media table | code preview fullscreen | removeformat help",
-        toolbar_mode: "sliding",
-        resize: true,
-        skin: "oxide-dark",
-        content_css: "dark",
-        branding: false,
-        promotion: false,
-        convert_urls: false,
-        relative_urls: false,
-        remove_script_host: false,
-        content_style: [
-            "html { background: #101010; }",
-            "body { background: #101010; color: #f4f7fb; font-family: Inter, Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 18px 20px; }",
-            "a { color: #00aeef; }",
-            "h1, h2, h3, h4, h5, h6 { color: #ffffff; font-weight: 800; line-height: 1.22; }",
-            "blockquote { border-left: 3px solid #00aeef; color: #cbd5df; margin-left: 0; padding-left: 16px; }",
-            "code { background: #1c1c1c; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #ffc848; padding: 2px 5px; }",
-            "table { border-collapse: collapse; width: 100%; }",
-            "th, td { border: 1px solid rgba(255, 255, 255, 0.14); padding: 10px; }",
-            "th { background: #181818; color: #ffffff; }"
-        ].join(" ")
+        tinymce.init({
+            selector: "#payment-tos-content",
+            height: 440,
+            menubar: "file edit view insert format table help",
+            plugins: "advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount help autoresize",
+            toolbar: "undo redo | blocks | bold italic underline strikethrough | alignleft aligncenter alignright | bullist numlist outdent indent | link image media table | code preview fullscreen | removeformat help",
+            toolbar_mode: "sliding",
+            resize: true,
+            skin: "oxide-dark",
+            content_css: "dark",
+            branding: false,
+            promotion: false,
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            content_style: [
+                "html { background: #101010; }",
+                "body { background: #101010; color: #f4f7fb; font-family: Inter, Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 18px 20px; }",
+                "a { color: #00aeef; }",
+                "h1, h2, h3, h4, h5, h6 { color: #ffffff; font-weight: 800; line-height: 1.22; }",
+                "blockquote { border-left: 3px solid #00aeef; color: #cbd5df; margin-left: 0; padding-left: 16px; }",
+                "code { background: #1c1c1c; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #ffc848; padding: 2px 5px; }",
+                "table { border-collapse: collapse; width: 100%; }",
+                "th, td { border: 1px solid rgba(255, 255, 255, 0.14); padding: 10px; }",
+                "th { background: #181818; color: #ffffff; }"
+            ].join(" ")
+        });
     });
-});
 </script>
