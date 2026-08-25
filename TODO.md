@@ -5,30 +5,32 @@
 - [x] Build credit balance display and transaction history on the frontend.
 - [x] Build the add-credit flow with Stripe and PayPal.
 - [x] Replace the servers placeholder with a real category and plan catalog.
-- [x] Add purchase-with-credit provisioning through the Pterodactyl API.
+- [x] Add rental-with-credit provisioning through the Pterodactyl API.
 - [x] Add frontend payment settings management for Stripe, PayPal, and balance limits.
-- [x] Add server purchase history to the Manage Wallet page.
-- [x] Record shop purchase metadata for renewals and 30-day expiration tracking.
+- [x] Add server rental history to the Manage Wallet page.
+- [x] Record shop rental metadata for renewals and 30-day expiration tracking.
 - [x] Remove server-panel install-state hard reloads and stabilize polling.
 - [x] Add admin CRUD for shop categories and server plans.
-- [ ] Add order detail pages for completed balance uploads, server purchases, and renewals.
+- [ ] Add order detail pages for completed balance uploads, server rentals, and renewals.
 
 ## Frontend Invoice System
 
-- [ ] Add frontend-owned invoice database tables for invoices, invoice line items, and invoice events.
-- [ ] Add immutable invoice snapshots for company details, customer details, line items, tax, totals, currency, and payment metadata.
-- [ ] Add invoice numbering settings with configurable prefix and starting/next invoice number.
-- [ ] Add invoice company settings for business name, address, phone, email, tax label, and tax rate.
+- [x] Add frontend-owned invoice database tables for invoices, invoice line items, and invoice events.
+- [x] Add immutable invoice snapshots for company details, customer details, line items, tax, totals, currency, and payment metadata.
+- [x] Add invoice numbering settings with configurable prefix and starting/next invoice number.
+- [x] Add invoice company settings for business name, address, phone, email, tax label, and tax rate.
 - [ ] Add invoice delivery settings for enabling invoice emails, reply-to/from behavior, and future PDF attachment behavior.
-- [ ] Add an Invoice Settings tab/section to the admin shop/settings page.
-- [ ] Generate invoices when wallet top-ups complete successfully.
-- [ ] Generate invoices when server purchases complete successfully.
-- [ ] Generate invoices when server renewals complete successfully.
+- [x] Add an Invoice Settings tab/section to the admin shop/settings page.
+- [x] Generate invoices when wallet top-ups complete successfully.
+- [x] Generate invoices when server rentals complete successfully.
+- [x] Generate invoices when server renewals complete successfully.
+- [x] Add admin action to manually generate a missing invoice for a completed wallet top-up.
 - [ ] Send invoice email notifications through the existing PHPMailer setup after invoice creation.
-- [ ] Add customer-facing invoice list/detail pages with secure ownership checks.
+- [x] Add customer-facing invoice list/detail pages with secure ownership checks.
 - [ ] Add PDF invoice rendering/download support.
 - [ ] Add admin invoice list/detail pages with search, filters, pagination, resend, void, and refund-aware status handling.
 - [ ] Add invoice event logging for generated, emailed, resent, failed-email, voided, refunded, and downloaded events.
+- [x] Change invoices displayed on Wallet page to new invoice system.
 
 ## Shared Frontend Utilities
 
@@ -62,4 +64,4 @@
 - [x] Add server delete action.
 - [x] Require strong confirmation before deleting.
 - [ ] Prevent accidental deletion with clear server name confirmation.
-- [ ] Decide whether deleted server purchase/history records should remain for billing/audit history.
+- [ ] Decide whether deleted server rental/history records should remain for billing/audit history.

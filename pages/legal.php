@@ -2,7 +2,7 @@
 $legalDocs =[
     'terms' => [
         'title' => 'Terms of Service',
-        'updated' => 'March 6, 2026',
+        'updated' => 'August 25, 2026',
         'summary1' => 'These Terms of Service govern your access to and use of services operated by Frostbyt3 Gaming LLC, including game servers, websites, management panels, digital services, and related platforms.',
         'summary2' => 'By accessing or using any Frostbyt3 Gaming services, you agree to be bound by these Terms.',
         'file' => './legal/ToS.pdf',
@@ -59,7 +59,9 @@ $current = $legalDocs[$activeDoc];
 
         <div class="legal-divider"></div>
 
-        <iframe class="pdf-frame" src="<?php echo htmlspecialchars($current['file']); ?>"></iframe>
+        <?php $pdfUrl = asset($current['file']); ?>
+
+        <iframe class="pdf-frame" src="<?php echo htmlspecialchars($pdfUrl); ?>"></iframe>
 
         <p class="legal-note">
             Questions about this document can be sent to

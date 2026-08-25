@@ -26,6 +26,7 @@ $allowed = [
     'account'               => 'account.php',
     'wallet'                => 'wallet.php',
     'credit'                => 'wallet.php',
+    'invoice'               => 'invoice.php',
     'verify-email-change'   => 'verify-email-change.php',
     'order'                 => 'order.php',
     'legal'                 => 'legal.php',

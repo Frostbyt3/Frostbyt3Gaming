@@ -9,6 +9,7 @@ if (empty($_SESSION['csrf_token'])) {
 
 $catalog = fbgGetShopCatalog();
 $currency = fbgGetShopCurrency();
+$shopTaxRate = fbgGetShopTaxRate();
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $isLoggedIn = $userId > 0;
 $balance = $isLoggedIn ? fbgGetUserCreditBalance($userId) : 0.0;
@@ -118,8 +119,10 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                             <?php foreach ($category['games'] as $game): ?>
                                 <?php
                                 $price = (float)($game['price'] ?? 0);
-                                $canAfford = $isLoggedIn && $balance >= $price;
-                                $balanceAfterOrder = max(0, $balance - $price);
+                                $tax = fbgCalculateShopTax($price);
+                                $totalPrice = (float)$tax['total'];
+                                $canAfford = $isLoggedIn && $balance >= $totalPrice;
+                                $balanceAfterOrder = max(0, $balance - $totalPrice);
                                 ?>
                                 <article class="fbg-shop-plan-card">
                                     <div class="fbg-shop-plan-media">
@@ -132,8 +135,13 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                                     <div class="fbg-shop-plan-body">
                                         <div class="fbg-shop-plan-title-row">
                                             <h3><?php echo htmlspecialchars((string)$game['name']); ?></h3>
-                                            <strong><?php echo htmlspecialchars(fbgFormatCredit($price, $currency)); ?></strong>
+                                            <strong><?php echo htmlspecialchars(fbgFormatCredit($totalPrice, $currency)); ?></strong>
                                         </div>
+                                        <?php if ($shopTaxRate > 0): ?>
+                                            <p class="fbg-shop-plan-tax-note">
+                                                Includes <?php echo htmlspecialchars(fbgFormatCredit((float)$tax['tax_amount'], $currency)); ?> tax.
+                                            </p>
+                                        <?php endif; ?>
 
                                         <div class="fbg-shop-plan-specs">
                                             <span><?php echo htmlspecialchars(fbgShopFormatMemory((int)$game['memory'])); ?> RAM</span>
@@ -150,7 +158,7 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                                     <div class="fbg-shop-plan-actions">
                                         <?php if (!$isLoggedIn): ?>
                                             <a class="btn fbg-primary-button" href="./page.php?name=login">
-                                                Login to Order
+                                                Login to Rent
                                             </a>
                                         <?php else: ?>
                                             <button
@@ -159,13 +167,16 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                                                 data-game-id="<?php echo (int)$game['id']; ?>"
                                                 data-game-name="<?php echo htmlspecialchars((string)$category['title'], ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-plan-name="<?php echo htmlspecialchars((string)$game['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                                                data-price="<?php echo htmlspecialchars(fbgFormatCredit($price, $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-subtotal="<?php echo htmlspecialchars(fbgFormatCredit($price, $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-tax-rate="<?php echo htmlspecialchars(number_format((float)$tax['tax_rate'], 2), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-tax-amount="<?php echo htmlspecialchars(fbgFormatCredit((float)$tax['tax_amount'], $currency), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-total="<?php echo htmlspecialchars(fbgFormatCredit($totalPrice, $currency), ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-current-balance="<?php echo htmlspecialchars(fbgFormatCredit($balance, $currency), ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-balance-after="<?php echo htmlspecialchars(fbgFormatCredit($balanceAfterOrder, $currency), ENT_QUOTES, 'UTF-8'); ?>"
-                                                data-default-text="Order Plan"
+                                                data-default-text="Rent Server"
                                                 <?php echo $canAfford ? '' : 'disabled'; ?>
                                             >
-                                                <?php echo $canAfford ? 'Order Plan' : 'Insufficient Balance'; ?>
+                                                <?php echo $canAfford ? 'Rent Server' : 'Insufficient Balance'; ?>
                                             </button>
                                         <?php endif; ?>
                                     </div>
@@ -195,8 +206,8 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
             </div>
 
             <div class="fbg-shop-order-copy">
-                <p>By selecting Confirm Order, you acknowledge that you have read and agree to the Terms of Service.</p>
-                <p>Your new world will begin taking shape immediately after your order is confirmed. You'll be exploring it in no time!</p>
+                <p>By selecting Confirm Rental, you acknowledge that you have read and agree to the Terms of Service.</p>
+                <p>Your new world will begin taking shape immediately after your rental is confirmed. You'll be exploring it in no time!</p>
             </div>
 
             <div class="fbg-shop-order-tos">
@@ -230,15 +241,23 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                     <dd id="fbg-shop-order-plan">-</dd>
                 </div>
                 <div>
-                    <dt>Price</dt>
-                    <dd id="fbg-shop-order-price">-</dd>
+                    <dt>Subtotal</dt>
+                    <dd id="fbg-shop-order-subtotal">-</dd>
+                </div>
+                <div>
+                    <dt>Tax</dt>
+                    <dd id="fbg-shop-order-tax">-</dd>
+                </div>
+                <div>
+                    <dt>Total</dt>
+                    <dd id="fbg-shop-order-total">-</dd>
                 </div>
                 <div>
                     <dt>Current Balance</dt>
                     <dd id="fbg-shop-order-balance">-</dd>
                 </div>
                 <div>
-                    <dt>Balance After Order</dt>
+                    <dt>Balance After Rental</dt>
                     <dd id="fbg-shop-order-after">-</dd>
                 </div>
             </dl>
@@ -253,7 +272,7 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
 
             <div class="fbg-modal-actions fbg-shop-order-actions">
                 <button type="button" class="btn fbg-neutral-button" id="fbg-shop-order-cancel">Cancel</button>
-                <button type="button" class="btn fbg-primary-button" id="fbg-shop-order-confirm" disabled>Confirm Order</button>
+                <button type="button" class="btn fbg-primary-button" id="fbg-shop-order-confirm" disabled>Confirm Rental</button>
             </div>
         </div>
     </div>
@@ -273,7 +292,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const orderFields = {
         game: document.getElementById("fbg-shop-order-game"),
         plan: document.getElementById("fbg-shop-order-plan"),
-        price: document.getElementById("fbg-shop-order-price"),
+        subtotal: document.getElementById("fbg-shop-order-subtotal"),
+        tax: document.getElementById("fbg-shop-order-tax"),
+        total: document.getElementById("fbg-shop-order-total"),
         balance: document.getElementById("fbg-shop-order-balance"),
         after: document.getElementById("fbg-shop-order-after")
     };
@@ -309,7 +330,9 @@ document.addEventListener("DOMContentLoaded", () => {
         activePurchaseButton = button;
         orderFields.game.textContent = button.dataset.gameName || "-";
         orderFields.plan.textContent = button.dataset.planName || "-";
-        orderFields.price.textContent = button.dataset.price || "-";
+        orderFields.subtotal.textContent = button.dataset.subtotal || "-";
+        orderFields.tax.textContent = `${button.dataset.taxAmount || "-"} (${button.dataset.taxRate || "0.00"}%)`;
+        orderFields.total.textContent = button.dataset.total || "-";
         orderFields.balance.textContent = button.dataset.currentBalance || "-";
         orderFields.after.textContent = button.dataset.balanceAfter || "-";
         orderAgree.checked = false;
@@ -382,12 +405,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const payload = await readJsonResponse(response);
 
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.error || "Could not purchase server.");
+                    throw new Error(payload.error || "Could not start server rental.");
                 }
 
                 stopProvisioningAnimation();
                 button.textContent = "Provisioned";
-                showMessage(payload.data?.message || "Server purchased and provisioning has started.", "success");
+                showMessage(payload.data?.message || "Server rental started and provisioning has begun.", "success");
 
                 if (payload.data?.identifier) {
                     setTimeout(() => {
@@ -396,7 +419,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (error) {
                 stopProvisioningAnimation();
-                showMessage(error.message || "Could not purchase server.", "error");
+                showMessage(error.message || "Could not start server rental.", "error");
                 button.disabled = false;
                 button.textContent = originalText;
             }

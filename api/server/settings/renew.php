@@ -142,7 +142,7 @@ try {
     }
 
     $gameStmt = $pdo->prepare(
-        'SELECT id, price
+        'SELECT id, name, price
          FROM games
          WHERE id = :id
          LIMIT 1'
@@ -156,7 +156,9 @@ try {
         throw new RuntimeException('Game package not found.');
     }
 
-    $price = (float)($gameRow['price'] ?? 0);
+    $price = round((float)($gameRow['price'] ?? 0), 2);
+    $tax = fbgCalculateShopTax($price);
+    $totalPrice = (float)$tax['total'];
 
     if ($price <= 0) {
         throw new RuntimeException("You can't renew this server.");
@@ -180,11 +182,11 @@ try {
 
     $currentCredit = (float)($userRow['credit'] ?? 0);
 
-    if ($currentCredit < $price) {
+    if ($currentCredit < $totalPrice) {
         throw new RuntimeException("You don't have enough balance to renew this server.");
     }
 
-    $newCredit = $currentCredit - $price;
+    $newCredit = $currentCredit - $totalPrice;
     $oldExpiredAt = fbgNormalizeExpirationHistoryValue((string)($serverRow['expired_at'] ?? ''));
 
     $expiryBase = new DateTimeImmutable((string)$serverRow['expired_at']);
@@ -271,10 +273,20 @@ try {
         $currency = (string)$currencyRow['value'];
     }
 
-    $canRenewAgain = $newCredit >= $price;
+    $canRenewAgain = $newCredit >= $totalPrice;
     $renewWarning  = $canRenewAgain
         ? ''
         : 'You do not have enough balance to renew this server again.';
+    $invoice = fbgCreateFrontendInvoiceForServerRenewal(
+        $panelUserId,
+        $serverId,
+        (int)($gameRow['id'] ?? 0),
+        (string)($gameRow['name'] ?? 'Game Server'),
+        $price,
+        $currency,
+        $newExpiryForDb,
+        $oldExpiredAt
+    );
 
     settingsJsonResponse(200, [
         'ok'    => true,
@@ -285,9 +297,14 @@ try {
             'expired_at_display'  => $newExpiry->format('M j, Y g:i A'),
             'balance'             => round($newCredit, 2),
             'currency'            => $currency,
+            'subtotal'            => (float)$tax['subtotal'],
+            'tax_rate'            => (float)$tax['tax_rate'],
+            'tax_amount'          => (float)$tax['tax_amount'],
+            'total'               => $totalPrice,
             'can_renew'           => $canRenewAgain,
             'renew_warning'       => $renewWarning,
             'unsuspend_warning'   => $unsuspendWarning,
+            'invoice'             => $invoice,
         ],
     ]);
 } catch (Throwable $e) {

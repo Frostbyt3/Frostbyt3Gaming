@@ -80,6 +80,9 @@ $launchSftpUrl = ($sftpHost !== '' && $sftpPort !== '')
 $shopCurrency = 'USD';
 $userBalance = 0.00;
 $renewPrice = 0.00;
+$renewTaxRate = fbgGetShopTaxRate();
+$renewTaxAmount = 0.00;
+$renewTotal = 0.00;
 $canRenewServer = false;
 $renewDisabledReason = 'Renewal information is unavailable for this server. Please contact support.';
 $hasValidRenewData = false;
@@ -157,11 +160,15 @@ try {
             $renewDisabledReason = 'This server is missing expiration information and cannot be renewed. Please contact support.';
         } elseif (!empty($renewRow['product_id']) && isset($renewRow['price'])) {
             $renewPrice = (float)$renewRow['price'];
+            $renewTax = fbgCalculateShopTax($renewPrice);
+            $renewTaxRate = (float)$renewTax['tax_rate'];
+            $renewTaxAmount = (float)$renewTax['tax_amount'];
+            $renewTotal = (float)$renewTax['total'];
 
             if ($renewPrice > 0) {
                 $hasValidRenewData = true;
 
-                if ($userBalance >= $renewPrice) {
+                if ($userBalance >= $renewTotal) {
                     $canRenewServer = $showRenewalSection;
                     $renewDisabledReason = '';
                 } else {
@@ -291,8 +298,25 @@ if (!$showRenewalSection) {
                         </div>
                     <?php endif; ?>
 
+                    <?php if ($hasValidRenewData): ?>
+                        <div class="fbg-settings-balance-row">
+                            <span>Renewal Subtotal</span>
+                            <code><?php echo htmlspecialchars(number_format($renewPrice, 2) . ' ' . $shopCurrency); ?></code>
+                        </div>
+
+                        <div class="fbg-settings-balance-row">
+                            <span>Tax <?php echo htmlspecialchars(number_format($renewTaxRate, 2)); ?>%</span>
+                            <code><?php echo htmlspecialchars(number_format($renewTaxAmount, 2) . ' ' . $shopCurrency); ?></code>
+                        </div>
+
+                        <div class="fbg-settings-balance-row">
+                            <span>Renewal Total</span>
+                            <code><?php echo htmlspecialchars(number_format($renewTotal, 2) . ' ' . $shopCurrency); ?></code>
+                        </div>
+                    <?php endif; ?>
+
                     <p class="fbg-settings-note">
-                        Your server will be renewed for an additional 30 days and the cost will be deducted from your balance.
+                        Your server will be renewed for an additional 30 days and the total will be deducted from your balance.
                     </p>
 
                     <?php if (!$canRenewServer && $renewDisabledReason !== ''): ?>
@@ -309,13 +333,16 @@ if (!$showRenewalSection) {
                             type="button"
                             class="btn fbg-neutral-button"
                             id="settings-renew-button"
-                            data-renew-price="<?php echo htmlspecialchars(number_format($renewPrice, 2, '.', '')); ?>"
+                            data-renew-price="<?php echo htmlspecialchars(number_format($renewTotal, 2, '.', '')); ?>"
+                            data-renew-subtotal="<?php echo htmlspecialchars(number_format($renewPrice, 2, '.', '')); ?>"
+                            data-renew-tax="<?php echo htmlspecialchars(number_format($renewTaxAmount, 2, '.', '')); ?>"
+                            data-renew-tax-rate="<?php echo htmlspecialchars(number_format($renewTaxRate, 2, '.', '')); ?>"
                             data-currency="<?php echo htmlspecialchars($shopCurrency); ?>"
                             <?php echo ($canRenewServer && $hasValidRenewData) ? '' : 'disabled'; ?>
                         >
                             Renew Server -
                             <?php echo $hasValidRenewData
-                                ? htmlspecialchars(number_format($renewPrice, 2) . ' ' . $shopCurrency)
+                                ? htmlspecialchars(number_format($renewTotal, 2) . ' ' . $shopCurrency)
                                 : 'Unavailable'; ?>
                         </button>
                     </div>

@@ -43,10 +43,23 @@ $paymentSettings = fbgGetShopPaymentSettings();
 $hasOnlineBalanceUploads = $paymentSettings['stripe_enabled'] || $paymentSettings['paypal_enabled'];
 $balance = fbgGetUserCreditBalance($userId);
 $transactions = fbgGetUserPaymentHistory($userId);
+$frontendInvoices = fbgGetUserFrontendInvoices($userId);
 $serverPurchases = fbgGetUserServerPurchaseHistory($userId);
 $showPendingTransactions = (string)($_GET['show_pending'] ?? '') === '1';
 $visibleTransactions = [];
 $hiddenPendingTransactions = 0;
+$invoiceByPaymentId = [];
+
+foreach ($frontendInvoices as $invoice) {
+    if (($invoice['source_type'] ?? '') !== 'payment') {
+        continue;
+    }
+
+    $sourceId = (int)($invoice['source_id'] ?? 0);
+    if ($sourceId > 0) {
+        $invoiceByPaymentId[$sourceId] = $invoice;
+    }
+}
 
 foreach ($transactions as $transaction) {
     $completed = (int)($transaction['completed'] ?? 0) === 1;
@@ -170,123 +183,206 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                         <?php endif; ?>
                     </section>
 
-                    <section class="fbg-account-section fbg-credit-server-purchases">
-            <div class="fbg-settings-section-header">
-                <div>
-                    <h3>Server Purchase History</h3>
-                    <p class="fbg-settings-note">
-                        Servers provisioned using your account balance.
-                    </p>
-                </div>
-            </div>
+                    <section class="fbg-account-section">
+                        <div class="fbg-settings-section-header fbg-credit-transactions-header">
+                            <div>
+                                <h3>Transaction History</h3>
+                                <?php if ($hiddenPendingTransactions > 0 && !$showPendingTransactions): ?>
+                                    <p class="fbg-settings-note">
+                                        <?php echo $hiddenPendingTransactions; ?> pending transaction<?php echo $hiddenPendingTransactions === 1 ? '' : 's'; ?> older than 24 hours hidden.
+                                    </p>
+                                <?php endif; ?>
+                            </div>
 
-            <?php if (empty($serverPurchases)): ?>
-                <div class="fbg-empty-state">
-                    No server purchases found.
-                </div>
-            <?php else: ?>
-                <div class="fbg-credit-table-wrap">
-                    <table class="fbg-credit-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Plan</th>
-                                <th class="fbg-credit-table-amount">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($serverPurchases as $purchase): ?>
-                                <?php
-                                $createdAt = (string)($purchase['created_at'] ?? '');
-                                $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
-                                $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
-                                $purchaseCurrency = trim((string)($purchase['currency'] ?? '')) ?: $currency;
-                                ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($dateDisplay); ?></td>
-                                    <td><?php echo htmlspecialchars((string)($purchase['game_name'] ?? 'Game Server')); ?></td>
-                                    <td class="fbg-credit-table-amount">
-                                        <?php echo htmlspecialchars(fbgFormatCredit((float)($purchase['amount'] ?? 0), $purchaseCurrency)); ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
+                            <label class="fbg-toggle-row fbg-credit-pending-toggle">
+                                <span class="fbg-toggle-label">Show Pending</span>
+                                <span class="fbg-toggle-switch">
+                                    <input
+                                        type="checkbox"
+                                        id="fbg-show-pending-transactions"
+                                        <?php echo $showPendingTransactions ? 'checked' : ''; ?>
+                                    >
+                                    <span class="fbg-toggle-slider"></span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <?php if (empty($visibleTransactions)): ?>
+                            <div class="fbg-empty-state">
+                                No transactions found.
+                            </div>
+                        <?php else: ?>
+                            <div class="fbg-credit-table-wrap fbg-wallet-table-scroll">
+                                <table class="fbg-credit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Status</th>
+                                            <th>Invoice</th>
+                                            <th class="fbg-credit-table-amount">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($visibleTransactions as $transaction): ?>
+                                            <?php
+                                            $createdAt = (string)($transaction['created_at'] ?? '');
+                                            $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
+                                            $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
+                                            $type = ucfirst((string)($transaction['payment_type'] ?? 'Payment'));
+                                            $completed = (int)($transaction['completed'] ?? 0) === 1;
+                                            $invoice = $invoiceByPaymentId[(int)($transaction['id'] ?? 0)] ?? null;
+                                            $invoiceNumber = trim((string)($invoice['invoice_number'] ?? $transaction['invoice_number'] ?? ''));
+                                            $invoiceUrl = $invoice && !empty($invoice['id'])
+                                                ? './page.php?name=invoice&id=' . rawurlencode((string)$invoice['id'])
+                                                : '';
+                                            ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($dateDisplay); ?></td>
+                                                <td><?php echo htmlspecialchars($type); ?></td>
+                                                <td>
+                                                    <span class="fbg-credit-status <?php echo $completed ? 'is-complete' : 'is-pending'; ?>">
+                                                        <?php echo $completed ? 'Complete' : 'Pending'; ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($invoiceNumber !== '' && $invoiceUrl !== ''): ?>
+                                                        <a href="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-invoice-link">
+                                                            <?php echo htmlspecialchars($invoiceNumber, ENT_QUOTES, 'UTF-8'); ?>
+                                                        </a>
+                                                    <?php else: ?>
+                                                        &mdash;
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="fbg-credit-table-amount">
+                                                    <?php echo htmlspecialchars(fbgFormatCredit((float)($transaction['amount'] ?? 0), $currency)); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </section>
 
                     <section class="fbg-account-section">
-            <div class="fbg-settings-section-header fbg-credit-transactions-header">
-                <div>
-                    <h3>Transaction History</h3>
-                    <?php if ($hiddenPendingTransactions > 0 && !$showPendingTransactions): ?>
-                        <p class="fbg-settings-note">
-                            <?php echo $hiddenPendingTransactions; ?> pending transaction<?php echo $hiddenPendingTransactions === 1 ? '' : 's'; ?> older than 24 hours hidden.
-                        </p>
-                    <?php endif; ?>
-                </div>
+                        <div class="fbg-settings-section-header">
+                            <div>
+                                <h3>Invoices</h3>
+                                <p class="fbg-settings-note">
+                                    Frontend-generated invoices for completed wallet activity.
+                                </p>
+                            </div>
+                        </div>
 
-                <label class="fbg-toggle-row fbg-credit-pending-toggle">
-                    <span class="fbg-toggle-label">Show Pending</span>
-                    <span class="fbg-toggle-switch">
-                        <input
-                            type="checkbox"
-                            id="fbg-show-pending-transactions"
-                            <?php echo $showPendingTransactions ? 'checked' : ''; ?>
-                        >
-                        <span class="fbg-toggle-slider"></span>
-                    </span>
-                </label>
-            </div>
-
-            <?php if (empty($visibleTransactions)): ?>
-                <div class="fbg-empty-state">
-                    No transactions found.
-                </div>
-            <?php else: ?>
-                <div class="fbg-credit-table-wrap">
-                    <table class="fbg-credit-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Invoice</th>
-                                <th class="fbg-credit-table-amount">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($visibleTransactions as $transaction): ?>
-                                <?php
-                                $createdAt = (string)($transaction['created_at'] ?? '');
-                                $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
-                                $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
-                                $type = ucfirst((string)($transaction['payment_type'] ?? 'Payment'));
-                                $completed = (int)($transaction['completed'] ?? 0) === 1;
-                                $invoiceNumber = trim((string)($transaction['invoice_number'] ?? ''));
-                                ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($dateDisplay); ?></td>
-                                    <td><?php echo htmlspecialchars($type); ?></td>
-                                    <td>
-                                        <span class="fbg-credit-status <?php echo $completed ? 'is-complete' : 'is-pending'; ?>">
-                                            <?php echo $completed ? 'Complete' : 'Pending'; ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <?php echo $invoiceNumber !== '' ? htmlspecialchars($invoiceNumber) : '&mdash;'; ?>
-                                    </td>
-                                    <td class="fbg-credit-table-amount">
-                                        <?php echo htmlspecialchars(fbgFormatCredit((float)($transaction['amount'] ?? 0), $currency)); ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
+                        <?php if (empty($frontendInvoices)): ?>
+                            <div class="fbg-empty-state">
+                                No invoices found.
+                            </div>
+                        <?php else: ?>
+                            <div class="fbg-credit-table-wrap fbg-wallet-table-scroll">
+                                <table class="fbg-credit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Invoice</th>
+                                            <th>Status</th>
+                                            <th>Source</th>
+                                            <th class="fbg-credit-table-amount">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($frontendInvoices as $invoice): ?>
+                                            <?php
+                                            $createdAt = (string)($invoice['created_at'] ?? '');
+                                            $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
+                                            $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
+                                            $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
+                                            $invoiceStatus = ucfirst((string)($invoice['status'] ?? 'Paid'));
+                                            $sourceType = (string)($invoice['source_type'] ?? 'purchase');
+                                            $sourceLabel = match ($sourceType) {
+                                                'payment' => 'Balance Upload',
+                                                'server_purchase' => 'Server Rental',
+                                                'renewal' => 'Server Renewal',
+                                                default => 'Rental',
+                                            };
+                                            $invoiceCurrency = trim((string)($invoice['currency'] ?? '')) ?: $currency;
+                                            $invoiceUrl = './page.php?name=invoice&id=' . rawurlencode((string)($invoice['id'] ?? 0));
+                                            ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($dateDisplay); ?></td>
+                                                <td>
+                                                    <?php if ($invoiceNumber !== ''): ?>
+                                                        <a href="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-invoice-link">
+                                                            <?php echo htmlspecialchars($invoiceNumber, ENT_QUOTES, 'UTF-8'); ?>
+                                                        </a>
+                                                    <?php else: ?>
+                                                        &mdash;
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="fbg-credit-status is-complete">
+                                                        <?php echo htmlspecialchars($invoiceStatus); ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($sourceLabel); ?></td>
+                                                <td class="fbg-credit-table-amount">
+                                                    <?php echo htmlspecialchars(fbgFormatCredit((float)($invoice['total'] ?? 0), $invoiceCurrency)); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </section>
+
+                    <section class="fbg-account-section fbg-credit-server-purchases">
+                        <div class="fbg-settings-section-header">
+                            <div>
+                                <h3>Server Rental History</h3>
+                                <p class="fbg-settings-note">
+                                     Server rentals paid from your account balance.
+                                </p>
+                            </div>
+                        </div>
+
+                        <?php if (empty($serverPurchases)): ?>
+                            <div class="fbg-empty-state">
+                                No server rentals found.
+                            </div>
+                        <?php else: ?>
+                            <div class="fbg-credit-table-wrap fbg-wallet-table-scroll">
+                                <table class="fbg-credit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Plan</th>
+                                            <th class="fbg-credit-table-amount">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($serverPurchases as $purchase): ?>
+                                            <?php
+                                            $createdAt = (string)($purchase['created_at'] ?? '');
+                                            $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
+                                            $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
+                                            $purchaseCurrency = trim((string)($purchase['currency'] ?? '')) ?: $currency;
+                                            ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($dateDisplay); ?></td>
+                                                <td><?php echo htmlspecialchars((string)($purchase['game_name'] ?? 'Game Server')); ?></td>
+                                                <td class="fbg-credit-table-amount">
+                                                    <?php echo htmlspecialchars(fbgFormatCredit((float)($purchase['amount'] ?? 0), $purchaseCurrency)); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </section>
+                    
                 </div>
             </div>
         </div>

@@ -138,6 +138,22 @@
         const currency = data.currency || renewButton.dataset.currency || 'USD';
         renewButton.dataset.currency = currency;
 
+        if (typeof data.total !== 'undefined') {
+            renewButton.dataset.renewPrice = String(data.total);
+        }
+
+        if (typeof data.subtotal !== 'undefined') {
+            renewButton.dataset.renewSubtotal = String(data.subtotal);
+        }
+
+        if (typeof data.tax_amount !== 'undefined') {
+            renewButton.dataset.renewTax = String(data.tax_amount);
+        }
+
+        if (typeof data.tax_rate !== 'undefined') {
+            renewButton.dataset.renewTaxRate = String(data.tax_rate);
+        }
+
         if (typeof data.balance !== 'undefined' && balanceValue) {
             balanceValue.textContent = formatMoney(data.balance, currency);
         }
@@ -258,9 +274,12 @@
 
     if (renewButton && canRenew) {
         renewButton.addEventListener('click', async () => {
+            const renewalTotal = formatMoney(renewButton.dataset.renewPrice || 0, renewButton.dataset.currency || 'USD');
+            const renewalTax = formatMoney(renewButton.dataset.renewTax || 0, renewButton.dataset.currency || 'USD');
+            const renewalTaxRate = Number(renewButton.dataset.renewTaxRate || 0).toFixed(2);
             const confirmed = await confirmAction(
                 'Renew Server?',
-                'Renew this server for one additional month and deduct the cost from your balance?',
+                `Renew this server for one additional month and deduct ${renewalTotal} from your balance.\nIncludes ${renewalTax} tax (${renewalTaxRate}%).`,
                 'Renew',
                 'Cancel'
             );

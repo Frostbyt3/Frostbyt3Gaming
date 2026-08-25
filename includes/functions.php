@@ -500,14 +500,14 @@ if (!function_exists('fbgRecordShopServerPurchase')) {
         string $gameName,
         float $amount,
         ?string $currency = null
-    ): void {
+    ): ?array {
         if (
             $userId <= 0 ||
             $serverId <= 0 ||
             $gameId <= 0 ||
             !fbgEnsureShopServerPurchaseTable()
         ) {
-            return;
+            return null;
         }
 
         try {
@@ -544,8 +544,20 @@ if (!function_exists('fbgRecordShopServerPurchase')) {
                 ':amount' => number_format(max(0, $amount), 2, '.', ''),
                 ':currency' => strtoupper(substr(trim((string)($currency ?? fbgGetShopCurrency())), 0, 8)) ?: 'USD',
             ]);
+
+            $purchaseStmt = fbgPteroDb()->prepare("
+                SELECT id, user_id, server_id, game_id, game_name, amount, currency, created_at
+                FROM shop_server_purchases
+                WHERE server_id = :server_id
+                LIMIT 1
+            ");
+            $purchaseStmt->execute([':server_id' => $serverId]);
+            $purchase = $purchaseStmt->fetch(PDO::FETCH_ASSOC);
+
+            return is_array($purchase) ? $purchase : null;
         } catch (Throwable $e) {
-            // History should never block a successful server purchase.
+            // History should never block a successful server rental.
+            return null;
         }
     }
 }
@@ -654,6 +666,901 @@ if (!function_exists('fbgSetShopSetting')) {
             ':setting_key'   => $key,
             ':setting_value' => $value,
         ]);
+    }
+}
+
+if (!function_exists('fbgEnsureFrontendInvoiceTables')) {
+    function fbgEnsureFrontendInvoiceTables(): bool
+    {
+        try {
+            $pdo = db();
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS fbg_invoices (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    invoice_number VARCHAR(64) NULL,
+                    user_id INT UNSIGNED NOT NULL,
+                    source_type VARCHAR(64) NOT NULL,
+                    source_id VARCHAR(191) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'paid',
+                    currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+                    subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    tax_rate DECIMAL(8,4) NOT NULL DEFAULT 0.0000,
+                    tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    tax_label VARCHAR(64) NOT NULL DEFAULT 'Tax',
+                    total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    company_name VARCHAR(191) NOT NULL DEFAULT '',
+                    company_address TEXT NULL,
+                    company_phone VARCHAR(64) NOT NULL DEFAULT '',
+                    company_email VARCHAR(191) NOT NULL DEFAULT '',
+                    company_code VARCHAR(191) NOT NULL DEFAULT '',
+                    company_vat VARCHAR(191) NOT NULL DEFAULT '',
+                    customer_name VARCHAR(191) NOT NULL DEFAULT '',
+                    customer_email VARCHAR(191) NOT NULL DEFAULT '',
+                    customer_username VARCHAR(191) NOT NULL DEFAULT '',
+                    payment_provider VARCHAR(64) NOT NULL DEFAULT '',
+                    payment_reference VARCHAR(191) NOT NULL DEFAULT '',
+                    paid_at DATETIME NULL,
+                    metadata_json LONGTEXT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY fbg_invoices_invoice_number_unique (invoice_number),
+                    UNIQUE KEY fbg_invoices_source_unique (source_type, source_id),
+                    KEY fbg_invoices_user_created_idx (user_id, created_at),
+                    KEY fbg_invoices_status_idx (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+
+            $taxLabelColumn = $pdo->query("SHOW COLUMNS FROM fbg_invoices LIKE 'tax_label'")->fetch(PDO::FETCH_ASSOC);
+            if (!$taxLabelColumn) {
+                $pdo->exec("ALTER TABLE fbg_invoices ADD COLUMN tax_label VARCHAR(64) NOT NULL DEFAULT 'Tax' AFTER tax_amount");
+            }
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS fbg_invoice_line_items (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    invoice_id INT UNSIGNED NOT NULL,
+                    description VARCHAR(255) NOT NULL,
+                    quantity DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+                    unit_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    line_subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    tax_rate DECIMAL(8,4) NOT NULL DEFAULT 0.0000,
+                    tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    line_total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    metadata_json LONGTEXT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    KEY fbg_invoice_line_items_invoice_idx (invoice_id),
+                    CONSTRAINT fbg_invoice_line_items_invoice_fk
+                        FOREIGN KEY (invoice_id) REFERENCES fbg_invoices (id)
+                        ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS fbg_invoice_events (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    invoice_id INT UNSIGNED NOT NULL,
+                    event_type VARCHAR(64) NOT NULL,
+                    event_note TEXT NULL,
+                    metadata_json LONGTEXT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    KEY fbg_invoice_events_invoice_idx (invoice_id),
+                    KEY fbg_invoice_events_type_idx (event_type),
+                    CONSTRAINT fbg_invoice_events_invoice_fk
+                        FOREIGN KEY (invoice_id) REFERENCES fbg_invoices (id)
+                        ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+
+            return true;
+        } catch (Throwable $e) {
+            error_log('Unable to ensure frontend invoice tables: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgGetFrontendInvoiceSettings')) {
+    function fbgGetFrontendInvoiceSettings(): array
+    {
+        return [
+            'enabled' => (string)fbgGetSetting('fbg_invoice_enabled', '1') === '1',
+            'prefix' => (string)fbgGetSetting('fbg_invoice_prefix', 'FBG-'),
+            'starting_number' => max(1, (int)fbgGetSetting('fbg_invoice_starting_number', '1001')),
+            'next_number' => max(1, (int)fbgGetSetting('fbg_invoice_next_number', fbgGetSetting('fbg_invoice_starting_number', '1001'))),
+            'company_name' => (string)fbgGetSetting('fbg_invoice_company_name', 'Frostbyt3 Gaming, LLC.'),
+            'company_address' => (string)fbgGetSetting('fbg_invoice_company_address', ''),
+            'company_phone' => (string)fbgGetSetting('fbg_invoice_company_phone', ''),
+            'company_email' => (string)fbgGetSetting('fbg_invoice_company_email', ''),
+            'company_code' => (string)fbgGetSetting('fbg_invoice_company_code', ''),
+            'company_vat' => (string)fbgGetSetting('fbg_invoice_company_vat', ''),
+            'tax_rate' => max(0, (float)fbgGetSetting('fbg_invoice_tax_rate', '0')),
+            'tax_label' => (string)fbgGetSetting('fbg_invoice_tax_label', 'Tax'),
+        ];
+    }
+}
+
+if (!function_exists('fbgGetShopTaxRate')) {
+    function fbgGetShopTaxRate(): float
+    {
+        return max(0, round((float)fbgGetSetting('fbg_invoice_tax_rate', '0'), 4));
+    }
+}
+
+if (!function_exists('fbgCalculateShopTax')) {
+    function fbgCalculateShopTax(float $subtotal): array
+    {
+        $subtotal = round(max(0, $subtotal), 2);
+        $taxRate = fbgGetShopTaxRate();
+        $taxAmount = round($subtotal * ($taxRate / 100), 2);
+
+        return [
+            'subtotal' => $subtotal,
+            'tax_rate' => $taxRate,
+            'tax_amount' => $taxAmount,
+            'total' => round($subtotal + $taxAmount, 2),
+        ];
+    }
+}
+
+if (!function_exists('fbgFormatFrontendInvoiceNumber')) {
+    function fbgFormatFrontendInvoiceNumber(int $invoiceId, array $settings): string
+    {
+        $prefix = trim((string)($settings['prefix'] ?? 'FBG-'));
+        $startingNumber = max(1, (int)($settings['starting_number'] ?? 1001));
+        $number = $startingNumber + max(0, $invoiceId - 1);
+
+        return $prefix . str_pad((string)$number, 6, '0', STR_PAD_LEFT);
+    }
+}
+
+if (!function_exists('fbgReserveFrontendInvoiceNumber')) {
+    function fbgReserveFrontendInvoiceNumber(PDO $pdo, array $settings): string
+    {
+        $prefix = substr(trim((string)($settings['prefix'] ?? 'FBG-')), 0, 24);
+        $startingNumber = max(1, (int)($settings['starting_number'] ?? 1001));
+        $nextNumber = max($startingNumber, (int)($settings['next_number'] ?? $startingNumber));
+        $settingKey = 'fbg_invoice_next_number';
+
+        $ensureStmt = $pdo->prepare("
+            INSERT INTO site_settings (setting_key, setting_value)
+            VALUES (:setting_key, :setting_value)
+            ON DUPLICATE KEY UPDATE setting_value = setting_value
+        ");
+        $ensureStmt->execute([
+            ':setting_key' => $settingKey,
+            ':setting_value' => (string)$nextNumber,
+        ]);
+
+        $lockStmt = $pdo->prepare("
+            SELECT setting_value
+            FROM site_settings
+            WHERE setting_key = :setting_key
+            LIMIT 1
+            FOR UPDATE
+        ");
+        $lockStmt->execute([':setting_key' => $settingKey]);
+        $storedNext = $lockStmt->fetchColumn();
+        $nextNumber = max($startingNumber, (int)$storedNext);
+
+        do {
+            $invoiceNumber = $prefix . str_pad((string)$nextNumber, 6, '0', STR_PAD_LEFT);
+            $existsStmt = $pdo->prepare("
+                SELECT id
+                FROM fbg_invoices
+                WHERE invoice_number = :invoice_number
+                LIMIT 1
+            ");
+            $existsStmt->execute([':invoice_number' => $invoiceNumber]);
+
+            if (!$existsStmt->fetchColumn()) {
+                break;
+            }
+
+            $nextNumber++;
+        } while (true);
+
+        $updateStmt = $pdo->prepare("
+            UPDATE site_settings
+            SET setting_value = :setting_value
+            WHERE setting_key = :setting_key
+        ");
+        $updateStmt->execute([
+            ':setting_key' => $settingKey,
+            ':setting_value' => (string)($nextNumber + 1),
+        ]);
+
+        return $invoiceNumber;
+    }
+}
+
+if (!function_exists('fbgLogFrontendInvoiceEvent')) {
+    function fbgLogFrontendInvoiceEvent(int $invoiceId, string $eventType, string $eventNote = '', array $metadata = []): void
+    {
+        if ($invoiceId <= 0 || $eventType === '' || !fbgEnsureFrontendInvoiceTables()) {
+            return;
+        }
+
+        try {
+            $stmt = db()->prepare("
+                INSERT INTO fbg_invoice_events (invoice_id, event_type, event_note, metadata_json, created_at)
+                VALUES (:invoice_id, :event_type, :event_note, :metadata_json, NOW())
+            ");
+            $stmt->execute([
+                ':invoice_id' => $invoiceId,
+                ':event_type' => substr($eventType, 0, 64),
+                ':event_note' => $eventNote,
+                ':metadata_json' => !empty($metadata) ? json_encode($metadata, JSON_UNESCAPED_SLASHES) : null,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Unable to log frontend invoice event: ' . $e->getMessage());
+        }
+    }
+}
+
+if (!function_exists('fbgCreateFrontendInvoice')) {
+    function fbgCreateFrontendInvoice(array $data): ?array
+    {
+        $userId = (int)($data['user_id'] ?? 0);
+        $sourceType = trim((string)($data['source_type'] ?? ''));
+        $sourceId = trim((string)($data['source_id'] ?? ''));
+
+        if ($userId <= 0 || $sourceType === '' || $sourceId === '') {
+            return null;
+        }
+
+        if (!fbgEnsureFrontendInvoiceTables()) {
+            return null;
+        }
+
+        $settings = fbgGetFrontendInvoiceSettings();
+        if (empty($settings['enabled'])) {
+            return null;
+        }
+
+        $pdo = db();
+
+        try {
+            $existingStmt = $pdo->prepare("
+                SELECT *
+                FROM fbg_invoices
+                WHERE source_type = :source_type
+                AND source_id = :source_id
+                LIMIT 1
+            ");
+            $existingStmt->execute([
+                ':source_type' => $sourceType,
+                ':source_id' => $sourceId,
+            ]);
+            $existing = $existingStmt->fetch();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $lineItems = $data['line_items'] ?? [];
+            if (!is_array($lineItems) || empty($lineItems)) {
+                return null;
+            }
+
+            $currency = strtoupper(substr(trim((string)($data['currency'] ?? fbgGetShopCurrency())), 0, 8)) ?: 'USD';
+            $taxRate = round((float)($data['tax_rate'] ?? $settings['tax_rate']), 4);
+            $subtotal = 0.0;
+            $normalizedItems = [];
+
+            foreach ($lineItems as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+
+                $description = trim((string)($item['description'] ?? 'Frostbyt3 Gaming rental'));
+                $quantity = max(0.01, round((float)($item['quantity'] ?? 1), 2));
+                $unitAmount = round((float)($item['unit_amount'] ?? 0), 2);
+                $lineSubtotal = round($quantity * $unitAmount, 2);
+
+                if ($description === '' || $lineSubtotal <= 0) {
+                    continue;
+                }
+
+                $subtotal += $lineSubtotal;
+                $normalizedItems[] = [
+                    'description' => substr($description, 0, 255),
+                    'quantity' => $quantity,
+                    'unit_amount' => $unitAmount,
+                    'line_subtotal' => $lineSubtotal,
+                    'metadata' => is_array($item['metadata'] ?? null) ? $item['metadata'] : [],
+                ];
+            }
+
+            if (empty($normalizedItems) || $subtotal <= 0) {
+                return null;
+            }
+
+            $subtotal = round($subtotal, 2);
+            $taxAmount = round($subtotal * ($taxRate / 100), 2);
+            $total = round($subtotal + $taxAmount, 2);
+            $customer = is_array($data['customer'] ?? null) ? $data['customer'] : [];
+
+            $pdo->beginTransaction();
+            $invoiceNumber = fbgReserveFrontendInvoiceNumber($pdo, $settings);
+
+            $insertStmt = $pdo->prepare("
+                INSERT INTO fbg_invoices (
+                    invoice_number,
+                    user_id,
+                    source_type,
+                    source_id,
+                    status,
+                    currency,
+                    subtotal,
+                    tax_rate,
+                    tax_amount,
+                    tax_label,
+                    total,
+                    company_name,
+                    company_address,
+                    company_phone,
+                    company_email,
+                    company_code,
+                    company_vat,
+                    customer_name,
+                    customer_email,
+                    customer_username,
+                    payment_provider,
+                    payment_reference,
+                    paid_at,
+                    metadata_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :invoice_number,
+                    :user_id,
+                    :source_type,
+                    :source_id,
+                    :status,
+                    :currency,
+                    :subtotal,
+                    :tax_rate,
+                    :tax_amount,
+                    :tax_label,
+                    :total,
+                    :company_name,
+                    :company_address,
+                    :company_phone,
+                    :company_email,
+                    :company_code,
+                    :company_vat,
+                    :customer_name,
+                    :customer_email,
+                    :customer_username,
+                    :payment_provider,
+                    :payment_reference,
+                    :paid_at,
+                    :metadata_json,
+                    NOW(),
+                    NOW()
+                )
+            ");
+            $insertStmt->execute([
+                ':invoice_number' => $invoiceNumber,
+                ':user_id' => $userId,
+                ':source_type' => substr($sourceType, 0, 64),
+                ':source_id' => substr($sourceId, 0, 191),
+                ':status' => substr((string)($data['status'] ?? 'paid'), 0, 32),
+                ':currency' => $currency,
+                ':subtotal' => number_format($subtotal, 2, '.', ''),
+                ':tax_rate' => number_format($taxRate, 4, '.', ''),
+                ':tax_amount' => number_format($taxAmount, 2, '.', ''),
+                ':tax_label' => substr(trim((string)($settings['tax_label'] ?? 'Tax')) ?: 'Tax', 0, 64),
+                ':total' => number_format($total, 2, '.', ''),
+                ':company_name' => substr((string)$settings['company_name'], 0, 191),
+                ':company_address' => (string)$settings['company_address'],
+                ':company_phone' => substr((string)$settings['company_phone'], 0, 64),
+                ':company_email' => substr((string)$settings['company_email'], 0, 191),
+                ':company_code' => substr((string)$settings['company_code'], 0, 191),
+                ':company_vat' => substr((string)$settings['company_vat'], 0, 191),
+                ':customer_name' => substr((string)($customer['name'] ?? ''), 0, 191),
+                ':customer_email' => substr((string)($customer['email'] ?? ''), 0, 191),
+                ':customer_username' => substr((string)($customer['username'] ?? ''), 0, 191),
+                ':payment_provider' => substr((string)($data['payment_provider'] ?? ''), 0, 64),
+                ':payment_reference' => substr((string)($data['payment_reference'] ?? ''), 0, 191),
+                ':paid_at' => !empty($data['paid_at']) ? (string)$data['paid_at'] : date('Y-m-d H:i:s'),
+                ':metadata_json' => !empty($data['metadata']) && is_array($data['metadata'])
+                    ? json_encode($data['metadata'], JSON_UNESCAPED_SLASHES)
+                    : null,
+            ]);
+
+            $invoiceId = (int)$pdo->lastInsertId();
+
+            $itemStmt = $pdo->prepare("
+                INSERT INTO fbg_invoice_line_items (
+                    invoice_id,
+                    description,
+                    quantity,
+                    unit_amount,
+                    line_subtotal,
+                    tax_rate,
+                    tax_amount,
+                    line_total,
+                    metadata_json,
+                    created_at
+                )
+                VALUES (
+                    :invoice_id,
+                    :description,
+                    :quantity,
+                    :unit_amount,
+                    :line_subtotal,
+                    :tax_rate,
+                    :tax_amount,
+                    :line_total,
+                    :metadata_json,
+                    NOW()
+                )
+            ");
+
+            foreach ($normalizedItems as $item) {
+                $lineTax = round((float)$item['line_subtotal'] * ($taxRate / 100), 2);
+                $lineTotal = round((float)$item['line_subtotal'] + $lineTax, 2);
+
+                $itemStmt->execute([
+                    ':invoice_id' => $invoiceId,
+                    ':description' => $item['description'],
+                    ':quantity' => number_format((float)$item['quantity'], 2, '.', ''),
+                    ':unit_amount' => number_format((float)$item['unit_amount'], 2, '.', ''),
+                    ':line_subtotal' => number_format((float)$item['line_subtotal'], 2, '.', ''),
+                    ':tax_rate' => number_format($taxRate, 4, '.', ''),
+                    ':tax_amount' => number_format($lineTax, 2, '.', ''),
+                    ':line_total' => number_format($lineTotal, 2, '.', ''),
+                    ':metadata_json' => !empty($item['metadata'])
+                        ? json_encode($item['metadata'], JSON_UNESCAPED_SLASHES)
+                        : null,
+                ]);
+            }
+
+            $pdo->commit();
+
+            fbgLogFrontendInvoiceEvent($invoiceId, 'generated', 'Invoice generated by the frontend checkout flow.');
+
+            $invoiceStmt = $pdo->prepare("
+                SELECT *
+                FROM fbg_invoices
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $invoiceStmt->execute([':id' => $invoiceId]);
+
+            return $invoiceStmt->fetch() ?: null;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            error_log('Unable to create frontend invoice: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('fbgCreateFrontendInvoiceForPayment')) {
+    function fbgCreateFrontendInvoiceForPayment(int $paymentId, string $provider, string $reference = ''): ?array
+    {
+        if ($paymentId <= 0 || !fbgEnsurePteroDbHelper()) {
+            return null;
+        }
+
+        try {
+            $paymentStmt = fbgPteroDb()->prepare("
+                SELECT id, user_id, amount, payment_type, session_id, completed, created_at
+                FROM payments
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $paymentStmt->execute([':id' => $paymentId]);
+            $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$payment || (int)($payment['completed'] ?? 0) !== 1) {
+                return null;
+            }
+
+            $userId = (int)($payment['user_id'] ?? 0);
+            $panelUser = function_exists('fbgFindPanelUserById') ? fbgFindPanelUserById($userId) : null;
+            $customerName = trim((string)($_SESSION['name'] ?? ''));
+
+            if ($customerName === '' && is_array($panelUser)) {
+                $customerName = trim((string)($panelUser['name_first'] ?? ''));
+            }
+
+            $invoice = fbgCreateFrontendInvoice([
+                'user_id' => $userId,
+                'source_type' => 'payment',
+                'source_id' => (string)$paymentId,
+                'status' => 'paid',
+                'currency' => fbgGetShopCurrency(),
+                'tax_rate' => 0,
+                'payment_provider' => $provider !== '' ? $provider : (string)($payment['payment_type'] ?? ''),
+                'payment_reference' => $reference !== '' ? $reference : (string)($payment['session_id'] ?? ''),
+                'paid_at' => date('Y-m-d H:i:s'),
+                'customer' => [
+                    'name' => $customerName,
+                    'email' => is_array($panelUser) ? (string)($panelUser['email'] ?? '') : (string)($_SESSION['email'] ?? ''),
+                    'username' => is_array($panelUser) ? (string)($panelUser['username'] ?? '') : (string)($_SESSION['username'] ?? ''),
+                ],
+                'line_items' => [
+                    [
+                        'description' => 'Account balance upload',
+                        'quantity' => 1,
+                        'unit_amount' => (float)($payment['amount'] ?? 0),
+                        'metadata' => [
+                            'payment_id' => $paymentId,
+                            'payment_type' => (string)($payment['payment_type'] ?? ''),
+                        ],
+                    ],
+                ],
+                'metadata' => [
+                    'payment_id' => $paymentId,
+                    'payment_session_id' => (string)($payment['session_id'] ?? ''),
+                ],
+            ]);
+
+            if ($invoice && !empty($invoice['invoice_number'])) {
+                try {
+                    $updatePaymentStmt = fbgPteroDb()->prepare("
+                        UPDATE payments
+                        SET invoice_number = :invoice_number
+                        WHERE id = :id
+                        AND (invoice_number IS NULL OR invoice_number = '')
+                    ");
+                    $updatePaymentStmt->execute([
+                        ':invoice_number' => (string)$invoice['invoice_number'],
+                        ':id' => $paymentId,
+                    ]);
+                } catch (Throwable $e) {
+                    error_log('Unable to backfill payment invoice number: ' . $e->getMessage());
+                }
+            }
+
+            return $invoice;
+        } catch (Throwable $e) {
+            error_log('Unable to create payment invoice: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('fbgGetFrontendInvoiceCustomerForUser')) {
+    function fbgGetFrontendInvoiceCustomerForUser(int $userId): array
+    {
+        $customer = [
+            'name' => '',
+            'email' => '',
+            'username' => '',
+        ];
+
+        if ($userId <= 0 || !fbgEnsurePteroDbHelper()) {
+            return $customer;
+        }
+
+        try {
+            $stmt = fbgPteroDb()->prepare("
+                SELECT username, email, name_first, name_last
+                FROM users
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmt->execute([':id' => $userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (is_array($user)) {
+                $firstName = trim((string)($user['name_first'] ?? ''));
+                $lastName = trim((string)($user['name_last'] ?? ''));
+
+                $customer['name'] = trim($firstName . ' ' . $lastName);
+                $customer['email'] = (string)($user['email'] ?? '');
+                $customer['username'] = (string)($user['username'] ?? '');
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to load invoice customer details: ' . $e->getMessage());
+        }
+
+        if ($customer['name'] === '') {
+            $customer['name'] = trim((string)($_SESSION['name'] ?? ''));
+        }
+
+        if ($customer['email'] === '') {
+            $customer['email'] = trim((string)($_SESSION['email'] ?? ''));
+        }
+
+        if ($customer['username'] === '') {
+            $customer['username'] = trim((string)($_SESSION['username'] ?? ''));
+        }
+
+        return $customer;
+    }
+}
+
+if (!function_exists('fbgCreateFrontendInvoiceForServerPurchase')) {
+    function fbgCreateFrontendInvoiceForServerPurchase(array $purchase): ?array
+    {
+        $purchaseId = (int)($purchase['id'] ?? 0);
+        $userId = (int)($purchase['user_id'] ?? 0);
+        $serverId = (int)($purchase['server_id'] ?? 0);
+        $gameId = (int)($purchase['game_id'] ?? 0);
+        $gameName = trim((string)($purchase['game_name'] ?? 'Game Server'));
+        $amount = round((float)($purchase['invoice_subtotal'] ?? $purchase['amount'] ?? 0), 2);
+        $taxRate = fbgGetShopTaxRate();
+
+        if ($purchaseId <= 0 || $userId <= 0 || $serverId <= 0 || $amount <= 0) {
+            return null;
+        }
+
+        try {
+            return fbgCreateFrontendInvoice([
+                'user_id' => $userId,
+                'source_type' => 'server_purchase',
+                'source_id' => (string)$purchaseId,
+                'status' => 'paid',
+                'currency' => (string)($purchase['currency'] ?? fbgGetShopCurrency()),
+                'tax_rate' => $taxRate,
+                'payment_provider' => 'account_balance',
+                'paid_at' => date('Y-m-d H:i:s'),
+                'customer' => fbgGetFrontendInvoiceCustomerForUser($userId),
+                'line_items' => [
+                    [
+                        'description' => $gameName . ' server rental (30 Days)',
+                        'quantity' => 1,
+                        'unit_amount' => $amount,
+                        'metadata' => [
+                            'purchase_id' => $purchaseId,
+                            'server_id' => $serverId,
+                            'game_id' => $gameId,
+                        ],
+                    ],
+                ],
+                'metadata' => [
+                    'purchase_id' => $purchaseId,
+                    'server_id' => $serverId,
+                    'game_id' => $gameId,
+                    'game_name' => $gameName,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            error_log('Unable to create server rental invoice: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('fbgCreateFrontendInvoiceForServerRenewal')) {
+    function fbgCreateFrontendInvoiceForServerRenewal(
+        int $userId,
+        int $serverId,
+        int $gameId,
+        string $gameName,
+        float $amount,
+        string $currency,
+        string $newExpiresAt,
+        ?string $oldExpiresAt = null
+    ): ?array {
+        $normalizedNewExpiry = fbgNormalizeExpirationHistoryValue($newExpiresAt);
+        $taxRate = fbgGetShopTaxRate();
+
+        if ($userId <= 0 || $serverId <= 0 || $amount <= 0 || $normalizedNewExpiry === null) {
+            return null;
+        }
+
+        try {
+            return fbgCreateFrontendInvoice([
+                'user_id' => $userId,
+                'source_type' => 'renewal',
+                'source_id' => $serverId . ':' . $normalizedNewExpiry,
+                'status' => 'paid',
+                'currency' => $currency !== '' ? $currency : fbgGetShopCurrency(),
+                'tax_rate' => $taxRate,
+                'payment_provider' => 'account_balance',
+                'paid_at' => date('Y-m-d H:i:s'),
+                'customer' => fbgGetFrontendInvoiceCustomerForUser($userId),
+                'line_items' => [
+                    [
+                        'description' => trim($gameName) !== '' ? trim($gameName) . ' server renewal (30 Days)' : 'Server renewal (30 Days)',
+                        'quantity' => 1,
+                        'unit_amount' => round($amount, 2),
+                        'metadata' => [
+                            'server_id' => $serverId,
+                            'game_id' => $gameId,
+                            'old_expires_at' => $oldExpiresAt,
+                            'new_expires_at' => $normalizedNewExpiry,
+                        ],
+                    ],
+                ],
+                'metadata' => [
+                    'server_id' => $serverId,
+                    'game_id' => $gameId,
+                    'game_name' => $gameName,
+                    'old_expires_at' => $oldExpiresAt,
+                    'new_expires_at' => $normalizedNewExpiry,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            error_log('Unable to create server renewal invoice: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('fbgAdminGenerateFrontendInvoiceForPayment')) {
+    function fbgAdminGenerateFrontendInvoiceForPayment(int $paymentId): array
+    {
+        if ($paymentId <= 0 || !fbgEnsurePteroDbHelper()) {
+            return [
+                'ok' => false,
+                'error' => 'Choose a valid completed order before generating an invoice.',
+                'invoice' => null,
+            ];
+        }
+
+        try {
+            $paymentStmt = fbgPteroDb()->prepare("
+                SELECT id, payment_type, session_id, completed
+                FROM payments
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $paymentStmt->execute([':id' => $paymentId]);
+            $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$payment) {
+                return [
+                    'ok' => false,
+                    'error' => 'That order could not be found.',
+                    'invoice' => null,
+                ];
+            }
+
+            if ((int)($payment['completed'] ?? 0) !== 1) {
+                return [
+                    'ok' => false,
+                    'error' => 'Invoices can only be generated for completed orders.',
+                    'invoice' => null,
+                ];
+            }
+
+            $invoice = fbgCreateFrontendInvoiceForPayment(
+                $paymentId,
+                (string)($payment['payment_type'] ?? ''),
+                (string)($payment['session_id'] ?? '')
+            );
+
+            if (!$invoice) {
+                return [
+                    'ok' => false,
+                    'error' => 'The invoice could not be generated. Check invoice settings and try again.',
+                    'invoice' => null,
+                ];
+            }
+
+            fbgLogFrontendInvoiceEvent(
+                (int)$invoice['id'],
+                'manual-generation',
+                'Invoice was generated manually from the admin area.',
+                ['payment_id' => $paymentId]
+            );
+
+            return [
+                'ok' => true,
+                'error' => null,
+                'invoice' => $invoice,
+            ];
+        } catch (Throwable $e) {
+            error_log('Unable to manually generate frontend invoice: ' . $e->getMessage());
+
+            return [
+                'ok' => false,
+                'error' => 'The invoice could not be generated. Check the logs and try again.',
+                'invoice' => null,
+            ];
+        }
+    }
+}
+
+if (!function_exists('fbgGetUserFrontendInvoices')) {
+    function fbgGetUserFrontendInvoices(int $userId, int $limit = 100): array
+    {
+        if ($userId <= 0 || !fbgEnsureFrontendInvoiceTables()) {
+            return [];
+        }
+
+        $limit = max(1, min(250, $limit));
+
+        try {
+            $stmt = db()->prepare("
+                SELECT
+                    id,
+                    invoice_number,
+                    source_type,
+                    source_id,
+                    status,
+                    currency,
+                    subtotal,
+                    tax_amount,
+                    total,
+                    payment_provider,
+                    paid_at,
+                    created_at
+                FROM fbg_invoices
+                WHERE user_id = :user_id
+                ORDER BY created_at DESC, id DESC
+                LIMIT {$limit}
+            ");
+            $stmt->execute([':user_id' => $userId]);
+            $rows = $stmt->fetchAll();
+
+            return is_array($rows) ? $rows : [];
+        } catch (Throwable $e) {
+            error_log('Unable to load frontend invoices: ' . $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('fbgGetFrontendInvoiceDetail')) {
+    function fbgGetFrontendInvoiceDetail(int $invoiceId, int $viewerUserId, bool $canViewAll = false): ?array
+    {
+        if ($invoiceId <= 0 || $viewerUserId <= 0 || !fbgEnsureFrontendInvoiceTables()) {
+            return null;
+        }
+
+        try {
+            $where = 'id = :id';
+            $params = [':id' => $invoiceId];
+
+            if (!$canViewAll) {
+                $where .= ' AND user_id = :user_id';
+                $params[':user_id'] = $viewerUserId;
+            }
+
+            $stmt = db()->prepare("
+                SELECT *
+                FROM fbg_invoices
+                WHERE {$where}
+                LIMIT 1
+            ");
+            $stmt->execute($params);
+            $invoice = $stmt->fetch();
+
+            if (!$invoice) {
+                return null;
+            }
+
+            $itemsStmt = db()->prepare("
+                SELECT
+                    id,
+                    description,
+                    quantity,
+                    unit_amount,
+                    line_subtotal,
+                    tax_rate,
+                    tax_amount,
+                    line_total,
+                    metadata_json,
+                    created_at
+                FROM fbg_invoice_line_items
+                WHERE invoice_id = :invoice_id
+                ORDER BY id ASC
+            ");
+            $itemsStmt->execute([':invoice_id' => $invoiceId]);
+
+            $invoice['line_items'] = $itemsStmt->fetchAll() ?: [];
+
+            return $invoice;
+        } catch (Throwable $e) {
+            error_log('Unable to load frontend invoice detail: ' . $e->getMessage());
+            return null;
+        }
     }
 }
 
@@ -913,8 +1820,14 @@ if (!function_exists('fbgCompleteStripeBalanceCheckout')) {
             }
 
             if ((int)($payment['completed'] ?? 0) === 1) {
+                $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'stripe', $sessionId);
                 $pdo->commit();
-                return ['ok' => true, 'error' => null, 'message' => 'Payment already applied.'];
+                return [
+                    'ok' => true,
+                    'error' => null,
+                    'message' => 'Payment already applied.',
+                    'invoice' => $invoice,
+                ];
             }
 
             $amount = round((float)($payment['amount'] ?? 0), 2);
@@ -960,11 +1873,13 @@ if (!function_exists('fbgCompleteStripeBalanceCheckout')) {
             $updatePaymentStmt->execute([':id' => (int)$payment['id']]);
 
             $pdo->commit();
+            $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'stripe', $sessionId);
 
             return [
                 'ok' => true,
                 'error' => null,
                 'message' => 'Account balance updated.',
+                'invoice' => $invoice,
             ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -1288,8 +2203,14 @@ if (!function_exists('fbgCompletePayPalBalanceCheckout')) {
             }
 
             if ((int)($payment['completed'] ?? 0) === 1) {
+                $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'paypal', $orderId);
                 $pdo->commit();
-                return ['ok' => true, 'error' => null, 'message' => 'Payment already applied.'];
+                return [
+                    'ok' => true,
+                    'error' => null,
+                    'message' => 'Payment already applied.',
+                    'invoice' => $invoice,
+                ];
             }
 
             $amount = round((float)($payment['amount'] ?? 0), 2);
@@ -1353,11 +2274,13 @@ if (!function_exists('fbgCompletePayPalBalanceCheckout')) {
             $updatePaymentStmt->execute([':id' => (int)$payment['id']]);
 
             $pdo->commit();
+            $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'paypal', $orderId);
 
             return [
                 'ok' => true,
                 'error' => null,
                 'message' => 'Account balance updated.',
+                'invoice' => $invoice,
             ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -1886,8 +2809,11 @@ if (!function_exists('fbgPurchaseShopGame')) {
         }
 
         $price = round((float)($game['price'] ?? 0), 2);
+        $tax = fbgCalculateShopTax($price);
+        $totalPrice = (float)$tax['total'];
+
         if ($price <= 0) {
-            return ['ok' => false, 'error' => 'This server plan cannot be purchased right now.', 'data' => null];
+            return ['ok' => false, 'error' => 'This server plan cannot be rented right now.', 'data' => null];
         }
 
         $nodeIds = fbgShopNodeIds((string)($game['node_ids'] ?? ''));
@@ -1932,11 +2858,11 @@ if (!function_exists('fbgPurchaseShopGame')) {
             }
 
             $currentCredit = round((float)($user['credit'] ?? 0), 2);
-            if ($currentCredit < $price) {
+            if ($currentCredit < $totalPrice) {
                 throw new RuntimeException("You don't have enough account balance for this server.");
             }
 
-            $newCredit = round($currentCredit - $price, 2);
+            $newCredit = round($currentCredit - $totalPrice, 2);
             $creditStmt = $pdo->prepare("
                 UPDATE users
                 SET credit = :credit
@@ -2016,14 +2942,21 @@ if (!function_exists('fbgPurchaseShopGame')) {
             $expiresAt = fbgShopInitialServerExpiry();
             $serverCreated = true;
             fbgApplyShopServerPurchaseMetadata($serverId, (int)$game['id'], $expiresAt);
-            fbgRecordShopServerPurchase(
+            $purchaseRecord = fbgRecordShopServerPurchase(
                 $userId,
                 $serverId,
                 (int)$game['id'],
                 (string)($game['name'] ?? 'Game Server'),
-                $price,
+                $totalPrice,
                 fbgGetShopCurrency()
             );
+            if ($purchaseRecord) {
+                $purchaseRecord['invoice_subtotal'] = $price;
+                $purchaseRecord['invoice_tax_rate'] = (float)$tax['tax_rate'];
+                $purchaseRecord['invoice_tax_amount'] = (float)$tax['tax_amount'];
+                $purchaseRecord['invoice_total'] = $totalPrice;
+            }
+            $invoice = $purchaseRecord ? fbgCreateFrontendInvoiceForServerPurchase($purchaseRecord) : null;
 
             if (isset($_SESSION['server_meta'])) {
                 unset($_SESSION['server_meta']);
@@ -2038,7 +2971,12 @@ if (!function_exists('fbgPurchaseShopGame')) {
                     'identifier' => $identifier,
                     'balance' => $newCredit,
                     'balance_display' => fbgFormatCredit($newCredit),
-                    'message' => $provisionWarning ?? 'Server purchased and provisioning has started.',
+                    'subtotal' => (float)$tax['subtotal'],
+                    'tax_rate' => (float)$tax['tax_rate'],
+                    'tax_amount' => (float)$tax['tax_amount'],
+                    'total' => $totalPrice,
+                    'message' => $provisionWarning ?? 'Server rental started and provisioning has begun.',
+                    'invoice' => $invoice,
                 ],
             ];
         } catch (Throwable $e) {
@@ -2047,12 +2985,12 @@ if (!function_exists('fbgPurchaseShopGame')) {
             }
 
             if (!empty($creditReserved) && empty($serverCreated)) {
-                fbgRefundShopPurchaseCredit($userId, $price);
+                fbgRefundShopPurchaseCredit($userId, $totalPrice);
             }
 
             return [
                 'ok' => false,
-                'error' => $e instanceof RuntimeException ? $e->getMessage() : 'Server purchase failed.',
+                'error' => $e instanceof RuntimeException ? $e->getMessage() : 'Server rental failed.',
                 'data' => null,
             ];
         }

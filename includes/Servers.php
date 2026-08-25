@@ -1,28 +1,28 @@
 <?php
-$servers = [
-    [
-        "type" => "minecraft",
-        "name" => "All the Mods 10",
-        "host" => "node1.frostbyt3gaming.com",
-        "port" => "10065"
-    ],
-    [
-        "type" => "steam",
-        "name" => "Ark: Survival Evolved",
-        "host" => "209.147.107.81",
-        "gamePort" => "10002",
-        "queryPort" => "10005",
-        "appid" => "346110"
-    ],
-    [
-        "type" => "steam",
-        "name" => "Icarus",
-        "host" => "209.147.107.81",
-        "gamePort" => "10000",
-        "queryPort" => "10001",
-        "appid" => "1149460"
-    ]
-];
+    $servers = [
+        [
+            "type" => "minecraft",
+            "name" => "All the Mods 10",
+            "host" => "node1.frostbyt3gaming.com",
+            "port" => "10065"
+        ],
+        [
+            "type" => "steam",
+            "name" => "Ark: Survival Evolved",
+            "host" => "209.147.107.81",
+            "gamePort" => "10002",
+            "queryPort" => "10005",
+            "appid" => "346110"
+        ],
+        [
+            "type" => "steam",
+            "name" => "Icarus",
+            "host" => "209.147.107.81",
+            "gamePort" => "10000",
+            "queryPort" => "10001",
+            "appid" => "1149460"
+        ]
+    ];
 ?>
 
 <?php foreach ($servers as $server): ?>

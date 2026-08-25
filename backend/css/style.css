@@ -2146,6 +2146,13 @@ a.button {
     white-space: nowrap;
 }
 
+.fbg-shop-plan-tax-note {
+    margin: -8px 0 0;
+    color: var(--fbg-text-dark);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
 .fbg-shop-plan-specs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8683,6 +8690,7 @@ textarea.startup-variable-input {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 18px;
+    margin-bottom: 16px;
 }
 
 .fbg-account-section:first-child {
@@ -8754,6 +8762,30 @@ textarea.startup-variable-input {
     overflow-x: auto;
 }
 
+.fbg-wallet-table-scroll {
+    max-height: 322px;
+    overflow-y: auto;
+}
+
+.fbg-wallet-table-scroll .fbg-credit-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--fbg-card-bg);
+}
+
+.fbg-invoice-link {
+    color: var(--fbg-brightblue);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.fbg-invoice-link:hover,
+.fbg-invoice-link:focus {
+    color: var(--fbg-white);
+    text-decoration: underline;
+}
+
 .fbg-credit-transactions-header {
     display: flex;
     align-items: flex-start;
@@ -8823,6 +8855,85 @@ textarea.startup-variable-input {
     text-align: center;
 }
 
+.fbg-invoice-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.fbg-invoice-summary > div,
+.fbg-invoice-payment-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.fbg-invoice-summary strong,
+.fbg-invoice-payment-grid strong {
+    color: var(--fbg-white);
+    overflow-wrap: anywhere;
+}
+
+.fbg-invoice-detail-grid,
+.fbg-invoice-payment-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.fbg-invoice-party {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fbg-invoice-party strong {
+    color: var(--fbg-white);
+    font-size: 1.02rem;
+}
+
+.fbg-invoice-party p {
+    margin: 0;
+    color: var(--fbg-offwhite);
+    line-height: 1.5;
+}
+
+.fbg-invoice-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: min(100%, 360px);
+    margin: 18px 0 0 auto;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.fbg-invoice-totals > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    color: var(--fbg-offwhite);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.fbg-invoice-totals > div:last-child {
+    border-bottom: 0;
+}
+
+.fbg-invoice-totals strong {
+    color: var(--fbg-white);
+}
+
+.fbg-invoice-totals .is-total {
+    color: var(--fbg-white);
+    background: rgba(0, 170, 255, 0.08);
+}
+
 @media (max-width: 820px) {
     .fbg-account-header {
         align-items: stretch;
@@ -8845,6 +8956,16 @@ textarea.startup-variable-input {
 
     .fbg-credit-pending-toggle {
         align-self: flex-start;
+    }
+
+    .fbg-invoice-summary,
+    .fbg-invoice-detail-grid,
+    .fbg-invoice-payment-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fbg-invoice-totals {
+        width: 100%;
     }
 }
 
