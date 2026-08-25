@@ -740,6 +740,128 @@ if (!function_exists('fbgEnsurePteroServersSuspendManualColumn')) {
     }
 }
 
+if (!function_exists('fbgEnsurePteroServersInstallCompletedEmailColumn')) {
+    function fbgEnsurePteroServersInstallCompletedEmailColumn(): bool
+    {
+        static $hasColumn = null;
+
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $pdo = fbgPteroDb();
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'servers'
+                  AND COLUMN_NAME = 'install_completed_email_sent_at'
+            ");
+            $stmt->execute();
+
+            if ((int)$stmt->fetchColumn() > 0) {
+                $hasColumn = true;
+                return true;
+            }
+
+            $pdo->exec("ALTER TABLE servers ADD COLUMN install_completed_email_sent_at DATETIME NULL AFTER status");
+            $hasColumn = true;
+            return true;
+        } catch (Throwable $e) {
+            error_log('Unable to ensure servers.install_completed_email_sent_at column: ' . $e->getMessage());
+            $hasColumn = false;
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgEnsurePteroServersInstallCompletionEmailTypeColumn')) {
+    function fbgEnsurePteroServersInstallCompletionEmailTypeColumn(): bool
+    {
+        static $hasColumn = null;
+
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $pdo = fbgPteroDb();
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'servers'
+                  AND COLUMN_NAME = 'install_completion_email_type'
+            ");
+            $stmt->execute();
+
+            if ((int)$stmt->fetchColumn() > 0) {
+                $hasColumn = true;
+                return true;
+            }
+
+            $pdo->exec("ALTER TABLE servers ADD COLUMN install_completion_email_type VARCHAR(32) NULL AFTER install_completed_email_sent_at");
+            $hasColumn = true;
+            return true;
+        } catch (Throwable $e) {
+            error_log('Unable to ensure servers.install_completion_email_type column: ' . $e->getMessage());
+            $hasColumn = false;
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgMarkPteroServerInstallCompletionEmailPending')) {
+    function fbgMarkPteroServerInstallCompletionEmailPending(int|string $server, string $type): bool
+    {
+        $type = strtolower(trim($type));
+        if (!in_array($type, ['initial', 'reinstall', 'modpack'], true)) {
+            $type = 'initial';
+        }
+
+        if (!fbgEnsurePteroServersInstallCompletedEmailColumn() || !fbgEnsurePteroServersInstallCompletionEmailTypeColumn()) {
+            return false;
+        }
+
+        try {
+            if (is_int($server) || ctype_digit((string)$server)) {
+                $stmt = fbgPteroDb()->prepare('
+                    UPDATE servers
+                    SET install_completed_email_sent_at = NULL,
+                        install_completion_email_type = :type
+                    WHERE id = :server_id
+                ');
+                $stmt->execute([
+                    'type' => $type,
+                    'server_id' => (int)$server,
+                ]);
+            } else {
+                $identifier = trim((string)$server);
+                if ($identifier === '') {
+                    return false;
+                }
+
+                $stmt = fbgPteroDb()->prepare('
+                    UPDATE servers
+                    SET install_completed_email_sent_at = NULL,
+                        install_completion_email_type = :type
+                    WHERE uuidShort = :identifier
+                ');
+                $stmt->execute([
+                    'type' => $type,
+                    'identifier' => $identifier,
+                ]);
+            }
+
+            return $stmt->rowCount() > 0;
+        } catch (Throwable $e) {
+            error_log('Unable to mark server install completion email pending: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
 if (!function_exists('pteroGetMultipleServerResources')) {
     function pteroGetMultipleServerResources(array $identifiers): array
     {
@@ -2795,7 +2917,13 @@ if (!function_exists('pteroReinstallServer')) {
             ];
         }
 
-        return pteroRequest('POST', "servers/{$serverId}/reinstall");
+        $result = pteroRequest('POST', "servers/{$serverId}/reinstall");
+
+        if (!empty($result['ok'])) {
+            fbgMarkPteroServerInstallCompletionEmailPending($serverId, 'reinstall');
+        }
+
+        return $result;
     }
 }
 

@@ -83,6 +83,40 @@ if (empty($validIds)) {
 }
 
 if (!function_exists('fbgRefreshStatusServerMeta')) {
+    function fbgSendServerInstallFinishedNotification(array $server): bool
+    {
+        $identifier = trim((string)($server['identifier'] ?? ''));
+        $serverName = trim((string)($server['name'] ?? ''));
+        $ownerEmail = trim((string)($server['owner_email'] ?? ''));
+
+        if ($identifier === '' || $serverName === '' || $ownerEmail === '') {
+            return false;
+        }
+
+        require_once __DIR__ . '/../includes/mailer.php';
+
+        if (!function_exists('fbgSendServerInstallFinishedEmail')) {
+            return false;
+        }
+
+        $baseUrl = function_exists('fbgShopBaseUrl')
+            ? fbgShopBaseUrl()
+            : 'https://frostbyt3gaming.com';
+
+        $emailType = strtolower(trim((string)($server['install_completion_email_type'] ?? 'initial')));
+        if (!in_array($emailType, ['initial', 'reinstall', 'modpack'], true)) {
+            $emailType = 'initial';
+        }
+
+        return fbgSendServerInstallFinishedEmail([
+            'type' => $emailType,
+            'to_email' => $ownerEmail,
+            'first_name' => trim((string)($server['owner_first_name'] ?? '')),
+            'server_name' => $serverName,
+            'server_panel_url' => rtrim($baseUrl, '/') . '/page.php?name=serverpanel&id=' . rawurlencode($identifier),
+        ]);
+    }
+
     function fbgRefreshStatusServerMeta(array $identifiers): array
     {
         $identifiers = array_values(array_unique(array_filter(array_map(
@@ -98,7 +132,19 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
         $hasSuspendManualColumn = function_exists('fbgEnsurePteroServersSuspendManualColumn')
             ? fbgEnsurePteroServersSuspendManualColumn()
             : false;
-        $suspendManualSelect = $hasSuspendManualColumn ? 'suspend_manual' : '0 AS suspend_manual';
+        $hasInstallEmailColumn = function_exists('fbgEnsurePteroServersInstallCompletedEmailColumn')
+            ? fbgEnsurePteroServersInstallCompletedEmailColumn()
+            : false;
+        $hasInstallEmailTypeColumn = function_exists('fbgEnsurePteroServersInstallCompletionEmailTypeColumn')
+            ? fbgEnsurePteroServersInstallCompletionEmailTypeColumn()
+            : false;
+        $suspendManualSelect = $hasSuspendManualColumn ? 's.suspend_manual' : '0 AS suspend_manual';
+        $installEmailSelect = $hasInstallEmailColumn
+            ? 's.install_completed_email_sent_at'
+            : 'NULL AS install_completed_email_sent_at';
+        $installEmailTypeSelect = $hasInstallEmailTypeColumn
+            ? 's.install_completion_email_type'
+            : 'NULL AS install_completion_email_type';
         $placeholders = [];
         $params = [];
 
@@ -110,9 +156,20 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
 
         try {
             $stmt = fbgPteroDb()->prepare('
-                SELECT uuidShort AS identifier, status, expired_at, ' . $suspendManualSelect . '
-                FROM servers
-                WHERE uuidShort IN (' . implode(', ', $placeholders) . ')
+                SELECT
+                    s.id,
+                    s.uuidShort AS identifier,
+                    s.name,
+                    s.status,
+                    s.expired_at,
+                    ' . $suspendManualSelect . ',
+                    ' . $installEmailSelect . ',
+                    ' . $installEmailTypeSelect . ',
+                    u.email AS owner_email,
+                    u.name_first AS owner_first_name
+                FROM servers s
+                LEFT JOIN users u ON u.id = s.owner_id
+                WHERE s.uuidShort IN (' . implode(', ', $placeholders) . ')
             ');
             $stmt->execute($params);
 
@@ -123,16 +180,56 @@ if (!function_exists('fbgRefreshStatusServerMeta')) {
                 }
 
                 $rawStatus = strtolower(trim((string)($row['status'] ?? '')));
+                $wasInstalling = !empty($serverMeta[$identifier]['is_installing']);
+                $isInstalling = in_array($rawStatus, ['installing', 'install_failed'], true);
+                $installEmailSentAt = trim((string)($row['install_completed_email_sent_at'] ?? ''));
+                $installEmailType = strtolower(trim((string)($row['install_completion_email_type'] ?? '')));
                 $serverMeta[$identifier] = is_array($serverMeta[$identifier] ?? null)
                     ? $serverMeta[$identifier]
                     : ['identifier' => $identifier];
+                $serverMeta[$identifier]['id'] = (int)($row['id'] ?? 0);
+                $serverMeta[$identifier]['name'] = (string)($row['name'] ?? '');
                 $serverMeta[$identifier]['status'] = $rawStatus;
                 $serverMeta[$identifier]['suspended'] = $rawStatus === 'suspended';
                 $serverMeta[$identifier]['suspend_manual'] = !empty($row['suspend_manual']);
                 $serverMeta[$identifier]['expired_at'] = (string)($row['expired_at'] ?? '');
                 $serverMeta[$identifier]['is_expired'] = !empty($row['expired_at']) && strtotime((string)$row['expired_at']) <= time();
-                $serverMeta[$identifier]['is_installing'] = in_array($rawStatus, ['installing', 'install_failed'], true);
+                $serverMeta[$identifier]['is_installing'] = $isInstalling;
                 $serverMeta[$identifier]['install_status'] = $rawStatus;
+                $serverMeta[$identifier]['install_completed_email_sent_at'] = $installEmailSentAt;
+                $serverMeta[$identifier]['install_completion_email_type'] = $installEmailType;
+                $serverMeta[$identifier]['owner_email'] = (string)($row['owner_email'] ?? '');
+                $serverMeta[$identifier]['owner_first_name'] = (string)($row['owner_first_name'] ?? '');
+
+                if (
+                    $hasInstallEmailColumn
+                    && $wasInstalling
+                    && !$isInstalling
+                    && $rawStatus !== 'suspended'
+                    && $installEmailSentAt === ''
+                ) {
+                    try {
+                        $sent = fbgSendServerInstallFinishedNotification($serverMeta[$identifier]);
+
+                        if ($sent) {
+                            $sentAt = date('Y-m-d H:i:s');
+                            $update = fbgPteroDb()->prepare('
+                                UPDATE servers
+                                SET install_completed_email_sent_at = :sent_at,
+                                    install_completion_email_type = NULL
+                                WHERE id = :server_id
+                            ');
+                            $update->execute([
+                                'sent_at' => $sentAt,
+                                'server_id' => (int)$serverMeta[$identifier]['id'],
+                            ]);
+                            $serverMeta[$identifier]['install_completed_email_sent_at'] = $sentAt;
+                            $serverMeta[$identifier]['install_completion_email_type'] = '';
+                        }
+                    } catch (Throwable $e) {
+                        error_log('Unable to send server install finished notification: ' . $e->getMessage());
+                    }
+                }
             }
 
             $_SESSION['server_meta'] = $serverMeta;

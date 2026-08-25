@@ -71,6 +71,10 @@ try {
         pteroJsonError((int)($result['status'] ?? 500), $result['error'] ?? 'Failed to start modpack installation.');
     }
 
+    if (function_exists('fbgMarkPteroServerInstallCompletionEmailPending')) {
+        fbgMarkPteroServerInstallCompletionEmailPending($serverIdentifier, 'modpack');
+    }
+
     echo json_encode([
         'ok' => true,
         'error' => null,

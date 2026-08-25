@@ -742,3 +742,145 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
         throw $e;
     }
 }
+
+function fbgSendServerInstallFinishedEmail(array $data): bool
+{
+    $toEmail = trim((string)($data['to_email'] ?? ''));
+    $firstName = trim((string)($data['first_name'] ?? ''));
+    $serverName = trim((string)($data['server_name'] ?? ''));
+    $serverPanelUrl = trim((string)($data['server_panel_url'] ?? ''));
+    $type = strtolower(trim((string)($data['type'] ?? 'initial')));
+
+    if ($toEmail === '' || $serverName === '' || $serverPanelUrl === '') {
+        return false;
+    }
+
+    $variants = [
+        'initial' => [
+            'subject' => 'Your Frostbyt3 Gaming server is ready',
+            'headline' => 'Your server is ready!',
+            'body' => 'Your server has finished installing and is ready to use. Click the button below to start your adventure.',
+            'button' => 'Log In and Begin Using',
+        ],
+        'reinstall' => [
+            'subject' => 'Your Frostbyt3 Gaming server reinstall is complete',
+            'headline' => 'Your server reinstall is complete!',
+            'body' => 'Your server has finished reinstalling and is ready to use again. Click the button below to jump back in.',
+            'button' => 'Log In and Begin Using',
+        ],
+        'modpack' => [
+            'subject' => 'Your Frostbyt3 Gaming modpack install is complete',
+            'headline' => 'Your modpack is ready!',
+            'body' => 'Your modpack has finished installing and your server is ready to use. Click the button below to start playing.',
+            'button' => 'Log In and Begin Using',
+        ],
+    ];
+
+    $variant = $variants[$type] ?? $variants['initial'];
+    $greetingName = $firstName !== '' ? $firstName : 'there';
+    $safeName = htmlspecialchars($greetingName, ENT_QUOTES, 'UTF-8');
+    $safeServerName = htmlspecialchars($serverName, ENT_QUOTES, 'UTF-8');
+    $safeServerPanelUrl = htmlspecialchars($serverPanelUrl, ENT_QUOTES, 'UTF-8');
+    $safeHeadline = htmlspecialchars($variant['headline'], ENT_QUOTES, 'UTF-8');
+    $safeBody = htmlspecialchars($variant['body'], ENT_QUOTES, 'UTF-8');
+    $safeButton = htmlspecialchars($variant['button'], ENT_QUOTES, 'UTF-8');
+    $subject = $variant['subject'];
+
+    $htmlMessage = '
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0;padding:0;background-color:#111;font-family:Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="color:#f2f2f2;background-color:#111;padding:24px 0;">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:32px;color:#ffffff;">
+                        <tr>
+                            <td style="font-size:22px;font-weight:bold;padding-bottom:8px;color:#ffffff;">Frostbyt3 Gaming</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:16px;padding-bottom:18px;color:#f2f2f2;">Hello ' . $safeName . ',</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:24px;font-weight:bold;padding-bottom:12px;color:#ffffff;">' . $safeHeadline . '</td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:15px;line-height:1.6;padding-bottom:22px;color:#cccccc;">' . $safeBody . '</td>
+                        </tr>
+                        <tr>
+                            <td style="background:#141414;border-left:4px solid #22aeff;border-radius:10px;padding:16px 18px;font-size:15px;color:#ffffff;">
+                                <span style="display:block;color:#9a9a9a;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;padding-bottom:6px;">Server Name</span>
+                                ' . $safeServerName . '
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="center" style="padding:28px 0 22px;">
+                                <a href="' . $safeServerPanelUrl . '" style="background-color:#007fca;border-radius:10px;color:#ffffff;display:inline-block;font-size:14px;font-weight:700;line-height:17px;padding:16px 28px;text-align:center;text-transform:uppercase;text-decoration:none;letter-spacing:.05em;">
+                                    ' . $safeButton . '
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-size:14px;line-height:1.6;color:#cccccc;padding-bottom:22px;">
+                                Regards,<br>
+                                Frostbyt3 Gaming, LLC.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="border-top:1px solid rgba(255,255,255,0.12);font-size:12px;line-height:1.5;color:#888888;padding-top:20px;">
+                                If you are having trouble clicking the "' . $safeButton . '" button, copy and paste the URL below into your browser:<br><br>
+                                <a href="' . $safeServerPanelUrl . '" style="color:#22aeff;">' . $safeServerPanelUrl . '</a><br><br>
+                                Copyright 2026 &copy; Frostbyt3 Gaming, LLC. All Rights Reserved.
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>';
+
+    $plainMessage = "Hello {$greetingName},\n\n"
+        . $variant['body'] . "\n\n"
+        . "Server Name: {$serverName}\n\n"
+        . "{$variant['button']}:\n{$serverPanelUrl}\n\n"
+        . "Regards,\nFrostbyt3 Gaming, LLC.\n\n"
+        . "If you are having trouble opening the link, copy and paste the URL below into your browser:\n\n"
+        . "{$serverPanelUrl}\n\n"
+        . "Copyright 2026 (c) Frostbyt3 Gaming, LLC. All Rights Reserved.";
+
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->Port = SMTP_PORT;
+
+        $mail->SMTPDebug = fbgIsLocalRequest() ? 2 : 0;
+        $mail->Debugoutput = 'error_log';
+
+        if (defined('SMTP_USE_AUTH') && SMTP_USE_AUTH) {
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+        } else {
+            $mail->SMTPAuth = false;
+        }
+
+        if (defined('SMTP_USE_TLS') && SMTP_USE_TLS) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlMessage;
+        $mail->AltBody = $plainMessage;
+
+        return $mail->send();
+    } catch (Exception $e) {
+        error_log('Server install finished email failed: ' . $e->getMessage());
+        throw $e;
+    }
+}
