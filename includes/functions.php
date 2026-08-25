@@ -1607,10 +1607,150 @@ if (!function_exists('fbgGetFrontendInvoiceDetail')) {
 
             $invoice['line_items'] = $itemsStmt->fetchAll() ?: [];
 
+            $eventsStmt = db()->prepare("
+                SELECT
+                    id,
+                    event_type,
+                    event_note,
+                    metadata_json,
+                    created_at
+                FROM fbg_invoice_events
+                WHERE invoice_id = :invoice_id
+                ORDER BY created_at DESC, id DESC
+            ");
+            $eventsStmt->execute([':invoice_id' => $invoiceId]);
+
+            $invoice['events'] = $eventsStmt->fetchAll() ?: [];
+
             return $invoice;
         } catch (Throwable $e) {
             error_log('Unable to load frontend invoice detail: ' . $e->getMessage());
             return null;
+        }
+    }
+}
+
+if (!function_exists('fbgGetAdminFrontendInvoices')) {
+    function fbgGetAdminFrontendInvoices(array $filters = [], int $limit = 25, int $offset = 0): array
+    {
+        if (!fbgEnsureFrontendInvoiceTables()) {
+            return ['rows' => [], 'total' => 0];
+        }
+
+        $limit = max(1, min(100, $limit));
+        $offset = max(0, $offset);
+        $where = [];
+        $params = [];
+
+        $search = trim((string)($filters['search'] ?? ''));
+        if ($search !== '') {
+            $where[] = '(
+                invoice_number LIKE :search
+                OR customer_name LIKE :search
+                OR customer_email LIKE :search
+                OR customer_username LIKE :search
+                OR source_id LIKE :search
+            )';
+            $params[':search'] = '%' . $search . '%';
+        }
+
+        $status = strtolower(trim((string)($filters['status'] ?? '')));
+        if ($status !== '') {
+            $where[] = 'status = :status';
+            $params[':status'] = $status;
+        }
+
+        $sourceType = strtolower(trim((string)($filters['source_type'] ?? '')));
+        if ($sourceType !== '') {
+            $where[] = 'source_type = :source_type';
+            $params[':source_type'] = $sourceType;
+        }
+
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        try {
+            $countStmt = db()->prepare("SELECT COUNT(*) FROM fbg_invoices {$whereSql}");
+            $countStmt->execute($params);
+            $total = (int)$countStmt->fetchColumn();
+
+            $stmt = db()->prepare("
+                SELECT
+                    id,
+                    invoice_number,
+                    user_id,
+                    source_type,
+                    source_id,
+                    status,
+                    currency,
+                    subtotal,
+                    tax_amount,
+                    total,
+                    customer_name,
+                    customer_email,
+                    customer_username,
+                    payment_provider,
+                    paid_at,
+                    created_at
+                FROM fbg_invoices
+                {$whereSql}
+                ORDER BY created_at DESC, id DESC
+                LIMIT {$limit} OFFSET {$offset}
+            ");
+            $stmt->execute($params);
+
+            return [
+                'rows' => $stmt->fetchAll() ?: [],
+                'total' => $total,
+            ];
+        } catch (Throwable $e) {
+            error_log('Unable to load admin frontend invoices: ' . $e->getMessage());
+            return ['rows' => [], 'total' => 0];
+        }
+    }
+}
+
+if (!function_exists('fbgResendFrontendInvoiceEmailNotification')) {
+    function fbgResendFrontendInvoiceEmailNotification(int $invoiceId): bool
+    {
+        if ($invoiceId <= 0) {
+            return false;
+        }
+
+        if ((string)fbgGetSetting('fbg_invoice_email_enabled', '1') !== '1') {
+            fbgLogFrontendInvoiceEvent($invoiceId, 'email-skipped', 'Invoice email delivery is disabled.');
+            return false;
+        }
+
+        $invoice = fbgGetFrontendInvoiceDetail($invoiceId, 1, true);
+        if (!$invoice || empty($invoice['customer_email'])) {
+            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email was not resent because no customer email address was available.');
+            return false;
+        }
+
+        require_once __DIR__ . '/mailer.php';
+
+        if (!function_exists('fbgSendInvoiceEmail')) {
+            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email helper is unavailable.');
+            return false;
+        }
+
+        try {
+            $invoiceUrl = fbgShopBaseUrl() . '/page.php?name=invoice&id=' . rawurlencode((string)$invoiceId);
+            $sent = fbgSendInvoiceEmail($invoice, $invoiceUrl);
+
+            if ($sent) {
+                fbgLogFrontendInvoiceEvent($invoiceId, 'resent', 'Invoice email resent to ' . (string)$invoice['customer_email'] . '.');
+                return true;
+            }
+
+            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email could not be resent.');
+            return false;
+        } catch (Throwable $e) {
+            error_log('Invoice resend email failed: ' . $e->getMessage());
+            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email failed to resend.', [
+                'error' => $e->getMessage(),
+            ]);
+            return false;
         }
     }
 }

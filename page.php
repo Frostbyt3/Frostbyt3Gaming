@@ -49,6 +49,7 @@ $allowed = [
     'admin-link-shortener'  => 'admin/shorten.php',
     'admin-service-manager' => 'admin/servicemanager.php',
     'admin-payments'        => 'admin/payments.php',
+    'admin-invoices'        => 'admin/invoices.php',
     'admin-shop-categories' => 'admin/categories.php',
     'admin-shop-plans'      => 'admin/plans.php',
     'admin-registrations'   => 'admin/registrations.php',

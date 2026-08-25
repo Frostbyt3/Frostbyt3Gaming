@@ -28,7 +28,8 @@
 - [x] Send invoice email notifications through the existing PHPMailer setup after invoice creation.
 - [x] Add customer-facing invoice list/detail pages with secure ownership checks.
 - [ ] Add PDF invoice rendering/download support.
-- [ ] Add admin invoice list/detail pages with search, filters, pagination, resend, void, and refund-aware status handling.
+- [x] Add admin invoice list/detail pages with search, filters, pagination, and resend.
+- [ ] Add invoice void and refund-aware status handling.
 - [ ] Add invoice event logging for generated, emailed, resent, failed-email, voided, refunded, and downloaded events.
 - [x] Change invoices displayed on Wallet page to new invoice system.
 

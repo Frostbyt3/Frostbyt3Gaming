@@ -82,6 +82,10 @@ if (function_exists('asset')) {
                 Payments
             </a>
 
+            <a href="./page.php?name=admin-invoices" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoices', $currentAdminPage) ?>">
+                Invoices
+            </a>
+
             <a href="./page.php?name=admin-shop-categories" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-categories', $currentAdminPage) ?>">
                 Categories
             </a>
