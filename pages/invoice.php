@@ -61,9 +61,16 @@ $taxLabel = trim((string)($invoice['tax_label'] ?? 'Tax')) ?: 'Tax';
                             <h1>Invoice</h1>
                             <p>Review invoice details for your Frostbyt3 Gaming account.</p>
                         </div>
-                        <a href="./page.php?name=wallet" class="btn fbg-neutral-button">
-                            Back to Wallet
-                        </a>
+                        <div class="fbg-admin-table-actions">
+                            <?php if ($invoice): ?>
+                                <a href="./page.php?name=invoice-pdf&id=<?= (int)$invoice['id'] ?>" class="btn" target="_blank" rel="noopener noreferrer">
+                                    Download PDF
+                                </a>
+                            <?php endif; ?>
+                            <a href="./page.php?name=wallet" class="btn fbg-neutral-button">
+                                Back to Wallet
+                            </a>
+                        </div>
                     </div>
 
                     <?php if (!$invoice): ?>
@@ -162,7 +169,7 @@ $taxLabel = trim((string)($invoice['tax_label'] ?? 'Tax')) ?: 'Tax';
                                             <tr>
                                                 <td><?php echo htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td class="fbg-credit-table-amount"><?php echo htmlspecialchars(number_format((float)($item['quantity'] ?? 0), 2), ENT_QUOTES, 'UTF-8'); ?></td>
-                                                <td class="fbg-credit-table-amount"><?php echo htmlspecialchars($formatMoney($item['unit_amount'] ?? 0), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td class="fbg-credit-table-amount"><?php echo htmlspecialchars(fbgFormatFrontendInvoiceUnitDisplay($item, $currency), ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td class="fbg-credit-table-amount"><?php echo htmlspecialchars($formatMoney($item['line_total'] ?? 0), ENT_QUOTES, 'UTF-8'); ?></td>
                                             </tr>
                                         <?php endforeach; ?>

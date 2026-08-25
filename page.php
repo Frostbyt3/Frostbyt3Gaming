@@ -27,6 +27,7 @@ $allowed = [
     'wallet'                => 'wallet.php',
     'credit'                => 'wallet.php',
     'invoice'               => 'invoice.php',
+    'invoice-pdf'           => 'invoice-pdf.php',
     'verify-email-change'   => 'verify-email-change.php',
     'order'                 => 'order.php',
     'legal'                 => 'legal.php',
@@ -84,6 +85,14 @@ if (
     && $page === 'serverpanel'
     && isset($_GET['partial'])
     && $_GET['partial'] === 'tab'
+) {
+    include('./pages/' . $allowed[$page]);
+    exit;
+}
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && $page === 'invoice-pdf'
 ) {
     include('./pages/' . $allowed[$page]);
     exit;

@@ -77,6 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $invoiceCode = trim(strip_tags((string)($_POST['invoice_code'] ?? '')));
             $invoiceVat = trim(strip_tags((string)($_POST['invoice_vat'] ?? '')));
             $invoiceTaxLabel = trim(strip_tags((string)($_POST['invoice_tax_label'] ?? 'Tax')));
+            $invoiceMailFromName = trim(strip_tags((string)($_POST['invoice_mail_from_name'] ?? '')));
+            $invoiceMailFromEmail = trim(strip_tags((string)($_POST['invoice_mail_from_email'] ?? '')));
+            $invoiceMailReplyToName = trim(strip_tags((string)($_POST['invoice_mail_reply_to_name'] ?? '')));
+            $invoiceMailReplyToEmail = trim(strip_tags((string)($_POST['invoice_mail_reply_to_email'] ?? '')));
 
             if ($invoicePrefix === '' || strlen($invoicePrefix) > 24) {
                 throw new RuntimeException('Invoice prefix must be between 1 and 24 characters.');
@@ -98,6 +102,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Tax label must be between 1 and 64 characters.');
             }
 
+            if ($invoiceMailFromEmail !== '' && !filter_var($invoiceMailFromEmail, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Invoice From email must be a valid email address.');
+            }
+
+            if ($invoiceMailReplyToEmail !== '' && !filter_var($invoiceMailReplyToEmail, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Invoice Reply-To email must be a valid email address.');
+            }
+
+            if ($invoiceMailReplyToName !== '' && $invoiceMailReplyToEmail === '') {
+                throw new RuntimeException('Reply-To email is required when a Reply-To name is set.');
+            }
+
             if ($invoiceEnabled === '1' && ($invoiceName === '' || $invoiceAddress === '' || $invoicePhone === '')) {
                 throw new RuntimeException('Invoice name, address, and phone are required when invoices are enabled.');
             }
@@ -114,6 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_company_code', $invoiceCode);
             fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_company_vat', $invoiceVat);
             fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_tax_label', $invoiceTaxLabel);
+            fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_mail_from_name', $invoiceMailFromName);
+            fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_mail_from_email', $invoiceMailFromEmail);
+            fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_mail_reply_to_name', $invoiceMailReplyToName);
+            fbgAdminInvoiceSettingsSaveSiteSetting('fbg_invoice_mail_reply_to_email', $invoiceMailReplyToEmail);
             fbgResetSettingsCache();
 
             $message = 'Invoice settings updated.';
@@ -138,6 +158,10 @@ $invoiceSettings = [
     'code' => (string)fbgGetSetting('fbg_invoice_company_code', ''),
     'vat' => (string)fbgGetSetting('fbg_invoice_company_vat', ''),
     'tax_label' => (string)fbgGetSetting('fbg_invoice_tax_label', 'Tax'),
+    'mail_from_name' => (string)fbgGetSetting('fbg_invoice_mail_from_name', ''),
+    'mail_from_email' => (string)fbgGetSetting('fbg_invoice_mail_from_email', ''),
+    'mail_reply_to_name' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_name', ''),
+    'mail_reply_to_email' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_email', ''),
 ];
 ?>
 
@@ -204,6 +228,59 @@ $invoiceSettings = [
                     <div class="fbg-admin-field">
                         <label for="invoice-tax-label">Tax Label</label>
                         <input id="invoice-tax-label" name="invoice_tax_label" type="text" maxlength="64" value="<?= htmlspecialchars($invoiceSettings['tax_label'], ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbg-admin-panel fbg-admin-panel-full">
+                <div class="fbg-admin-panel-header">
+                    <h2>Email Delivery</h2>
+                </div>
+
+                <div class="fbg-admin-form-grid">
+                    <div class="fbg-admin-field">
+                        <label for="invoice-mail-from-name">From Name</label>
+                        <input
+                            id="invoice-mail-from-name"
+                            name="invoice_mail_from_name"
+                            type="text"
+                            placeholder="<?= defined('SMTP_FROM_NAME') ? htmlspecialchars((string)SMTP_FROM_NAME, ENT_QUOTES, 'UTF-8') : 'Frostbyt3 Gaming' ?>"
+                            value="<?= htmlspecialchars($invoiceSettings['mail_from_name'], ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                        <p class="fbg-admin-help-text">Leave blank to use the default mail sender name.</p>
+                    </div>
+
+                    <div class="fbg-admin-field">
+                        <label for="invoice-mail-from-email">From Email</label>
+                        <input
+                            id="invoice-mail-from-email"
+                            name="invoice_mail_from_email"
+                            type="email"
+                            placeholder="<?= defined('SMTP_FROM_EMAIL') ? htmlspecialchars((string)SMTP_FROM_EMAIL, ENT_QUOTES, 'UTF-8') : 'billing@example.com' ?>"
+                            value="<?= htmlspecialchars($invoiceSettings['mail_from_email'], ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                        <p class="fbg-admin-help-text">Leave blank to use the default mail sender address.</p>
+                    </div>
+
+                    <div class="fbg-admin-field">
+                        <label for="invoice-mail-reply-to-name">Reply-To Name</label>
+                        <input
+                            id="invoice-mail-reply-to-name"
+                            name="invoice_mail_reply_to_name"
+                            type="text"
+                            value="<?= htmlspecialchars($invoiceSettings['mail_reply_to_name'], ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                    </div>
+
+                    <div class="fbg-admin-field">
+                        <label for="invoice-mail-reply-to-email">Reply-To Email</label>
+                        <input
+                            id="invoice-mail-reply-to-email"
+                            name="invoice_mail_reply_to_email"
+                            type="email"
+                            value="<?= htmlspecialchars($invoiceSettings['mail_reply_to_email'], ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                        <p class="fbg-admin-help-text">Replies to invoice emails will go here when set.</p>
                     </div>
                 </div>
             </section>

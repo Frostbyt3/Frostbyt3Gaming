@@ -779,6 +779,10 @@ if (!function_exists('fbgGetFrontendInvoiceSettings')) {
             'company_vat' => (string)fbgGetSetting('fbg_invoice_company_vat', ''),
             'tax_rate' => max(0, (float)fbgGetSetting('fbg_invoice_tax_rate', '0')),
             'tax_label' => (string)fbgGetSetting('fbg_invoice_tax_label', 'Tax'),
+            'mail_from_name' => (string)fbgGetSetting('fbg_invoice_mail_from_name', ''),
+            'mail_from_email' => (string)fbgGetSetting('fbg_invoice_mail_from_email', ''),
+            'mail_reply_to_name' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_name', ''),
+            'mail_reply_to_email' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_email', ''),
         ];
     }
 }
@@ -1627,6 +1631,321 @@ if (!function_exists('fbgGetFrontendInvoiceDetail')) {
             error_log('Unable to load frontend invoice detail: ' . $e->getMessage());
             return null;
         }
+    }
+}
+
+if (!function_exists('fbgCreateFrontendInvoicePdf')) {
+    function fbgCreateFrontendInvoicePdf(array $invoice): string
+    {
+        $currency = trim((string)($invoice['currency'] ?? 'USD')) ?: 'USD';
+        $invoiceNumber = trim((string)($invoice['invoice_number'] ?? 'Invoice')) ?: 'Invoice';
+        $taxLabel = trim((string)($invoice['tax_label'] ?? 'Tax')) ?: 'Tax';
+        $hasTax = round((float)($invoice['tax_rate'] ?? 0), 4) > 0 || round((float)($invoice['tax_amount'] ?? 0), 2) > 0;
+
+        $formatDate = static function ($value): string {
+            $value = trim((string)$value);
+            if ($value === '') {
+                return 'Unknown';
+            }
+
+            $timestamp = strtotime($value);
+            return $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
+        };
+
+        $formatMoney = static function ($amount) use ($currency): string {
+            return function_exists('fbgFormatCredit')
+                ? fbgFormatCredit((float)$amount, $currency)
+                : number_format((float)$amount, 2) . ' ' . $currency;
+        };
+
+        $normalize = static function ($value): string {
+            $text = preg_replace('/\s+/', ' ', trim((string)$value)) ?? '';
+            if (function_exists('iconv')) {
+                $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT//IGNORE', $text);
+                if ($converted !== false) {
+                    $text = $converted;
+                }
+            }
+
+            return str_replace(["\\", "(", ")"], ["\\\\", "\\(", "\\)"], $text);
+        };
+
+        $estimateWidth = static function (string $text, int $size = 10): float {
+            $units = 0.0;
+            $wide = 'ABCDEFGHIJKLMNOPQRSTUVWXYZmwMW@#%&';
+            $narrow = 'ilI.,:;!| ';
+
+            foreach (str_split($text) as $char) {
+                if (strpos($narrow, $char) !== false) {
+                    $units += 0.34;
+                } elseif (strpos($wide, $char) !== false) {
+                    $units += 0.86;
+                } elseif (ctype_upper($char)) {
+                    $units += 0.72;
+                } elseif (ctype_digit($char)) {
+                    $units += 0.56;
+                } else {
+                    $units += 0.52;
+                }
+            }
+
+            return $units * $size;
+        };
+
+        $wrapByWidth = static function (string $text, int $size, float $maxWidth) use ($estimateWidth): array {
+            $text = preg_replace('/\s+/', ' ', trim($text)) ?? '';
+            if ($text === '') {
+                return [''];
+            }
+
+            $lines = [];
+            $current = '';
+            foreach (explode(' ', $text) as $word) {
+                $candidate = $current === '' ? $word : $current . ' ' . $word;
+                if ($current !== '' && $estimateWidth($candidate, $size) > $maxWidth) {
+                    $lines[] = $current;
+                    $current = $word;
+                    continue;
+                }
+
+                if ($current === '' && $estimateWidth($candidate, $size) > $maxWidth) {
+                    $piece = '';
+                    foreach (str_split($word) as $char) {
+                        if ($piece !== '' && $estimateWidth($piece . $char, $size) > $maxWidth) {
+                            $lines[] = $piece;
+                            $piece = $char;
+                        } else {
+                            $piece .= $char;
+                        }
+                    }
+                    $current = $piece;
+                    continue;
+                }
+
+                $current = $candidate;
+            }
+
+            if ($current !== '') {
+                $lines[] = $current;
+            }
+
+            return $lines ?: [''];
+        };
+
+        $pages = [];
+        $content = '';
+        $y = 760;
+
+        $newPage = static function () use (&$pages, &$content, &$y): void {
+            if ($content !== '') {
+                $pages[] = $content;
+            }
+
+            $content = '';
+            $y = 760;
+        };
+
+        $ensureSpace = static function (int $needed) use (&$y, $newPage): void {
+            if ($y - $needed < 70) {
+                $newPage();
+            }
+        };
+
+        $line = static function (
+            string $text,
+            int $x = 50,
+            int $size = 10,
+            bool $bold = false,
+            int $leading = 14
+        ) use (&$content, &$y, $normalize, $newPage): void {
+            if ($y < 70) {
+                $newPage();
+            }
+
+            $font = $bold ? 'F2' : 'F1';
+            $content .= "BT /{$font} {$size} Tf {$x} {$y} Td (" . $normalize($text) . ") Tj ET\n";
+            $y -= $leading;
+        };
+
+        $wrapped = static function (
+            string $text,
+            int $x = 50,
+            int $size = 10,
+            bool $bold = false,
+            int $maxChars = 82
+        ) use ($line): void {
+            $text = str_replace(["\r\n", "\r"], "\n", trim($text));
+            foreach (explode("\n", $text) as $segment) {
+                $wrapped = wordwrap($segment, $maxChars, "\n", true);
+                foreach (explode("\n", $wrapped) as $part) {
+                    $line($part, $x, $size, $bold, $size + 5);
+                }
+            }
+        };
+
+        $rule = static function () use (&$content, &$y, $newPage): void {
+            if ($y < 70) {
+                $newPage();
+            }
+
+            $content .= "0.80 0.80 0.80 RG 50 {$y} m 545 {$y} l S\n";
+            $y -= 18;
+        };
+
+        $tableHeader = static function () use (&$content, &$y, $line): void {
+            $line('Description', 50, 9, true, 0);
+            $line('Qty', 330, 9, true, 0);
+            $line('Unit', 380, 9, true, 0);
+            $line('Total', 515, 9, true, 14);
+            $content .= "0.70 0.70 0.70 RG 50 {$y} m 545 {$y} l S\n";
+            $y -= 10;
+        };
+
+        $line('INVOICE', 50, 26, true, 34);
+        $line($invoiceNumber, 50, 14, true, 24);
+        $line('Status: ' . ucfirst((string)($invoice['status'] ?? 'paid')), 50, 10, false, 15);
+        $line('Created: ' . $formatDate($invoice['created_at'] ?? ''), 50, 10, false, 15);
+        $line('Paid: ' . $formatDate($invoice['paid_at'] ?? ''), 50, 10, false, 22);
+        $rule();
+
+        $line('From', 50, 13, true, 18);
+        $wrapped((string)($invoice['company_name'] ?? 'Frostbyt3 Gaming, LLC.'), 50, 10, true, 70);
+        if (!empty($invoice['company_address'])) {
+            $wrapped((string)$invoice['company_address'], 50, 10, false, 70);
+        }
+        if (!empty($invoice['company_phone'])) {
+            $line((string)$invoice['company_phone']);
+        }
+        if (!empty($invoice['company_email'])) {
+            $line((string)$invoice['company_email']);
+        }
+        if (!empty($invoice['company_code'])) {
+            $line('Code: ' . (string)$invoice['company_code']);
+        }
+        if (!empty($invoice['company_vat'])) {
+            $line('VAT: ' . (string)$invoice['company_vat']);
+        }
+
+        $y -= 10;
+        $line('Bill To', 50, 13, true, 18);
+        $wrapped((string)($invoice['customer_name'] ?: $invoice['customer_username'] ?: 'Customer'), 50, 10, true, 70);
+        if (!empty($invoice['customer_username'])) {
+            $line((string)$invoice['customer_username']);
+        }
+        if (!empty($invoice['customer_email'])) {
+            $line((string)$invoice['customer_email']);
+        }
+
+        $y -= 14;
+        $ensureSpace(90);
+        $rule();
+        $line('Line Items', 50, 13, true, 22);
+        $tableHeader();
+
+        foreach (($invoice['line_items'] ?? []) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $description = (string)($item['description'] ?? 'Invoice item');
+            $descriptionLines = $wrapByWidth($description, 10, 260);
+            $rowHeight = max(18, count($descriptionLines) * 13 + 5);
+
+            if ($y - $rowHeight < 70) {
+                $newPage();
+                $line($invoiceNumber . ' - Line Items', 50, 13, true, 22);
+                $tableHeader();
+            }
+
+            $rowStartY = $y;
+            foreach ($descriptionLines as $index => $descriptionLine) {
+                $line($descriptionLine, 50, 10, false, $index === count($descriptionLines) - 1 ? 0 : 13);
+            }
+
+            $y = $rowStartY;
+            $line(number_format((float)($item['quantity'] ?? 0), 2), 330, 10, false, 0);
+            $line(fbgFormatFrontendInvoiceUnitDisplay($item, $currency), 380, 7, false, 0);
+            $line($formatMoney($item['line_total'] ?? 0), 515, 10, false, 0);
+            $y = $rowStartY - $rowHeight;
+        }
+
+        $y -= 8;
+        $ensureSpace($hasTax ? 118 : 96);
+        $rule();
+        $line('Payment Provider: ' . ucwords(str_replace(['_', '-'], ' ', (string)($invoice['payment_provider'] ?? 'Payment'))), 50, 10, false, 22);
+        $line('Subtotal: ' . $formatMoney($invoice['subtotal'] ?? 0), 390, 11, false, 16);
+        if ($hasTax) {
+            $line($taxLabel . ' ' . number_format((float)($invoice['tax_rate'] ?? 0), 2) . '%: ' . $formatMoney($invoice['tax_amount'] ?? 0), 390, 11, false, 16);
+        }
+        $line('Total: ' . $formatMoney($invoice['total'] ?? 0), 390, 13, true, 20);
+
+        $y = max(45, $y - 20);
+        $line('Thank you for choosing Frostbyt3 Gaming.', 50, 9, false, 12);
+
+        if ($content !== '') {
+            $pages[] = $content;
+        }
+
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+        ];
+        $pageObjectIds = [];
+
+        foreach ($pages as $index => $pageContent) {
+            $contentObjectId = 5 + ($index * 2);
+            $pageObjectId = $contentObjectId + 1;
+            $pageObjectIds[] = $pageObjectId . ' 0 R';
+            $objects[$contentObjectId - 1] = '<< /Length ' . strlen($pageContent) . " >>\nstream\n" . $pageContent . "endstream";
+            $objects[$pageObjectId - 1] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' . $contentObjectId . ' 0 R >>';
+        }
+
+        $objects[1] = '<< /Type /Pages /Kids [' . implode(' ', $pageObjectIds) . '] /Count ' . count($pages) . ' >>';
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [0];
+
+        foreach ($objects as $index => $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($index + 1) . " 0 obj\n" . $object . "\nendobj\n";
+        }
+
+        $xrefOffset = strlen($pdf);
+        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n";
+        $pdf .= "0000000000 65535 f \n";
+
+        for ($i = 1; $i <= count($objects); $i++) {
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
+        }
+
+        $pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>\n";
+        $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
+
+        return $pdf;
+    }
+}
+
+if (!function_exists('fbgFormatFrontendInvoiceUnitDisplay')) {
+    function fbgFormatFrontendInvoiceUnitDisplay(array $item, string $currency): string
+    {
+        $currency = trim($currency) !== '' ? trim($currency) : 'USD';
+        $unitAmount = (float)($item['unit_amount'] ?? 0);
+        $taxAmount = round((float)($item['tax_amount'] ?? 0), 2);
+        $taxRate = round((float)($item['tax_rate'] ?? 0), 4);
+        $unitDisplay = fbgFormatCredit($unitAmount, $currency);
+
+        if ($taxAmount <= 0 && $taxRate <= 0) {
+            return $unitDisplay;
+        }
+
+        return $unitDisplay
+            . ' + '
+            . fbgFormatCredit($taxAmount, $currency)
+            . ' tax ('
+            . number_format($taxRate, 2)
+            . '%)';
     }
 }
 

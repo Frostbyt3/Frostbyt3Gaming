@@ -20,7 +20,8 @@
 - [x] Add invoice numbering settings with configurable prefix and starting/next invoice number.
 - [x] Add invoice company settings for business name, address, phone, email, and tax label.
 - [x] Add invoice email delivery enable/disable setting.
-- [ ] Add invoice reply-to/from behavior and future PDF attachment behavior.
+- [x] Add invoice reply-to/from behavior.
+- [x] Add PDF attachments to invoice emails.
 - [x] Move invoice settings and manual invoice recovery to a standalone admin Invoice Settings page.
 - [x] Generate invoices when wallet top-ups complete successfully.
 - [x] Generate invoices when server rentals complete successfully.
@@ -28,10 +29,11 @@
 - [x] Add admin action to manually generate a missing invoice for a completed wallet top-up.
 - [x] Send invoice email notifications through the existing PHPMailer setup after invoice creation.
 - [x] Add customer-facing invoice list/detail pages with secure ownership checks.
-- [ ] Add PDF invoice rendering/download support.
+- [x] Add PDF invoice rendering/download support.
+- [ ] Improve invoice PDF Unicode support beyond the current Windows-1252/Latin-oriented text handling.
 - [x] Add admin invoice list/detail pages with search, filters, pagination, and resend.
 - [ ] Add invoice void and refund-aware status handling.
-- [ ] Add invoice event logging for generated, emailed, resent, failed-email, voided, refunded, and downloaded events.
+- [ ] Add invoice event logging for voided and refunded events.
 - [x] Change invoices displayed on Wallet page to new invoice system.
 
 ## Shared Frontend Utilities

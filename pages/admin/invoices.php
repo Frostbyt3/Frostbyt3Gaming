@@ -296,6 +296,7 @@ $currencyFallback = fbgGetShopCurrency();
                             </div>
                             <div class="fbg-admin-table-actions">
                                 <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Open Customer View</a>
+                                <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice-pdf&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Download PDF</a>
                                 <form method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="action" value="resend_invoice">
@@ -339,7 +340,7 @@ $currencyFallback = fbgGetShopCurrency();
                                         <tr>
                                             <td><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                                             <td><?= htmlspecialchars(number_format((float)($item['quantity'] ?? 0), 2), ENT_QUOTES, 'UTF-8') ?></td>
-                                            <td><?= htmlspecialchars(fbgFormatCredit((float)($item['unit_amount'] ?? 0), $detailCurrency), ENT_QUOTES, 'UTF-8') ?></td>
+                                            <td><?= htmlspecialchars(fbgFormatFrontendInvoiceUnitDisplay($item, $detailCurrency), ENT_QUOTES, 'UTF-8') ?></td>
                                             <td><?= htmlspecialchars(fbgFormatCredit((float)($item['line_total'] ?? 0), $detailCurrency), ENT_QUOTES, 'UTF-8') ?></td>
                                         </tr>
                                     <?php endforeach; ?>

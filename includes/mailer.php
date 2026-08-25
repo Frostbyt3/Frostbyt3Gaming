@@ -599,6 +599,31 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
     $safeInvoiceUrl = htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8');
     $companyName = trim((string)($invoice['company_name'] ?? 'Frostbyt3 Gaming')) ?: 'Frostbyt3 Gaming';
     $safeCompanyName = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+    $getInvoiceMailSetting = static function (string $key, string $default = ''): string {
+        if (function_exists('fbgGetSetting')) {
+            return trim((string)fbgGetSetting($key, $default));
+        }
+
+        return trim($default);
+    };
+    $fromEmail = $getInvoiceMailSetting('fbg_invoice_mail_from_email', defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '');
+    $fromName = $getInvoiceMailSetting('fbg_invoice_mail_from_name', defined('SMTP_FROM_NAME') ? (string)SMTP_FROM_NAME : '');
+    $replyToEmail = $getInvoiceMailSetting('fbg_invoice_mail_reply_to_email');
+    $replyToName = $getInvoiceMailSetting('fbg_invoice_mail_reply_to_name');
+
+    if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        $fromEmail = defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '';
+    }
+
+    if ($fromName === '') {
+        $fromName = defined('SMTP_FROM_NAME') ? (string)SMTP_FROM_NAME : $companyName;
+    }
+
+    if ($replyToEmail !== '' && !filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) {
+        $replyToEmail = '';
+        $replyToName = '';
+    }
+    $invoicePdfFilename = (preg_replace('/[^A-Za-z0-9._-]+/', '-', $invoiceNumber) ?: 'invoice') . '.pdf';
     $formatMoney = static function ($amount) use ($currency): string {
         return function_exists('fbgFormatCredit')
             ? fbgFormatCredit((float)$amount, $currency)
@@ -728,13 +753,25 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         }
 
-        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->setFrom($fromEmail, $fromName);
+        if ($replyToEmail !== '') {
+            $mail->addReplyTo($replyToEmail, $replyToName !== '' ? $replyToName : $fromName);
+        }
         $mail->addAddress($toEmail);
 
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body = $htmlMessage;
         $mail->AltBody = $plainMessage;
+
+        if (function_exists('fbgCreateFrontendInvoicePdf')) {
+            $mail->addStringAttachment(
+                fbgCreateFrontendInvoicePdf($invoice),
+                $invoicePdfFilename,
+                'base64',
+                'application/pdf'
+            );
+        }
 
         return $mail->send();
     } catch (Exception $e) {
