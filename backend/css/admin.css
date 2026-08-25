@@ -1031,6 +1031,37 @@
     flex-wrap: wrap;
 }
 
+.fbg-admin-status-pill.is-paid {
+    background: rgba(34, 197, 94, 0.14);
+    color: #bfffd0;
+}
+
+.fbg-admin-status-pill.is-void {
+    background: rgba(148, 163, 184, 0.16);
+    color: #d7dde8;
+}
+
+.fbg-admin-status-pill.is-refunded {
+    background: rgba(255, 195, 55, 0.16);
+    color: #ffe1a0;
+}
+
+.fbg-admin-void-button {
+    background: rgba(148, 163, 184, 0.22);
+}
+
+.fbg-admin-void-button:hover {
+    background: rgba(148, 163, 184, 0.36);
+}
+
+.fbg-admin-refund-button {
+    background: rgba(255, 195, 55, 0.34);
+}
+
+.fbg-admin-refund-button:hover {
+    background: rgba(255, 195, 55, 0.5);
+}
+
 .fbg-admin-invoice-detail {
     display: flex;
     flex-direction: column;

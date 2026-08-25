@@ -86,6 +86,15 @@ function fbgAdminInvoicesProviderLabel(string $provider): string
     return ucwords(str_replace('_', ' ', $provider));
 }
 
+function fbgAdminInvoicesStatusLabel(string $status): string
+{
+    return match (strtolower(trim($status))) {
+        'void' => 'Void',
+        'refunded' => 'Refunded',
+        default => 'Paid',
+    };
+}
+
 function fbgAdminInvoicesBaseUrl(array $overrides = []): string
 {
     $query = array_merge($_GET, $overrides);
@@ -111,6 +120,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fbgAdminInvoicesRedirect(
             $sent ? 'Invoice email resent successfully.' : 'The invoice email could not be resent.',
             $sent ? 'success' : 'error',
+            $invoiceId
+        );
+    }
+
+    if (in_array($action, ['void_invoice', 'refund_invoice'], true) && $invoiceId > 0) {
+        $newStatus = $action === 'void_invoice' ? 'void' : 'refunded';
+        $result = fbgUpdateFrontendInvoiceStatus(
+            $invoiceId,
+            $newStatus,
+            $newStatus === 'void'
+                ? 'Invoice was marked as void from the admin area.'
+                : 'Invoice was marked as refunded from the admin area.',
+            ['admin_action' => $action]
+        );
+
+        fbgAdminInvoicesRedirect(
+            !empty($result['ok'])
+                ? 'Invoice marked as ' . fbgAdminInvoicesStatusLabel($newStatus) . '.'
+                : (string)($result['error'] ?? 'The invoice status could not be updated.'),
+            !empty($result['ok']) ? 'success' : 'error',
             $invoiceId
         );
     }
@@ -257,7 +286,12 @@ $currencyFallback = fbgGetShopCurrency();
                                         <small><?= htmlspecialchars((string)($invoice['customer_email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
                                     </td>
                                     <td><?= htmlspecialchars(fbgAdminInvoicesSourceLabel((string)($invoice['source_type'] ?? '')), ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><span class="status-badge status-<?= htmlspecialchars(strtolower((string)($invoice['status'] ?? 'paid')), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(ucfirst((string)($invoice['status'] ?? 'paid')), ENT_QUOTES, 'UTF-8') ?></span></td>
+                                    <td>
+                                        <?php $invoiceStatus = strtolower((string)($invoice['status'] ?? 'paid')); ?>
+                                        <span class="fbg-admin-status-pill is-<?= htmlspecialchars($invoiceStatus, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars(fbgAdminInvoicesStatusLabel($invoiceStatus), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                    </td>
                                     <td><?= htmlspecialchars(fbgFormatCredit((float)($invoice['total'] ?? 0), $currency), ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><?= htmlspecialchars(fbgAdminInvoicesProviderLabel((string)($invoice['payment_provider'] ?? '')), ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><?= htmlspecialchars(fbgAdminInvoicesDate($invoice['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
@@ -287,6 +321,7 @@ $currencyFallback = fbgGetShopCurrency();
                         <?php
                         $detailCurrency = trim((string)($viewInvoice['currency'] ?? '')) ?: $currencyFallback;
                         $detailTaxLabel = trim((string)($viewInvoice['tax_label'] ?? 'Tax')) ?: 'Tax';
+                        $detailStatus = strtolower((string)($viewInvoice['status'] ?? 'paid'));
                         $hasTax = round((float)($viewInvoice['tax_rate'] ?? 0), 4) > 0 || round((float)($viewInvoice['tax_amount'] ?? 0), 2) > 0;
                         ?>
                         <div class="fbg-admin-panel-header">
@@ -295,22 +330,36 @@ $currencyFallback = fbgGetShopCurrency();
                                 <p><?= htmlspecialchars(fbgAdminInvoicesSourceLabel((string)($viewInvoice['source_type'] ?? '')), ENT_QUOTES, 'UTF-8') ?> for <?= htmlspecialchars((string)($viewInvoice['customer_name'] ?: $viewInvoice['customer_username'] ?: 'Customer'), ENT_QUOTES, 'UTF-8') ?></p>
                             </div>
                             <div class="fbg-admin-table-actions">
-                                <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Open Customer View</a>
-                                <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice-pdf&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Download PDF</a>
-                                <form method="POST">
+                                 <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Open Customer View</a>
+                                 <a class="btn btn-sm fbg-neutral-button" href="./page.php?name=invoice-pdf&id=<?= (int)$viewInvoice['id'] ?>" target="_blank" rel="noopener noreferrer">Download PDF</a>
+                                 <form method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="action" value="resend_invoice">
-                                    <input type="hidden" name="invoice_id" value="<?= (int)$viewInvoice['id'] ?>">
-                                    <button type="submit" class="btn btn-sm">Resend Email</button>
-                                </form>
-                            </div>
-                        </div>
+                                     <input type="hidden" name="invoice_id" value="<?= (int)$viewInvoice['id'] ?>">
+                                     <button type="submit" class="btn btn-sm">Resend Email</button>
+                                 </form>
+                                <?php if ($detailStatus === 'paid'): ?>
+                                    <form method="POST">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                        <input type="hidden" name="action" value="void_invoice">
+                                        <input type="hidden" name="invoice_id" value="<?= (int)$viewInvoice['id'] ?>">
+                                        <button type="submit" class="btn btn-sm fbg-admin-void-button">Mark Void</button>
+                                    </form>
+                                    <form method="POST">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                        <input type="hidden" name="action" value="refund_invoice">
+                                        <input type="hidden" name="invoice_id" value="<?= (int)$viewInvoice['id'] ?>">
+                                        <button type="submit" class="btn btn-sm fbg-admin-refund-button">Mark Refunded</button>
+                                    </form>
+                                <?php endif; ?>
+                             </div>
+                         </div>
 
                         <div class="fbg-admin-invoice-summary-grid">
-                            <div class="fbg-admin-invoice-summary-card">
-                                <span>Status</span>
-                                <strong><?= htmlspecialchars(ucfirst((string)($viewInvoice['status'] ?? 'paid')), ENT_QUOTES, 'UTF-8') ?></strong>
-                            </div>
+                             <div class="fbg-admin-invoice-summary-card">
+                                 <span>Status</span>
+                                <strong><?= htmlspecialchars(fbgAdminInvoicesStatusLabel($detailStatus), ENT_QUOTES, 'UTF-8') ?></strong>
+                             </div>
                             <div class="fbg-admin-invoice-summary-card">
                                 <span>Total</span>
                                 <strong><?= htmlspecialchars(fbgFormatCredit((float)($viewInvoice['total'] ?? 0), $detailCurrency), ENT_QUOTES, 'UTF-8') ?></strong>

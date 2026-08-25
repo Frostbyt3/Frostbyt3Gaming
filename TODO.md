@@ -32,8 +32,8 @@
 - [x] Add PDF invoice rendering/download support.
 - [ ] Improve invoice PDF Unicode support beyond the current Windows-1252/Latin-oriented text handling.
 - [x] Add admin invoice list/detail pages with search, filters, pagination, and resend.
-- [ ] Add invoice void and refund-aware status handling.
-- [ ] Add invoice event logging for voided and refunded events.
+- [x] Add invoice void and refund-aware status handling.
+- [x] Add invoice event logging for voided and refunded events.
 - [x] Change invoices displayed on Wallet page to new invoice system.
 
 ## Shared Frontend Utilities

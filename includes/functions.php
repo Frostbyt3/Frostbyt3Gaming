@@ -905,6 +905,104 @@ if (!function_exists('fbgLogFrontendInvoiceEvent')) {
     }
 }
 
+if (!function_exists('fbgNormalizeFrontendInvoiceStatus')) {
+    function fbgNormalizeFrontendInvoiceStatus(string $status): ?string
+    {
+        $status = strtolower(trim($status));
+
+        return in_array($status, ['paid', 'void', 'refunded'], true) ? $status : null;
+    }
+}
+
+if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
+    function fbgUpdateFrontendInvoiceStatus(int $invoiceId, string $status, string $note = '', array $metadata = []): array
+    {
+        $normalizedStatus = fbgNormalizeFrontendInvoiceStatus($status);
+        if ($invoiceId <= 0 || $normalizedStatus === null || !fbgEnsureFrontendInvoiceTables()) {
+            return [
+                'ok' => false,
+                'error' => 'Choose a valid invoice status.',
+                'invoice' => null,
+            ];
+        }
+
+        try {
+            $pdo = db();
+            $stmt = $pdo->prepare("
+                SELECT *
+                FROM fbg_invoices
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmt->execute([':id' => $invoiceId]);
+            $invoice = $stmt->fetch();
+
+            if (!$invoice) {
+                return [
+                    'ok' => false,
+                    'error' => 'That invoice could not be found.',
+                    'invoice' => null,
+                ];
+            }
+
+            $previousStatus = fbgNormalizeFrontendInvoiceStatus((string)($invoice['status'] ?? '')) ?? 'paid';
+            if ($previousStatus === $normalizedStatus) {
+                return [
+                    'ok' => true,
+                    'error' => null,
+                    'invoice' => $invoice,
+                ];
+            }
+
+            $updateStmt = $pdo->prepare("
+                UPDATE fbg_invoices
+                SET status = :status,
+                    updated_at = NOW()
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $updateStmt->execute([
+                ':status' => $normalizedStatus,
+                ':id' => $invoiceId,
+            ]);
+
+            $eventType = match ($normalizedStatus) {
+                'void' => 'voided',
+                'refunded' => 'refunded',
+                default => 'status-updated',
+            };
+
+            if ($note === '') {
+                $note = match ($normalizedStatus) {
+                    'void' => 'Invoice was marked as void.',
+                    'refunded' => 'Invoice was marked as refunded.',
+                    default => 'Invoice status was updated.',
+                };
+            }
+
+            fbgLogFrontendInvoiceEvent($invoiceId, $eventType, $note, array_merge($metadata, [
+                'previous_status' => $previousStatus,
+                'new_status' => $normalizedStatus,
+                'admin_user_id' => (int)($_SESSION['user_id'] ?? 0),
+            ]));
+
+            return [
+                'ok' => true,
+                'error' => null,
+                'invoice' => fbgGetFrontendInvoiceDetail($invoiceId, (int)($invoice['user_id'] ?? 1), true),
+            ];
+        } catch (Throwable $e) {
+            error_log('Unable to update frontend invoice status: ' . $e->getMessage());
+
+            return [
+                'ok' => false,
+                'error' => 'The invoice status could not be updated. Check the logs and try again.',
+                'invoice' => null,
+            ];
+        }
+    }
+}
+
 if (!function_exists('fbgCreateFrontendInvoice')) {
     function fbgCreateFrontendInvoice(array $data): ?array
     {
