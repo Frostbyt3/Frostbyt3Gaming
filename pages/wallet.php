@@ -342,7 +342,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                             <div>
                                 <h3>Server Rental History</h3>
                                 <p class="fbg-settings-note">
-                                     Server rentals paid from your account balance.
+                                     Server rentals paid from your wallet balance.
                                 </p>
                             </div>
                         </div>
