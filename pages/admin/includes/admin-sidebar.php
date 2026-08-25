@@ -74,16 +74,24 @@ if (function_exists('asset')) {
             </a>
         </div>
 
-        <!-- Shop -->
         <div class="fbg-admin-nav-group">
-            <span class="fbg-admin-nav-group-title">Shop</span>
+            <span class="fbg-admin-nav-group-title">Invoice</span>
 
-            <a href="./page.php?name=admin-payments" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-payments', $currentAdminPage) ?>">
-                Payments
+            <a href="./page.php?name=admin-invoice-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoice-settings', $currentAdminPage) ?>">
+                Invoice Settings
             </a>
 
             <a href="./page.php?name=admin-invoices" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoices', $currentAdminPage) ?>">
                 Invoices
+            </a>
+        </div>
+
+        <!-- Shop -->
+        <div class="fbg-admin-nav-group">
+            <span class="fbg-admin-nav-group-title">Shop Settings</span>
+
+            <a href="./page.php?name=admin-payments" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-payments', $currentAdminPage) ?>">
+                Payments
             </a>
 
             <a href="./page.php?name=admin-shop-categories" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-categories', $currentAdminPage) ?>">
@@ -113,7 +121,7 @@ if (function_exists('asset')) {
 
         <!-- System -->
         <div class="fbg-admin-nav-group">
-            <span class="fbg-admin-nav-group-title">System</span>
+            <span class="fbg-admin-nav-group-title">System Settings</span>
 
             <a href="./page.php?name=admin-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-settings', $currentAdminPage) ?>">
                 Settings

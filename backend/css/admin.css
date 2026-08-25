@@ -770,6 +770,14 @@
     grid-column: span 12;
 }
 
+.fbg-admin-invoice-settings-page > .fbg-admin-panel-full {
+    margin-top: 20px;
+}
+
+.fbg-admin-invoice-settings-page > .fbg-admin-grid + .fbg-admin-panel-full {
+    margin-top: 20px;
+}
+
 .fbg-admin-form {
     display: flex;
     flex-direction: column;

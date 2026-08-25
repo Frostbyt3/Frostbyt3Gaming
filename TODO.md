@@ -18,9 +18,10 @@
 - [x] Add frontend-owned invoice database tables for invoices, invoice line items, and invoice events.
 - [x] Add immutable invoice snapshots for company details, customer details, line items, tax, totals, currency, and payment metadata.
 - [x] Add invoice numbering settings with configurable prefix and starting/next invoice number.
-- [x] Add invoice company settings for business name, address, phone, email, tax label, and tax rate.
-- [ ] Add invoice delivery settings for enabling invoice emails, reply-to/from behavior, and future PDF attachment behavior.
-- [x] Add an Invoice Settings tab/section to the admin shop/settings page.
+- [x] Add invoice company settings for business name, address, phone, email, and tax label.
+- [x] Add invoice email delivery enable/disable setting.
+- [ ] Add invoice reply-to/from behavior and future PDF attachment behavior.
+- [x] Move invoice settings and manual invoice recovery to a standalone admin Invoice Settings page.
 - [x] Generate invoices when wallet top-ups complete successfully.
 - [x] Generate invoices when server rentals complete successfully.
 - [x] Generate invoices when server renewals complete successfully.
