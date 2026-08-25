@@ -270,7 +270,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                             <div>
                                 <h3>Invoices</h3>
                                 <p class="fbg-settings-note">
-                                    Frontend-generated invoices for completed wallet activity.
+                                    Generated invoices for completed wallet activity.
                                 </p>
                             </div>
                         </div>
