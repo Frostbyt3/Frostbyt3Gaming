@@ -159,6 +159,10 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                     Checkout will open securely. Your account balance updates after payment is verified.
                                 </p>
 
+                                <p class="fbg-settings-note">
+                                    <i><strong>PayPal:</strong> A small temporary authorization may appear on your payment method while PayPal verifies it. This is not an additional Frostbyt3 Gaming charge and should disappear automatically.</i>
+                                </p>
+
                                 <div id="fbg-add-balance-message" class="fbg-dashboard-alert" style="display:none; margin-top: 12px;"></div>
 
                                 <div class="fbg-settings-section-footer">
