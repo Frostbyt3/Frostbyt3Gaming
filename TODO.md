@@ -25,7 +25,7 @@
 - [x] Generate invoices when server rentals complete successfully.
 - [x] Generate invoices when server renewals complete successfully.
 - [x] Add admin action to manually generate a missing invoice for a completed wallet top-up.
-- [ ] Send invoice email notifications through the existing PHPMailer setup after invoice creation.
+- [x] Send invoice email notifications through the existing PHPMailer setup after invoice creation.
 - [x] Add customer-facing invoice list/detail pages with secure ownership checks.
 - [ ] Add PDF invoice rendering/download support.
 - [ ] Add admin invoice list/detail pages with search, filters, pagination, resend, void, and refund-aware status handling.
