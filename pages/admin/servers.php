@@ -3087,15 +3087,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    overlays.forEach((overlay) => {
-        if (!overlay) return;
-        overlay.addEventListener('click', (event) => {
-            if (event.target === overlay) {
-                closeOverlay(overlay);
-            }
-        });
-    });
-
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') {
             return;
@@ -3483,12 +3474,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyEggData(false, true);
     }
 
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            window.location.href = './page.php?name=admin-servers';
-        }
-    });
-
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             window.location.href = './page.php?name=admin-servers';
@@ -3750,14 +3735,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (eggSelect) {
         eggSelect.addEventListener('change', () => applyEggData(true));
-    }
-
-    if (createModal) {
-        createModal.addEventListener('click', (event) => {
-            if (event.target === createModal) {
-                window.location.href = <?= json_encode(fbgAdminServersBaseQuery(['create' => null, 'edit' => null, 'tab' => null])) ?>;
-            }
-        });
     }
 
     document.addEventListener('keydown', (event) => {

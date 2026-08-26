@@ -625,20 +625,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (deleteConfirm) {
-        deleteConfirm.addEventListener('click', (event) => {
-            if (event.target === deleteConfirm) {
-                closeDeleteConfirm();
-            }
-        });
-    }
-
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            window.location.href = './page.php?name=admin-locations';
-        }
-    });
-
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             if (deleteConfirm && !deleteConfirm.hidden) {

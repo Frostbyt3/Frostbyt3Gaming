@@ -61,6 +61,10 @@ if (function_exists('asset')) {
                 Locations
             </a>
 
+            <a href="./page.php?name=admin-nodes" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-nodes', $currentAdminPage) ?>">
+                Nodes
+            </a>
+
             <a href="./page.php?name=admin-users" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-users', $currentAdminPage) ?>">
                 Users
             </a>

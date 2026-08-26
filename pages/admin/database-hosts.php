@@ -8,7 +8,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/pagination.php';
 require_once __DIR__ . '/../../api/pterodactyl.php';
 
 requireLogin();
@@ -353,8 +352,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $search = trim((string)($_GET['q'] ?? ''));
 $sort = (string)($_GET['sort'] ?? 'name');
 $direction = strtolower((string)($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+$pageNum = max(1, (int)($_GET['page_num'] ?? 1));
 $perPage = 25;
-$pageNum = fbgPaginationRequestedPage();
 $offset = ($pageNum - 1) * $perPage;
 $editHostId = max(0, (int)($_GET['edit'] ?? 0));
 $openCreate = isset($_GET['create']) && (string)$_GET['create'] === '1';
@@ -388,10 +387,11 @@ $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 $countStmt = fbgPteroDb()->prepare("SELECT COUNT(*) FROM database_hosts dh {$whereSql}");
 $countStmt->execute($params);
 $totalRows = (int)$countStmt->fetchColumn();
-$pagination = fbgNormalizePagination($totalRows, $pageNum, $perPage);
-$pageNum = $pagination['page_num'];
-$totalPages = $pagination['total_pages'];
-$offset = $pagination['offset'];
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+    $offset = ($pageNum - 1) * $perPage;
+}
 
 $orderSql = $sortMap[$sort] . ' ' . strtoupper($direction);
 $hostsStmt = fbgPteroDb()->prepare("
@@ -563,7 +563,19 @@ if ($editHostId > 0) {
                     </table>
                 </div>
 
-                <?php fbgRenderPagination($pagination, 'host', ['remove' => ['edit', 'create']]); ?>
+                <div class="fbg-admin-form-actions">
+                    <?php if ($pageNum > 1): ?>
+                        <?php $prevQuery = array_merge($_GET, ['page_num' => $pageNum - 1]); unset($prevQuery['edit'], $prevQuery['create']); ?>
+                        <a class="btn fbg-neutral-button" href="./page.php?<?= htmlspecialchars(http_build_query($prevQuery), ENT_QUOTES, 'UTF-8') ?>">Previous</a>
+                    <?php endif; ?>
+
+                    <span><?= number_format($totalRows) ?> total host<?= $totalRows === 1 ? '' : 's' ?>, page <?= $pageNum ?> of <?= $totalPages ?></span>
+
+                    <?php if ($pageNum < $totalPages): ?>
+                        <?php $nextQuery = array_merge($_GET, ['page_num' => $pageNum + 1]); unset($nextQuery['edit'], $nextQuery['create']); ?>
+                        <a class="btn fbg-neutral-button" href="./page.php?<?= htmlspecialchars(http_build_query($nextQuery), ENT_QUOTES, 'UTF-8') ?>">Next</a>
+                    <?php endif; ?>
+                </div>
             </section>
 
             <?php if ($editHostId > 0 && !$editingHost): ?>
@@ -851,20 +863,6 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteSubmit.disabled = deleteInput.value !== 'DELETE';
         });
     }
-
-    if (deleteConfirm) {
-        deleteConfirm.addEventListener('click', (event) => {
-            if (event.target === deleteConfirm) {
-                closeDeleteConfirm();
-            }
-        });
-    }
-
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            window.location.href = './page.php?name=admin-database-hosts';
-        }
-    });
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {

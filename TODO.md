@@ -2,14 +2,19 @@
 
 ## Admin Node Management
 
-- [ ] Add admin node list page with search, location, FQDN, scheme, maintenance, memory, disk, allocations, and server counts.
-- [ ] Add admin node create flow with name, location, FQDN, scheme, public/private visibility, behind-proxy, daemon ports, upload size, memory/disk limits, and overallocate settings.
-- [ ] Add admin node detail tabs for About, Settings, Configuration, Allocations, Servers, and System Information.
-- [ ] Add node settings update flow with validation that matches Pterodactyl's node edit behavior.
-- [ ] Add node configuration view with Wings configuration output and auto-deploy token generation.
-- [ ] Add node allocation management for creating IP/port ranges, setting aliases/notes, and deleting single or multiple allocations.
-- [ ] Add node servers tab showing servers assigned to the node with owner, allocation, status, and quick admin links.
-- [ ] Add node delete flow with safeguards when allocations or servers are still attached.
+- [x] Add admin node list page with search, location, FQDN, scheme, maintenance, memory, disk, allocations, and server counts.
+- [x] Add admin node create flow with name, location, FQDN, scheme, public/private visibility, behind-proxy, daemon ports, upload size, memory/disk limits, and overallocate settings.
+- [x] Add admin node detail tabs for About, Settings, Configuration, Allocations, and Servers.
+- [x] Add node System Information tab with daemon/system details.
+- [x] Add node settings update flow with validation that matches Pterodactyl's node edit behavior.
+- [x] Add node configuration view with Wings configuration output.
+- [ ] Add node auto-deploy token generation.
+- [x] Add node allocation management for creating IP/port ranges, setting aliases, and deleting single or multiple free allocations.
+- [ ] Add node allocation notes editing support.
+- [x] Add node servers tab showing assigned servers with owner, egg, allocation, resource limits, and quick admin links.
+- [ ] Add node server status display to the node Servers tab.
+- [x] Add node delete flow with safeguards when allocations or servers are still attached.
+- [ ] Replace Live Daemon Details card in System Information tab with live telemetry: Daemon Status, Node Uptime (Host Uptime + rolling 30-day availability), Load Average (Host CPU), RAM Used (Host Memory), Disk Used (Host Disk).
 
 ## Admin Mounts Management
 
@@ -38,6 +43,7 @@
 
 ## Frontend Invoice System
 
+- [ ] Fix invoice/server notification email CSS rendering issues in the iOS Gmail app.
 - [ ] Improve invoice PDF Unicode support beyond the current Windows-1252/Latin-oriented text handling.
 
 ## Registration Security
