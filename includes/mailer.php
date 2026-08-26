@@ -157,6 +157,11 @@ function fbgSendAccountEmailChangeVerification(array $data): bool
                 <td align="center">
                     <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
                         <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
+                        <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
                         </tr>
                         <tr>
@@ -257,6 +262,11 @@ function fbgSendRegistrationCompletionEmail(array $data): bool
             <tr>
                 <td align="center">
                     <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
+                        <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
                         <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
                         </tr>
@@ -382,6 +392,11 @@ function fbgSendServerExpiryReminderEmail(array $data): bool
                 <td align="center">
                     <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
                         <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
+                        <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
                         </tr>
                         <tr>
@@ -499,6 +514,11 @@ function fbgSendServerExpiredEmail(array $data): bool
             <tr>
                 <td align="center">
                     <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
+                        <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
                         <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">Frostbyt3 Gaming</td>
                         </tr>
@@ -670,6 +690,11 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
                 <td align="center">
                     <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border-radius:12px;padding:30px;color:#ffffff;">
                         <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
+                        <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:10px;">' . $safeCompanyName . '</td>
                         </tr>
                         <tr>
@@ -830,7 +855,12 @@ function fbgSendServerInstallFinishedEmail(array $data): bool
         <table width="100%" cellpadding="0" cellspacing="0" style="color:#f2f2f2;background-color:#111;padding:24px 0;">
             <tr>
                 <td align="center">
-                    <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:32px;color:#ffffff;">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background:#1e1e1e;border:1px solid #1c1c1c;border-radius:14px;padding:32px;color:#ffffff;">
+                        <tr>
+                            <td align="center" style="padding-bottom:10px;">
+                                <img src="https://frostbyt3gaming.com/backend/uplimg/29e3a1d2f6279265483296d8d3e829c5.png" height="128px" width="128px" alt="Frostbyt3 Gaming"></img>
+                            </td>
+                        </tr>
                         <tr>
                             <td style="font-size:22px;font-weight:bold;padding-bottom:8px;color:#ffffff;">Frostbyt3 Gaming</td>
                         </tr>
