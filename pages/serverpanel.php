@@ -156,27 +156,32 @@ if (!function_exists('getGameIcon')) {
         $serverName = strtolower(trim((string)($server['name'] ?? '')));
         $source = $eggName !== '' && $eggName !== 'unknown' ? $eggName : $serverName;
 
-        if (str_contains($source, 'neoforge')) return '/backend/img/icons/mc-neoforge.png';
-        if (str_contains($source, 'forge')) return '/backend/img/icons/mc-forge.png';
-        if (str_contains($source, 'fabric')) return '/backend/img/icons/mc-fabric.png';
-        if (str_contains($source, 'quilt')) return '/backend/img/icons/mc-quilt.svg';
-        if (str_contains($source, 'sponge')) return '/backend/img/icons/mc-sponge.png';
-        if (str_contains($source, 'paper')) return '/backend/img/icons/mc-paper.svg';
-        if (str_contains($source, 'spigot')) return '/backend/img/icons/minecraft.png';
-        if (str_contains($source, 'bukkit')) return '/backend/img/icons/minecraft.png';
-        if (str_contains($source, 'purpur')) return '/backend/img/icons/minecraft.png';
-        if (str_contains($source, 'vanilla minecraft')) return '/backend/img/icons/minecraft.png';
-        if (str_contains($source, 'modpack installer')) return '/backend/img/icons/minecraftmodpack.png';
-        if (str_contains($source, 'palworld')) return '/backend/img/icons/palworld.png';
-        if (str_contains($source, 'rust')) return '/backend/img/icons/rust.png';
-        if (str_contains($source, 'ark')) return '/backend/img/icons/ase.png';
-        if (str_contains($source, 'icarus')) return '/backend/img/icons/icarus.png';
-        if (str_contains($source, 'tshock')) return '/backend/img/icons/tshock.png';
-        if (str_contains($source, 'terraria')) return '/backend/img/icons/terraria.png';
-        if (str_contains($source, 'starrupture')) return '/backend/img/icons/starrupture.jpg';
-        if (str_contains($source, 'fivem')) return '/backend/img/icons/fivem.png';
-        if (str_contains($source, 'factorio')) return '/backend/img/icons/factorio.png';
-        if (str_contains($source, 'enshrouded')) return '/backend/img/icons/enshrouded.png';
+        if (str_contains($source, 'neoforge'))                      return '/backend/img/icons/mc-neoforge.png';
+        if (str_contains($source, 'forge'))                         return '/backend/img/icons/mc-forge.png';
+        if (str_contains($source, 'fabric'))                        return '/backend/img/icons/mc-fabric.png';
+        if (str_contains($source, 'quilt'))                         return '/backend/img/icons/mc-quilt.svg';
+        if (str_contains($source, 'sponge'))                        return '/backend/img/icons/mc-sponge.png';
+        if (str_contains($source, 'paper'))                         return '/backend/img/icons/mc-paper.svg';
+        if (str_contains($source, 'spigot'))                        return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'bukkit'))                        return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'purpur'))                        return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'vanilla minecraft'))             return '/backend/img/icons/minecraft.png';
+        if (str_contains($source, 'modpack installer'))             return '/backend/img/icons/minecraftmodpack.png';
+
+        if (str_contains($source, 'palworld'))                      return '/backend/img/icons/palworld.png';
+        if (str_contains($source, 'rust'))                          return '/backend/img/icons/rust.png';
+        if (str_contains($source, 'survival evolved'))              return '/backend/img/icons/ase.png';
+        if (str_contains($source, 'survival ascended'))             return '/backend/img/icons/asa.png';
+        if (str_contains($source, 'icarus'))                        return '/backend/img/icons/icarus.png';
+        if (str_contains($source, 'tshock'))                        return '/backend/img/icons/tshock.png';
+        if (str_contains($source, 'terraria'))                      return '/backend/img/icons/terraria.png';
+        if (str_contains($source, 'starrupture'))                   return '/backend/img/icons/starrupture.jpg';
+        if (str_contains($source, 'fivem'))                         return '/backend/img/icons/fivem.png';
+        if (str_contains($source, 'factorio'))                      return '/backend/img/icons/factorio.png';
+        if (str_contains($source, 'enshrouded'))                    return '/backend/img/icons/enshrouded.png';
+        if (str_contains($source, 'valheim'))                       return '/backend/img/icons/valheim2.png';
+        if (str_contains($source, 'satisfactory'))                  return '/backend/img/icons/satisfactory.png';
+        if (str_contains($source, 'hytale'))                        return '/backend/img/icons/hytale.png';
 
         return '/backend/img/icons/default.png';
     }
