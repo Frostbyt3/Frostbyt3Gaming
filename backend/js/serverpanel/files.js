@@ -737,9 +737,23 @@
             if (editorTextarea) {
                 editorTextarea.value = contents;
                 editorTextarea.readOnly = false;
-                editorTextarea.focus();
+
+                editorTextarea.setSelectionRange(0, 0);
+                editorTextarea.scrollTop = 0;
+                editorTextarea.scrollLeft = 0;
             }
+
             renderCodeEditor();
+
+            requestAnimationFrame(() => {
+                if (editorTextarea) {
+                    editorTextarea.setSelectionRange(0, 0);
+                    editorTextarea.scrollTop = 0;
+                    editorTextarea.scrollLeft = 0;
+                    syncEditorScroll();
+                    editorTextarea.focus();
+                }
+            });
 
             editorOriginalValue = contents;
             setEditorDirtyState();
