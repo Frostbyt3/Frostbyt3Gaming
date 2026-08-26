@@ -893,7 +893,7 @@ function fbgSendServerInstallFinishedEmail(array $data): bool
                             </td>
                         </tr>
                         <tr>
-                            <td style="border-top:1px solid rgba(255,255,255,0.12);font-size:12px;line-height:1.5;color:#888888;padding-top:20px;">
+                            <td style="border-top:1px solid #383838;font-size:12px;line-height:1.5;color:#888888;padding-top:20px;">
                                 If you are having trouble clicking the "' . $safeButton . '" button, copy and paste the URL below into your browser:<br><br>
                                 <a href="' . $safeServerPanelUrl . '" style="color:#22aeff;">' . $safeServerPanelUrl . '</a><br><br>
                                 Copyright 2026 &copy; Frostbyt3 Gaming, LLC. All Rights Reserved.
