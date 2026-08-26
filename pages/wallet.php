@@ -160,7 +160,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                 </p>
 
                                 <p class="fbg-wallet-note">
-                                    <i><strong>PayPal:</strong> A small temporary authorization may appear on your payment method while PayPal verifies it. This is not an additional Frostbyt3 Gaming charge and should disappear automatically.</i>
+                                    <i><strong>Note:</strong> A small temporary authorization hold may appear on your payment method while the payment processor verifies it. This is not an additional Frostbyt3 Gaming charge and should disappear automatically.</i>
                                 </p>
 
                                 <p class="fbg-wallet-note">
