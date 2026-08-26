@@ -90,7 +90,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                     <div class="fbg-account-header">
                         <div>
                             <h1>Manage Wallet</h1>
-                            <p>Add funds, review account balance, and view completed balance uploads.</p>
+                            <p>Add funds, review wallet balance, and view completed transactions.</p>
                         </div>
                     </div>
 
@@ -112,7 +112,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
 
                     <section class="fbg-account-section fbg-credit-summary">
                         <div>
-                            <span class="fbg-meta-label">Account Balance</span>
+                            <span class="fbg-meta-label">Wallet Balance</span>
                             <strong>$<?php echo htmlspecialchars(fbgFormatCredit($balance, $currency)); ?></strong>
                         </div>
                         <a href="./page.php?name=servers" class="btn fbg-primary-button">
@@ -155,32 +155,26 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                     </div>
                                 </div>
 
-                                <p class="fbg-settings-note">
-                                    Checkout will open securely. Your account balance updates after payment is verified.
+                                <p class="fbg-wallet-note">
+                                    Checkout will open securely. Your wallet balance updates after payment is verified.
                                 </p>
 
-                                <p class="fbg-settings-note">
+                                <p class="fbg-wallet-note">
                                     <i><strong>PayPal:</strong> A small temporary authorization may appear on your payment method while PayPal verifies it. This is not an additional Frostbyt3 Gaming charge and should disappear automatically.</i>
+                                </p>
+
+                                <p class="fbg-wallet-note">
+                                    <i>By adding funds, you agree to the <highlight>Frostbyt3 Gaming <a href="./page.php?name=legal&doc=terms">Terms of Service</a></highlight> and acknowledge that <highlight>Wallet Balance</highlight> is subject to our payment and refund terms.</i>
                                 </p>
 
                                 <div id="fbg-add-balance-message" class="fbg-dashboard-alert" style="display:none; margin-top: 12px;"></div>
 
                                 <div class="fbg-settings-section-footer">
-                                    <button
-                                        type="submit"
-                                        class="btn fbg-primary-button"
-                                        data-default-text="Add Balance with Stripe"
-                                        <?php echo (!$paymentSettings['stripe_enabled'] || !$paymentSettings['stripe_secret_configured']) ? 'disabled' : ''; ?>
-                                    >
-                                        Add Balance with Stripe
+                                    <button type="submit" class="btn fbg-primary-button" data-default-text="Add Balance with Stripe" <?php echo (!$paymentSettings['stripe_enabled'] || !$paymentSettings['stripe_secret_configured']) ? 'disabled' : ''; ?>>
+                                        <i class="fas fa-lock"></i> Add Balance with Stripe
                                     </button>
-                                    <button
-                                        type="button"
-                                        class="btn fbg-paypal-button"
-                                        id="fbg-paypal-balance-button"
-                                        <?php echo (!$paymentSettings['paypal_enabled'] || !$paymentSettings['paypal_key_configured'] || !$paymentSettings['paypal_secret_configured']) ? 'disabled' : ''; ?>
-                                    >
-                                        Add Balance with PayPal
+                                    <button type="button" class="btn fbg-paypal-button" id="fbg-paypal-balance-button" <?php echo (!$paymentSettings['paypal_enabled'] || !$paymentSettings['paypal_key_configured'] || !$paymentSettings['paypal_secret_configured']) ? 'disabled' : ''; ?>>
+                                        <i class="fas fa-lock"></i> Add Balance with PayPal
                                     </button>
                                 </div>
                             </form>

@@ -503,7 +503,7 @@ nav ul li a img {
     font-weight: 600;
     line-height: 17px;
     outline: 0;
-    padding: 19px 31px;
+    padding: 12px 18px;
     text-align: center;
     text-transform: uppercase;
     text-decoration: none;
@@ -7902,6 +7902,32 @@ textarea.startup-variable-input {
     margin: 0;
     color: var(--fbg-text-muted);
     line-height: 1.55;
+}
+
+.fbg-wallet-note {
+    margin: 0;
+    color: var(--fbg-text-muted);
+    line-height: 1.55;
+}
+
+.fbg-wallet-note .fbg-note-dark {
+    color: var(--fbg-text-darker);
+}
+
+.fbg-credit-form .fbg-wallet-note {
+    margin-bottom: 6px;
+    margin-top: 6px;
+}
+
+.fbg-wallet-note a {
+    color: var(--fbg-brightblue);
+    text-decoration: none;
+    transition: 0.3s color ease, 0.3s text-decoration ease;
+}
+
+.fbg-wallet-note a:hover {
+    color: var(--fbg-white);
+    text-decoration: underline;
 }
 
 .fbg-settings-renew-warning {
