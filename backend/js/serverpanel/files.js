@@ -177,13 +177,11 @@
     function getEditorLanguageFromPath(path) {
         const ext = getExtension(getBaseName(path));
 
-        if (ext === 'ini') {
-            return 'ini';
-        }
-
-        if (ext === 'properties') {
-            return 'properties';
-        }
+        if (ext === 'ini') return 'ini';
+        if (ext === 'properties') return 'properties';
+        if (ext === 'json') return 'json';
+        if (ext === 'json5') return 'json5';
+        if (ext === 'toml') return 'toml';
 
         return 'plain';
     }
@@ -209,11 +207,21 @@
     function getEditorLanguageLabel(language) {
         if (language === 'ini') return 'INI';
         if (language === 'properties') return 'Properties';
+        if (language === 'json') return 'JSON';
+        if (language === 'json5') return 'JSON5';
+        if (language === 'toml') return 'TOML';
+
         return 'Plain Text';
     }
 
     function setEditorLanguage(language) {
-        editorLanguage = ['ini', 'properties'].includes(language) ? language : 'plain';
+        editorLanguage = [
+            'ini',
+            'properties',
+            'json',
+            'json5',
+            'toml'
+        ].includes(language) ? language : 'plain';
 
         if (editorShell) {
             editorShell.dataset.language = editorLanguage;
@@ -270,12 +278,267 @@
         ].join('');
     }
 
+    function highlightJsonLike(contents, allowJson5 = false) {
+        const source = String(contents ?? '');
+        let output = '';
+        let index = 0;
+
+        const isIdentifierStart = (char) => /[A-Za-z_$]/.test(char);
+        const isIdentifierPart = (char) => /[A-Za-z0-9_$-]/.test(char);
+
+        while (index < source.length) {
+            const char = source[index];
+
+            // Whitespace
+            if (/\s/.test(char)) {
+                output += escapeEditorHtml(char);
+                index++;
+                continue;
+            }
+
+            // JSON5 line comment
+            if (
+                allowJson5 &&
+                char === '/' &&
+                source[index + 1] === '/'
+            ) {
+                const start = index;
+                index += 2;
+
+                while (index < source.length && source[index] !== '\n') {
+                    index++;
+                }
+
+                output += `<span class="fbg-code-comment">${escapeEditorHtml(
+                    source.slice(start, index)
+                )}</span>`;
+                continue;
+            }
+
+            // JSON5 block comment
+            if (
+                allowJson5 &&
+                char === '/' &&
+                source[index + 1] === '*'
+            ) {
+                const start = index;
+                index += 2;
+
+                while (
+                    index < source.length &&
+                    !(source[index] === '*' && source[index + 1] === '/')
+                ) {
+                    index++;
+                }
+
+                if (index < source.length) {
+                    index += 2;
+                }
+
+                output += `<span class="fbg-code-comment">${escapeEditorHtml(
+                    source.slice(start, index)
+                )}</span>`;
+                continue;
+            }
+
+            // Strings
+            if (char === '"' || (allowJson5 && char === "'")) {
+                const quote = char;
+                const start = index;
+                index++;
+
+                while (index < source.length) {
+                    if (source[index] === '\\') {
+                        index += 2;
+                        continue;
+                    }
+
+                    if (source[index] === quote) {
+                        index++;
+                        break;
+                    }
+
+                    index++;
+                }
+
+                const token = source.slice(start, index);
+
+                // A quoted string followed by ":" is a key.
+                let lookahead = index;
+                while (lookahead < source.length && /\s/.test(source[lookahead])) {
+                    lookahead++;
+                }
+
+                const tokenClass =
+                    source[lookahead] === ':'
+                        ? 'fbg-code-key'
+                        : 'fbg-code-value';
+
+                output += `<span class="${tokenClass}">${escapeEditorHtml(token)}</span>`;
+                continue;
+            }
+
+            // Numbers
+            const remaining = source.slice(index);
+            const numberMatch = remaining.match(
+                allowJson5
+                    ? /^[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|Infinity|NaN)/
+                    : /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/
+            );
+
+            if (numberMatch) {
+                output += `<span class="fbg-code-number">${escapeEditorHtml(numberMatch[0])}</span>`;
+                index += numberMatch[0].length;
+                continue;
+            }
+
+            // Keywords
+            const keywordMatch = remaining.match(
+                allowJson5
+                    ? /^(true|false|null|Infinity|NaN)\b/
+                    : /^(true|false|null)\b/
+            );
+
+            if (keywordMatch) {
+                output += `<span class="fbg-code-boolean">${escapeEditorHtml(keywordMatch[0])}</span>`;
+                index += keywordMatch[0].length;
+                continue;
+            }
+
+            // JSON5 unquoted keys
+            if (allowJson5 && isIdentifierStart(char)) {
+                const start = index;
+                index++;
+
+                while (
+                    index < source.length &&
+                    isIdentifierPart(source[index])
+                ) {
+                    index++;
+                }
+
+                const token = source.slice(start, index);
+
+                let lookahead = index;
+                while (lookahead < source.length && /\s/.test(source[lookahead])) {
+                    lookahead++;
+                }
+
+                const tokenClass =
+                    source[lookahead] === ':'
+                        ? 'fbg-code-key'
+                        : 'fbg-code-value';
+
+                output += `<span class="${tokenClass}">${escapeEditorHtml(token)}</span>`;
+                continue;
+            }
+
+            // Structural punctuation
+            if ('{}[],:'.includes(char)) {
+                output += `<span class="fbg-code-separator">${escapeEditorHtml(char)}</span>`;
+                index++;
+                continue;
+            }
+
+            output += escapeEditorHtml(char);
+            index++;
+        }
+
+        return output;
+    }
+
+    function highlightTomlLine(line) {
+        const escapedLine = escapeEditorHtml(line);
+        const leadingMatch = line.match(/^\s*/);
+        const leading = leadingMatch ? leadingMatch[0] : '';
+        const trimmed = line.slice(leading.length);
+
+        if (trimmed === '') {
+            return escapedLine || '&nbsp;';
+        }
+
+        // Comments
+        if (trimmed.startsWith('#')) {
+            return `<span class="fbg-code-comment">${escapedLine}</span>`;
+        }
+
+        // [table] and [[array.of.tables]]
+        if (
+            /^\[[^\]]+\]\s*(?:#.*)?$/.test(trimmed) ||
+            /^\[\[[^\]]+\]\]\s*(?:#.*)?$/.test(trimmed)
+        ) {
+            const commentIndex = trimmed.indexOf('#');
+            const sectionPart =
+                commentIndex >= 0
+                    ? trimmed.slice(0, commentIndex)
+                    : trimmed;
+            const commentPart =
+                commentIndex >= 0
+                    ? trimmed.slice(commentIndex)
+                    : '';
+
+            return [
+                escapeEditorHtml(leading),
+                `<span class="fbg-code-section">${escapeEditorHtml(sectionPart)}</span>`,
+                commentPart
+                    ? `<span class="fbg-code-comment">${escapeEditorHtml(commentPart)}</span>`
+                    : ''
+            ].join('');
+        }
+
+        const separatorIndex = trimmed.indexOf('=');
+
+        if (separatorIndex === -1) {
+            return escapedLine;
+        }
+
+        const key = trimmed.slice(0, separatorIndex);
+        const separator = '=';
+        const rawValue = trimmed.slice(separatorIndex + 1);
+
+        let valueClass = 'fbg-code-value';
+        const value = rawValue.trim();
+
+        if (/^(true|false)$/i.test(value)) {
+            valueClass = 'fbg-code-boolean';
+        } else if (
+            /^[+-]?(?:\d[\d_]*)(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?$/.test(value)
+        ) {
+            valueClass = 'fbg-code-number';
+        } else if (
+            /^(".*"|'[^']*')$/.test(value)
+        ) {
+            valueClass = 'fbg-code-value';
+        }
+
+        return [
+            escapeEditorHtml(leading),
+            `<span class="fbg-code-key">${escapeEditorHtml(key)}</span>`,
+            `<span class="fbg-code-separator">${separator}</span>`,
+            `<span class="${valueClass}">${escapeEditorHtml(rawValue)}</span>`
+        ].join('');
+    }
+
     function highlightEditorContents(contents) {
         const normalized = String(contents ?? '');
         const lines = normalized.split('\n');
 
-        if (editorLanguage === 'ini' || editorLanguage === 'properties') {
+        if (
+            editorLanguage === 'ini' ||
+            editorLanguage === 'properties') {
             return lines.map(highlightIniLikeLine).join('\n');
+        }
+
+        if (editorLanguage === 'json') {
+            return highlightJsonLike(normalized, false);
+        }
+
+        if (editorLanguage === 'json5') {
+            return highlightJsonLike(normalized, true);
+        }
+
+        if (editorLanguage === 'toml') {
+            return lines.map(highlightTomlLine).join('\n');
         }
 
         return escapeEditorHtml(normalized);
