@@ -3296,8 +3296,8 @@ a.button {
 }
 
 .fbg-server-rail-icon-wrap .fbg-dashboard-game-icon {
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
 }
 
 .fbg-server-rail-name {
@@ -5879,8 +5879,8 @@ body.fbg-confirm-open {
 }
 
 .fbg-dashboard-shell[data-dashboard-view="list"] .fbg-dashboard-game-icon {
-    width: 22px;
-    height: 22px;
+    width: 32px;
+    height: 32px;
 }
 
 .fbg-dashboard-shell[data-dashboard-view="list"] .fbg-dashboard-item-heading-row {
@@ -6022,8 +6022,8 @@ body.fbg-confirm-open {
 }
 
 .fbg-dashboard-shell[data-dashboard-view="cards"] .fbg-dashboard-game-icon {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
 }
 
 .fbg-dashboard-shell[data-dashboard-view="cards"] .fbg-dashboard-item-heading-row {
@@ -6296,8 +6296,8 @@ body.fbg-confirm-open {
 }
 
 .fbg-dashboard-game-icon {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
     display: block;
 }

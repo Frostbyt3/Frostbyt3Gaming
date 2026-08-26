@@ -60,7 +60,7 @@ function fbgShopPluralize(int $count, string $singular, string $plural): string
                     <div class="fbg-shop-header">
                         <div>
                             <h1>Game Servers</h1>
-                            <p>Choose a configured server plan and deploy it automatically with your account balance.</p>
+                            <p>Choose a configured server plan and deploy it automatically with your wallet balance.</p>
                         </div>
 
                         <div class="fbg-shop-balance">

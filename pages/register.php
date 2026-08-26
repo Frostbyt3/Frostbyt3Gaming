@@ -65,6 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === '' || strlen($username) < 3) {
         $errors[] = 'Username must be at least 3 characters.';
+    } elseif (!preg_match('/^[a-z0-9][a-z0-9_.-]+[a-z0-9]$/i', $username)) {
+        $errors[] = 'Username must start and end with a letter or number, and may only contain letters, numbers, dashes, underscores, and periods.';
     }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -179,7 +181,7 @@ $securityContext = fbgPrepareRegistrationFormSecurity();
             </div>
         <?php endif; ?>
 
-        <form method="post" action="./page.php?name=register">
+        <form method="post" action="./page.php?name=register" autocomplete="off">
 
             <input type="hidden" name="csrf_token"
                    value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
@@ -196,13 +198,20 @@ $securityContext = fbgPrepareRegistrationFormSecurity();
             </div>
 
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="fbg_registration_username">Username</label>
                 <input
-                    id="username"
+                    id="fbg_registration_username"
                     type="text"
                     name="username"
                     placeholder="Username"
-                    autocomplete="username"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    autocorrect="off"
+                    spellcheck="false"
+                    inputmode="text"
+                    data-lpignore="true"
+                    data-1p-ignore
+                    data-form-type="other"
                     required
                     value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
             </div>
@@ -264,6 +273,43 @@ $securityContext = fbgPrepareRegistrationFormSecurity();
     </div>
 
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const usernameInput = document.getElementById('fbg_registration_username');
+    const emailInput = document.getElementById('email');
+
+    if (!usernameInput) {
+        return;
+    }
+
+    let usernameTouched = false;
+
+    usernameInput.addEventListener('input', function () {
+        usernameTouched = true;
+    });
+
+    function clearEmailAutofillFromUsername() {
+        const username = usernameInput.value.trim();
+        const email = emailInput ? emailInput.value.trim() : '';
+
+        if (
+            !usernameTouched
+            && username.includes('@')
+            && (email === '' || username.toLowerCase() === email.toLowerCase())
+        ) {
+            usernameInput.value = '';
+        }
+    }
+
+    clearEmailAutofillFromUsername();
+    window.addEventListener('pageshow', clearEmailAutofillFromUsername);
+
+    [100, 500, 1200].forEach(function (delay) {
+        setTimeout(clearEmailAutofillFromUsername, delay);
+    });
+});
+</script>
 
 <style>
 .fbg-registration-honeypot {
