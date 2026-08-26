@@ -3,6 +3,7 @@
 
     const identifier = String(config.identifier || '').trim();
     const csrfToken = String(config.csrfToken || '').trim();
+    const isValheimServer = !!config.isValheim;
 
     if (!identifier || !csrfToken) return;
 
@@ -477,6 +478,18 @@
         return window.FBG_SERVER_PANEL_API || {};
     }
 
+    function updateValheimJoinCodeFromConsole(text) {
+        if (!isValheimServer || !text) return;
+
+        const match = String(text).match(/\bjoin code\s+([0-9]{4,10})\b/i);
+        if (!match) return;
+
+        const panelApi = getPanelApi();
+        if (typeof panelApi.updateValheimJoinCode !== 'function') return;
+
+        panelApi.updateValheimJoinCode(match[1]);
+    }
+
     function updatePanelStatus(status) {
         const panelApi = getPanelApi();
 
@@ -538,6 +551,7 @@
             case 'console output':
             case 'install output':
             case 'transfer logs':
+                updateValheimJoinCodeFromConsole(args.join('\n'));
                 appendConsoleText(args.join('\n'));
                 return;
 

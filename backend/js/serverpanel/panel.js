@@ -7,6 +7,7 @@
     let isInstalling = !!config.isInstalling;
     let isSuspended = !!config.isSuspended;
     let canShowSuspendedRenewal = !!config.canShowSuspendedRenewal;
+    const isValheimServer = !!config.isValheim;
     const allowConsoleWhileInstalling = !!config.allowConsoleWhileInstalling;
 
     if (!identifier || !csrfToken) return;
@@ -33,7 +34,9 @@
     const diskEl = document.querySelector('.stat-disk-usage');
     const cpuEl = document.querySelector('.stat-cpu-usage');
 
-    const addressEl = document.querySelector('.fbg-sidebar-stat .fbg-copyable');
+    const addressEl = document.getElementById('server-address-text');
+    const valheimJoinCodeCard = document.getElementById('valheim-join-code-card');
+    const valheimJoinCodeEl = document.getElementById('valheim-join-code-text');
     const railItems = Array.from(document.querySelectorAll('.fbg-server-rail-item[data-server]'));
     const railServerMap = new Map(
         railItems
@@ -109,6 +112,32 @@
         const value = String(address || '').trim() || 'Unavailable';
         addressEl.textContent = value;
         addressEl.dataset.copy = value;
+    }
+
+    function updateValheimJoinCode(joinCode) {
+        if (!isValheimServer || !valheimJoinCodeCard || !valheimJoinCodeEl) return;
+
+        const value = String(joinCode || '').trim();
+
+        if (!value) {
+            valheimJoinCodeEl.textContent = 'Waiting for server...';
+            valheimJoinCodeEl.dataset.copy = '';
+            return;
+        }
+
+        valheimJoinCodeEl.textContent = value;
+        valheimJoinCodeEl.dataset.copy = value;
+    }
+
+    function updateValheimJoinCodeVisibility(status) {
+        if (!isValheimServer || !valheimJoinCodeCard) return;
+
+        const shouldShow = status === 'running';
+        valheimJoinCodeCard.hidden = !shouldShow;
+
+        if (!shouldShow) {
+            updateValheimJoinCode('');
+        }
     }
 
     function clearBurstRefreshes() {
@@ -726,6 +755,7 @@
         }
 
         updateStatusIcon(displayStatus);
+        updateValheimJoinCodeVisibility(displayStatus);
 
         if (ramEl && data.memory_bytes !== undefined && data.memory_bytes !== null) {
             ramEl.textContent = formatBytes(data.memory_bytes);
@@ -1212,7 +1242,8 @@
     window.FBG_SERVER_PANEL_API = {
         updateUI,
         refresh,
-        updateAddress
+        updateAddress,
+        updateValheimJoinCode
     };
 
     document.addEventListener('click', function (e) {
@@ -1220,6 +1251,7 @@
         if (!el) return;
 
         const text = el.dataset.copy || el.textContent;
+        if (!String(text || '').trim()) return;
 
         navigator.clipboard.writeText(text).then(() => {
             const original = el.textContent;

@@ -107,6 +107,8 @@ $isManualSuspension = !empty($selectedServer['suspend_manual']);
 $expiredAtRaw = trim((string)($selectedServer['expired_at'] ?? ''));
 $isExpiredServer = $expiredAtRaw !== '' && strtotime($expiredAtRaw) !== false && strtotime($expiredAtRaw) <= time();
 $canShowSuspendedRenewal = $isSuspended && !$isManualSuspension && $isExpiredServer;
+$selectedEggName = trim((string)($selectedServer['egg_name'] ?? ''));
+$isValheimServer = stripos($selectedEggName, 'valheim') !== false;
 
 $resources = [
     'status' => $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : 'unknown'),
@@ -704,6 +706,7 @@ session_write_close();
                         isInstalling: <?php echo json_encode($isInstalling); ?>,
                         isSuspended: <?php echo json_encode($isSuspended); ?>,
                         canShowSuspendedRenewal: <?php echo json_encode($canShowSuspendedRenewal); ?>,
+                        isValheim: <?php echo json_encode($isValheimServer); ?>,
                         allowConsoleWhileInstalling: <?php echo json_encode($isPanelAdmin && $serverTab === 'console'); ?>,
                         currentTab: <?php echo json_encode($serverTab); ?>
                     };
@@ -750,6 +753,20 @@ session_write_close();
                             </div>
                         </div>
                     </div>
+
+                    <?php if ($isValheimServer): ?>
+                    <div class="fbg-sidebar-stat fbg-valheim-join-code-card" id="valheim-join-code-card" hidden>
+                        <div class="fbg-sidebar-stat-icon fbg-sidebar-stat-icon-valheim">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="fbg-sidebar-stat-content">
+                            <span class="fbg-meta-label">Join Code</span>
+                            <div id="valheim-join-code-text" class="fbg-meta-value fbg-copyable" data-copy="">
+                                Waiting for server...
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
 
                     <div class="fbg-sidebar-stat">
                         <div class="fbg-sidebar-stat-icon fbg-sidebar-stat-icon-status <?php echo htmlspecialchars(fbgStatusClass($status)); ?>">
