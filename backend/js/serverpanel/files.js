@@ -2321,11 +2321,13 @@
         }
     });
 
-    editorModal?.addEventListener('click', (event) => {
+    /* I no longer want this shit to close when I click outside of the modal.
+       It fucking closes when I attempt to highlight text. Fuck that shit. */
+    /* editorModal?.addEventListener('click', (event) => {
         if (event.target === editorModal) {
             closeEditorModal();
         }
-    });
+    }); */
 
     editorTextarea?.addEventListener('input', () => {
         renderCodeEditor();
