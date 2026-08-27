@@ -105,7 +105,7 @@ try {
     $suspendManualSelect = $hasSuspendManualColumn ? 'suspend_manual' : '0 AS suspend_manual';
 
     $serverStmt = $pdo->prepare(
-        'SELECT id, product_id, expired_at, status, ' . $suspendManualSelect . '
+        'SELECT id, name, product_id, expired_at, status, ' . $suspendManualSelect . '
          FROM servers
          WHERE id = :id
          LIMIT 1
@@ -142,7 +142,7 @@ try {
     }
 
     $gameStmt = $pdo->prepare(
-        'SELECT id, name, price
+        'SELECT id, name, egg_id, price
          FROM games
          WHERE id = :id
          LIMIT 1'
@@ -154,6 +154,12 @@ try {
 
     if (!$gameRow) {
         throw new RuntimeException('Game package not found.');
+    }
+
+    $eggName = '';
+    if (!empty($gameRow['egg_id']) && function_exists('fbgShopGetEggData')) {
+        $eggRow = fbgShopGetEggData((int)$gameRow['egg_id']);
+        $eggName = is_array($eggRow) ? (string)($eggRow['name'] ?? '') : '';
     }
 
     $price = round((float)($gameRow['price'] ?? 0), 2);
@@ -293,8 +299,21 @@ try {
         'error' => null,
         'data'  => [
             'message'             => 'Server renewed successfully.',
+            'game_name'           => (string)($gameRow['name'] ?? 'Game Server'),
+            'egg_name'            => $eggName,
+            'confirmation_background_image' => function_exists('fbgResolveConfirmationBackgroundForContext')
+                ? (string)fbgResolveConfirmationBackgroundForContext($eggName, (string)($gameRow['name'] ?? 'Game Server'), (string)($serverRow['name'] ?? ''))
+                : '',
+            'duration_days'       => 30,
+            'old_expired_at'      => $oldExpiredAt,
+            'old_expired_at_display' => $oldExpiredAt !== null && strtotime((string)$oldExpiredAt) !== false
+                ? date('M j, Y', strtotime((string)$oldExpiredAt))
+                : '',
             'expired_at'          => $newExpiry->format('Y-m-d H:i:s'),
             'expired_at_display'  => $newExpiry->format('M j, Y g:i A'),
+            'expired_date_display' => $newExpiry->format('M j, Y'),
+            'server_panel_url'    => '/page.php?name=serverpanel&id=' . rawurlencode($serverIdentifier),
+            'dashboard_url'       => '/page.php?name=dashboard',
             'balance'             => round($newCredit, 2),
             'currency'            => $currency,
             'subtotal'            => (float)$tax['subtotal'],

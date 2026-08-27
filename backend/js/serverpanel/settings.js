@@ -131,6 +131,65 @@
         renewButton.textContent = `Renew Server - ${formatMoney(renewPrice, currency)}`;
     }
 
+    function invoicePayload(invoice) {
+        if (!invoice || !invoice.id || !invoice.invoice_number) {
+            return null;
+        }
+
+        return {
+            number: invoice.invoice_number,
+            url: `/page.php?name=invoice&id=${encodeURIComponent(invoice.id)}`
+        };
+    }
+
+    function showRenewalConfirmation(data) {
+        if (typeof window.FBGPurchaseConfirmation !== 'function') {
+            return false;
+        }
+
+        const currency = data.currency || renewButton?.dataset.currency || 'USD';
+        const serverName = (headerNameText?.textContent || '').trim() || 'Game Server';
+
+        window.FBGPurchaseConfirmation({
+            type: 'renewal',
+            title: 'Thanks for your order!',
+            message: 'Your server renewal was completed successfully.',
+            label: 'Server Renewal',
+            backgroundImage: data.confirmation_background_image || '',
+            backgroundKey: data.egg_name || data.game_name || serverName,
+            eggName: data.egg_name || '',
+            gameName: data.game_name || '',
+            planName: serverName,
+            currency,
+            details: [
+                { label: 'Plan', value: data.game_name || serverName },
+                { label: 'Extended By', value: `${data.duration_days || 30} days` },
+                { label: 'Previous Expiration', value: data.old_expired_at_display || 'Unknown' },
+                { label: 'New Expiration', value: data.expired_date_display || data.expired_at_display || 'Unknown' }
+            ],
+            totals: [
+                { label: 'Price', value: formatMoney(data.subtotal || 0, currency) },
+                { label: `Tax ${Number(data.tax_rate || 0).toFixed(2)}%`, value: formatMoney(data.tax_amount || 0, currency) },
+                { label: 'Total', value: formatMoney(data.total || 0, currency), total: true }
+            ],
+            balance: {
+                label: 'Remaining Balance',
+                value: formatMoney(data.balance || 0, currency)
+            },
+            note: 'Your server access has been extended. You can pick up right where you left off.',
+            invoice: invoicePayload(data.invoice),
+            actions: [
+                {
+                    label: 'Close',
+                    close: true,
+                    primary: true
+                }
+            ]
+        });
+
+        return true;
+    }
+
     function applyRenewResponse(payload) {
         if (!renewButton) return;
 
@@ -301,10 +360,12 @@
                     ? `Server renewed successfully. ${renewData.unsuspend_warning}`
                     : (renewData.message || result?.message || 'Server renewed for an additional month.');
 
-                showSettingsToast({
-                    type: 'success',
-                    message: successMessage,
-                });
+                if (!showRenewalConfirmation(renewData)) {
+                    showSettingsToast({
+                        type: 'success',
+                        message: successMessage,
+                    });
+                }
 
                 if (renewData.unsuspend_warning) {
                     showSettingsToast({

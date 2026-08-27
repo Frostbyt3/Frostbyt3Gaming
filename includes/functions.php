@@ -3038,7 +3038,7 @@ if (!function_exists('fbgShopGetEggData')) {
         }
 
         $stmt = fbgPteroDb()->prepare("
-            SELECT id, nest_id, startup, docker_images
+            SELECT id, nest_id, name, startup, docker_images
             FROM eggs
             WHERE id = :id
             LIMIT 1
@@ -3047,6 +3047,160 @@ if (!function_exists('fbgShopGetEggData')) {
         $egg = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $egg ?: null;
+    }
+}
+
+if (!function_exists('fbgEnsureConfirmationBackgroundTable')) {
+    function fbgEnsureConfirmationBackgroundTable(): bool
+    {
+        try {
+            db()->exec("
+                CREATE TABLE IF NOT EXISTS fbg_confirmation_backgrounds (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    egg_match VARCHAR(120) NOT NULL,
+                    image_path VARCHAR(512) NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY fbg_confirmation_backgrounds_egg_match_unique (egg_match)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+
+            return true;
+        } catch (Throwable $e) {
+            error_log('Unable to ensure confirmation background table: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgGetConfirmationBackgrounds')) {
+    function fbgGetConfirmationBackgrounds(): array
+    {
+        if (!fbgEnsureConfirmationBackgroundTable()) {
+            return [];
+        }
+
+        try {
+            $stmt = db()->query("
+                SELECT id, egg_match, image_path, created_at, updated_at
+                FROM fbg_confirmation_backgrounds
+                ORDER BY CHAR_LENGTH(egg_match) DESC, egg_match ASC
+            ");
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e) {
+            error_log('Unable to load confirmation backgrounds: ' . $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('fbgNormalizeConfirmationBackgroundPath')) {
+    function fbgNormalizeConfirmationBackgroundPath(string $imagePath): string
+    {
+        $imagePath = trim(str_replace(['"', "'", '\\'], '', $imagePath));
+
+        if ($imagePath === '') {
+            return '';
+        }
+
+        if (str_starts_with($imagePath, '/backend/img/backgrounds/')) {
+            return $imagePath;
+        }
+
+        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+            $parts = parse_url($imagePath);
+            $scheme = strtolower((string)($parts['scheme'] ?? ''));
+
+            if (in_array($scheme, ['http', 'https'], true)) {
+                return $imagePath;
+            }
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('fbgSaveConfirmationBackground')) {
+    function fbgSaveConfirmationBackground(string $eggMatch, string $imagePath): array
+    {
+        $eggMatch = strtolower(trim($eggMatch));
+        $imagePath = fbgNormalizeConfirmationBackgroundPath($imagePath);
+
+        if ($eggMatch === '' || strlen($eggMatch) > 120) {
+            return ['ok' => false, 'error' => 'Egg name is required and must be 120 characters or fewer.'];
+        }
+
+        if (!preg_match('/^[a-z0-9 ._()\\[\\]-]+$/', $eggMatch)) {
+            return ['ok' => false, 'error' => 'Egg name can only contain letters, numbers, spaces, dots, underscores, hyphens, and parentheses.'];
+        }
+
+        if ($imagePath === '') {
+            return ['ok' => false, 'error' => 'Choose a valid image URL or upload an image.'];
+        }
+
+        if (!fbgEnsureConfirmationBackgroundTable()) {
+            return ['ok' => false, 'error' => 'Confirmation image storage could not be prepared.'];
+        }
+
+        try {
+            $stmt = db()->prepare("
+                INSERT INTO fbg_confirmation_backgrounds (egg_match, image_path, created_at, updated_at)
+                VALUES (:egg_match, :image_path, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE image_path = VALUES(image_path), updated_at = NOW()
+            ");
+            $stmt->execute([
+                ':egg_match' => $eggMatch,
+                ':image_path' => $imagePath,
+            ]);
+
+            return ['ok' => true, 'error' => null];
+        } catch (Throwable $e) {
+            error_log('Unable to save confirmation background: ' . $e->getMessage());
+            return ['ok' => false, 'error' => 'Confirmation image could not be saved.'];
+        }
+    }
+}
+
+if (!function_exists('fbgDeleteConfirmationBackground')) {
+    function fbgDeleteConfirmationBackground(int $backgroundId): bool
+    {
+        if ($backgroundId <= 0 || !fbgEnsureConfirmationBackgroundTable()) {
+            return false;
+        }
+
+        try {
+            $stmt = db()->prepare('DELETE FROM fbg_confirmation_backgrounds WHERE id = :id LIMIT 1');
+            $stmt->execute([':id' => $backgroundId]);
+
+            return $stmt->rowCount() > 0;
+        } catch (Throwable $e) {
+            error_log('Unable to delete confirmation background: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('fbgResolveConfirmationBackgroundForContext')) {
+    function fbgResolveConfirmationBackgroundForContext(string ...$values): string
+    {
+        $haystack = strtolower(trim(implode(' ', array_filter($values, static fn($value) => trim((string)$value) !== ''))));
+
+        if ($haystack === '') {
+            return '';
+        }
+
+        foreach (fbgGetConfirmationBackgrounds() as $background) {
+            $eggMatch = strtolower(trim((string)($background['egg_match'] ?? '')));
+            $imagePath = fbgNormalizeConfirmationBackgroundPath((string)($background['image_path'] ?? ''));
+
+            if ($eggMatch !== '' && $imagePath !== '' && str_contains($haystack, $eggMatch)) {
+                return $imagePath;
+            }
+        }
+
+        return '';
     }
 }
 
@@ -3577,6 +3731,21 @@ if (!function_exists('fbgPurchaseShopGame')) {
                 'data' => [
                     'server_id' => $serverId,
                     'identifier' => $identifier,
+                    'egg_name' => (string)($egg['name'] ?? ''),
+                    'confirmation_background_image' => fbgResolveConfirmationBackgroundForContext(
+                        (string)($egg['name'] ?? ''),
+                        (string)($game['category_title'] ?? ''),
+                        (string)($game['name'] ?? '')
+                    ),
+                    'server_panel_url' => $identifier !== ''
+                        ? '/page.php?name=serverpanel&id=' . rawurlencode($identifier)
+                        : '/page.php?name=dashboard',
+                    'dashboard_url' => '/page.php?name=dashboard',
+                    'expires_at' => $expiresAt,
+                    'expires_at_display' => strtotime($expiresAt) !== false
+                        ? date('M j, Y', strtotime($expiresAt))
+                        : $expiresAt,
+                    'duration_days' => 30,
                     'balance' => $newCredit,
                     'balance_display' => fbgFormatCredit($newCredit),
                     'subtotal' => (float)$tax['subtotal'],

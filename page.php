@@ -53,6 +53,7 @@ $allowed = [
     'admin-payments'        => 'admin/payments.php',
     'admin-invoice-settings' => 'admin/invoice-settings.php',
     'admin-invoices'        => 'admin/invoices.php',
+    'admin-confirmation-backgrounds' => 'admin/confirmation-backgrounds.php',
     'admin-shop-categories' => 'admin/categories.php',
     'admin-shop-plans'      => 'admin/plans.php',
     'admin-registrations'   => 'admin/registrations.php',

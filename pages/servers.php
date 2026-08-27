@@ -324,6 +324,68 @@ document.addEventListener("DOMContentLoaded", () => {
         message.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
 
+    const invoicePayload = (invoice) => {
+        if (!invoice || !invoice.id || !invoice.invoice_number) {
+            return null;
+        }
+
+        return {
+            number: invoice.invoice_number,
+            url: `/page.php?name=invoice&id=${encodeURIComponent(invoice.id)}`
+        };
+    };
+
+    const showRentalConfirmation = (button, data) => {
+        if (typeof window.FBGPurchaseConfirmation !== "function") {
+            return false;
+        }
+
+        const serverPanelUrl = data.server_panel_url
+            || (data.identifier ? `/page.php?name=serverpanel&id=${encodeURIComponent(data.identifier)}` : "");
+
+        window.FBGPurchaseConfirmation({
+            type: "server_rental",
+            title: "Thanks for your order!",
+            message: "Your purchase was completed successfully.",
+            label: "Server Rental",
+            backgroundImage: data.confirmation_background_image || "",
+            backgroundKey: data.egg_name || button.dataset.gameName || button.dataset.planName || "",
+            eggName: data.egg_name || "",
+            gameName: button.dataset.gameName || "",
+            planName: button.dataset.planName || "",
+            details: [
+                { label: "Plan", value: button.dataset.planName || "Game Server" },
+                { label: "Game", value: button.dataset.gameName || "Game Server" },
+                { label: "Duration", value: `${data.duration_days || 30} days` },
+                { label: "Expiration Date", value: data.expires_at_display || "Pending" }
+            ],
+            totals: [
+                { label: "Price", value: button.dataset.subtotal || "-" },
+                { label: `Tax ${button.dataset.taxRate || "0.00"}%`, value: button.dataset.taxAmount || "-" },
+                { label: "Total", value: button.dataset.total || "-", total: true }
+            ],
+            balance: {
+                label: "Remaining Balance",
+                value: data.balance_display || button.dataset.balanceAfter || "-"
+            },
+            note: "Your server is being provisioned and installed and will appear in your dashboard shortly.",
+            invoice: invoicePayload(data.invoice),
+            actions: [
+                {
+                    label: "Dashboard",
+                    url: data.dashboard_url || "/page.php?name=dashboard"
+                },
+                {
+                    label: "Server Panel",
+                    url: serverPanelUrl || "/page.php?name=dashboard",
+                    primary: true
+                }
+            ]
+        });
+
+        return true;
+    };
+
     const openOrderModal = (button) => {
         if (!orderModal || !orderAgree || !orderConfirm) return false;
 
@@ -410,12 +472,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 stopProvisioningAnimation();
                 button.textContent = "Provisioned";
-                showMessage(payload.data?.message || "Server rental started and provisioning has begun.", "success");
+                const purchaseData = payload.data || {};
 
-                if (payload.data?.identifier) {
-                    setTimeout(() => {
-                        window.location.href = "/page.php?name=dashboard";
-                    }, 1500);
+                if (!showRentalConfirmation(button, purchaseData)) {
+                    showMessage(purchaseData.message || "Server rental started and provisioning has begun.", "success");
                 }
             } catch (error) {
                 stopProvisioningAnimation();

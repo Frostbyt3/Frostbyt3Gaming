@@ -172,6 +172,8 @@ if (!function_exists('getGameIcon')) {
         if (str_contains($source, 'enshrouded'))                    return '/backend/img/icons/enshrouded.png';
         if (str_contains($source, 'valheim'))                       return '/backend/img/icons/valheim2.png';
         if (str_contains($source, 'satisfactory'))                  return '/backend/img/icons/satisfactory.png';
+        if (str_contains($source, '7 days to die'))                 return '/backend/img/icons/7d2d.png';
+        if (str_contains($source, 'foundry'))                       return '/backend/img/icons/foundry.png';
 
         return '/backend/img/icons/default.png';
     }

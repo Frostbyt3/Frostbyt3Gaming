@@ -105,6 +105,10 @@ if (function_exists('asset')) {
             <a href="./page.php?name=admin-shop-plans" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-shop-plans', $currentAdminPage) ?>">
                 Plans
             </a>
+
+            <a href="./page.php?name=admin-confirmation-backgrounds" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-confirmation-backgrounds', $currentAdminPage) ?>">
+                Confirmation Images
+            </a>
         </div>
 
         <div class="fbg-admin-nav-group">

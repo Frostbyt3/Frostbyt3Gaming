@@ -978,6 +978,84 @@
     width: 58px;
 }
 
+.fbg-admin-confirmation-background-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.fbg-admin-confirmation-background-card {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.fbg-admin-confirmation-background-preview {
+    width: 96px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.fbg-admin-confirmation-background-preview:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(34, 174, 255, 0.22);
+}
+
+.fbg-admin-confirmation-background-preview img {
+    width: 96px;
+    aspect-ratio: 4 / 5;
+    border: 1px solid var(--fbg-border-soft);
+    border-radius: 8px;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.fbg-admin-confirmation-background-preview:hover img {
+    border-color: rgba(34, 174, 255, 0.55);
+    transform: translateY(-1px);
+}
+
+.fbg-admin-confirmation-background-card span {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--fbg-text-dark);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.fbg-admin-confirmation-background-card strong,
+.fbg-admin-confirmation-background-card code {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.fbg-admin-confirmation-background-card strong {
+    color: var(--fbg-white);
+}
+
+.fbg-admin-confirmation-background-card code {
+    margin-top: 8px;
+    color: var(--fbg-text-muted);
+    font-size: 0.78rem;
+}
+
+.fbg-admin-confirmation-background-card form {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+}
+
 .fbg-admin-form-actions {
     display: flex;
     gap: 12px;

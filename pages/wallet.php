@@ -13,11 +13,13 @@ if (empty($_SESSION['csrf_token'])) {
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $messages = [];
 $errors = [];
+$balanceUploadResult = null;
 
 if (!empty($_GET['stripe_session_id'])) {
     $result = fbgCompleteStripeBalanceCheckout($userId, trim((string)$_GET['stripe_session_id']));
 
     if (!empty($result['ok'])) {
+        $balanceUploadResult = $result;
         $messages[] = (string)($result['message'] ?? 'Account balance updated.');
     } else {
         $errors[] = (string)($result['error'] ?? 'Could not verify payment.');
@@ -28,6 +30,7 @@ if (($_GET['payment_provider'] ?? '') === 'paypal' && !empty($_GET['token'])) {
     $result = fbgCompletePayPalBalanceCheckout($userId, trim((string)$_GET['token']));
 
     if (!empty($result['ok'])) {
+        $balanceUploadResult = $result;
         $messages[] = (string)($result['message'] ?? 'Account balance updated.');
     } else {
         $errors[] = (string)($result['error'] ?? 'Could not verify PayPal payment.');
@@ -42,6 +45,65 @@ $currency = fbgGetShopCurrency();
 $paymentSettings = fbgGetShopPaymentSettings();
 $hasOnlineBalanceUploads = $paymentSettings['stripe_enabled'] || $paymentSettings['paypal_enabled'];
 $balance = fbgGetUserCreditBalance($userId);
+$purchaseConfirmation = null;
+
+if (is_array($balanceUploadResult) && is_array($balanceUploadResult['invoice'] ?? null)) {
+    $invoice = $balanceUploadResult['invoice'];
+    $addedAmount = (float)($invoice['subtotal'] ?? $invoice['total'] ?? 0);
+    $totalCharged = (float)($invoice['total'] ?? $addedAmount);
+    $invoiceId = (int)($invoice['id'] ?? 0);
+    $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
+
+    if ($addedAmount > 0) {
+        $purchaseConfirmation = [
+            'type' => 'balance_upload',
+            'title' => 'Thanks for your order!',
+            'message' => 'Your wallet balance was updated successfully.',
+            'label' => 'Balance Upload',
+            'currency' => $currency,
+            'details' => [
+                [
+                    'label' => 'Added',
+                    'value' => fbgFormatCredit($addedAmount, $currency),
+                ],
+                [
+                    'label' => 'Processing / Tax',
+                    'value' => fbgFormatCredit(0.0, $currency),
+                ],
+                [
+                    'label' => 'Total Charged',
+                    'value' => fbgFormatCredit($totalCharged, $currency),
+                ],
+            ],
+            'totals' => [],
+            'balance' => [
+                'label' => 'New Wallet Balance',
+                'value' => fbgFormatCredit($balance, $currency),
+            ],
+            'note' => '',
+            'invoice' => $invoiceId > 0 && $invoiceNumber !== ''
+                ? [
+                    'number' => $invoiceNumber,
+                    'url' => '/page.php?name=invoice&id=' . rawurlencode((string)$invoiceId),
+                ]
+                : null,
+            'actions' => [
+                [
+                    'label' => 'Manage Wallet',
+                    'url' => '/page.php?name=wallet',
+                    'primary' => true,
+                ],
+                [
+                    'label' => 'Browse Shop',
+                    'url' => '/page.php?name=servers',
+                ],
+            ],
+        ];
+
+        $messages = [];
+    }
+}
+
 $transactions = fbgGetUserPaymentHistory($userId);
 $frontendInvoices = fbgGetUserFrontendInvoices($userId);
 $serverPurchases = fbgGetUserServerPurchaseHistory($userId);
@@ -386,6 +448,16 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
         </div>
     </div>
 </section>
+
+<?php if (is_array($purchaseConfirmation)): ?>
+    <script>
+    window.addEventListener("DOMContentLoaded", () => {
+        if (typeof window.FBGPurchaseConfirmation === "function") {
+            window.FBGPurchaseConfirmation(<?php echo json_encode($purchaseConfirmation, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>);
+        }
+    });
+    </script>
+<?php endif; ?>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
