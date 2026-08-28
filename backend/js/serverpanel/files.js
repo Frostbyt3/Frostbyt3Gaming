@@ -3,6 +3,8 @@
     if (!filesPanel) return;
 
     const serverId = filesPanel.dataset.serverId || '';
+    const canArchiveFiles = filesPanel.dataset.canArchive === '1';
+    const canCreateFiles = filesPanel.dataset.canCreate === '1';
     let currentDirectory = filesPanel.dataset.directory || '/';
     let activeFloatingMenu = null;
     let activeMenuButton = null;
@@ -589,6 +591,50 @@
         return EDITABLE_EXTENSIONS.has(ext);
     }
 
+    function isArchiveFile(entry) {
+        if (!entry || !entry.is_file) return false;
+
+        const mimetype = String(entry.mime || entry.mimetype || '').toLowerCase();
+        const archiveMimeTypes = new Set([
+            'application/vnd.rar',
+            'application/x-rar-compressed',
+            'application/x-tar',
+            'application/x-br',
+            'application/x-bzip2',
+            'application/gzip',
+            'application/x-gzip',
+            'application/x-lzip',
+            'application/x-sz',
+            'application/x-xz',
+            'application/zstd',
+            'application/zip',
+            'application/x-7z-compressed'
+        ]);
+
+        if (archiveMimeTypes.has(mimetype)) {
+            return true;
+        }
+
+        const name = String(entry.name || '').toLowerCase();
+        return [
+            '.zip',
+            '.rar',
+            '.7z',
+            '.tar',
+            '.tar.gz',
+            '.tgz',
+            '.tar.bz2',
+            '.tbz2',
+            '.tar.xz',
+            '.txz',
+            '.tar.zst',
+            '.zst',
+            '.gz',
+            '.bz2',
+            '.xz'
+        ].some((ext) => name.endsWith(ext));
+    }
+
     function findEntryByPath(path) {
         const cleanPath = normalizePath(path);
         return (currentItems || []).find((entry) => normalizePath(entry.path || '/') === cleanPath) || null;
@@ -618,7 +664,7 @@
 
     function formatToastText(value) {
         return String(value || '')
-            .replace(/[*_#-]/g, '')
+            .replace(/[*_#]/g, '')
             .trim();
     }
 
@@ -1317,6 +1363,101 @@
             return;
         }
 
+        if (action === 'compress') {
+            const confirmed = await confirmFilesAction(
+                'Compress item?',
+                `Create a compressed copy of "${name}" in this folder?`,
+                'Compress',
+                'Cancel'
+            );
+            if (!confirmed) {
+                return;
+            }
+
+            const operationItem = createFileOperationItem(name, 'Compressing...');
+
+            try {
+                const payload = await postJson(
+                    '/api/server/files/compress.php',
+                    {
+                        id: serverId,
+                        path: path
+                    },
+                    'Invalid JSON from file compress endpoint:'
+                );
+
+                const archiveName = payload?.data?.archive_name || payload?.data?.archive?.name || '';
+                finishFileOperationItem(operationItem, 'Compression complete');
+
+                await loadFiles();
+
+                showFilesToast({
+                    type: 'success',
+                    title: 'File Manager',
+                    message: archiveName
+                        ? `# Item compressed:\n### ${formatToastText(archiveName)}`
+                        : `# Item compressed:\n### ${formatToastText(name)}`,
+                });
+            } catch (error) {
+                console.error('Compress error:', error);
+                failFileOperationItem(operationItem, 'Compression failed');
+
+                showFilesToast({
+                    type: 'error',
+                    title: 'File Manager',
+                    message: "We couldn't compress that item.\nPlease try again in a moment.",
+                });
+            }
+
+            return;
+        }
+
+        if (action === 'decompress') {
+            const confirmed = await confirmFilesAction(
+                'Decompress archive?',
+                `Existing files with matching names may be overwritten. This action could change your server files.\n\nArchive: ${name}`,
+                'Decompress',
+                'Cancel'
+            );
+            if (!confirmed) {
+                return;
+            }
+
+            const operationItem = createFileOperationItem(name, 'Decompressing...');
+
+            try {
+                await postJson(
+                    '/api/server/files/decompress.php',
+                    {
+                        id: serverId,
+                        path: path
+                    },
+                    'Invalid JSON from file decompress endpoint:'
+                );
+
+                finishFileOperationItem(operationItem, 'Decompression complete');
+
+                await loadFiles();
+
+                showFilesToast({
+                    type: 'success',
+                    title: 'File Manager',
+                    message: `# File decompressed:\n### ${formatToastText(name)}`,
+                });
+            } catch (error) {
+                console.error('Decompress error:', error);
+                failFileOperationItem(operationItem, 'Decompression failed');
+
+                showFilesToast({
+                    type: 'error',
+                    title: 'File Manager',
+                    message: "We couldn't decompress that file.\nPlease try again in a moment.",
+                });
+            }
+
+            return;
+        }
+
         if (action === 'delete') {
             const confirmed = await confirmFilesAction(
                 'Delete item?',
@@ -1401,6 +1542,7 @@
         const name = entry.name || 'Unnamed';
         const cleanPath = normalizePath(entry.path || '/');
         const isFile = !!entry.is_file;
+        const archiveFile = isArchiveFile(entry);
 
         const menuItems = [];
 
@@ -1446,6 +1588,36 @@
                 >
                     <i class="fas fa-folder-open"></i>
                     <span>Open</span>
+                </button>
+            `);
+        }
+
+        if (archiveFile && canCreateFiles) {
+            menuItems.push(`
+                <button
+                    type="button"
+                    class="fbg-files-action-item"
+                    data-files-action="decompress"
+                    data-path="${escapeHtml(cleanPath)}"
+                    data-name="${escapeHtml(name)}"
+                    data-is-file="1"
+                >
+                    <i class="fas fa-box-open"></i>
+                    <span>Decompress</span>
+                </button>
+            `);
+        } else if (canArchiveFiles) {
+            menuItems.push(`
+                <button
+                    type="button"
+                    class="fbg-files-action-item"
+                    data-files-action="compress"
+                    data-path="${escapeHtml(cleanPath)}"
+                    data-name="${escapeHtml(name)}"
+                    data-is-file="${isFile ? '1' : '0'}"
+                >
+                    <i class="fas fa-file-zipper"></i>
+                    <span>Compress</span>
                 </button>
             `);
         }
@@ -1725,6 +1897,59 @@
             bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
             bar.classList.toggle('is-error', !!isError);
         }
+    }
+
+    function createFileOperationItem(name, statusText) {
+        if (!uploadQueue) return null;
+
+        uploadQueue.hidden = false;
+
+        const item = document.createElement('div');
+        item.className = 'fbg-files-upload-item';
+        item.innerHTML = `
+            <div class="fbg-files-upload-top">
+                <div class="fbg-files-upload-name">${escapeHtml(name)}</div>
+                <div class="fbg-files-upload-status">${escapeHtml(statusText)}</div>
+            </div>
+            <div class="fbg-files-upload-progress">
+                <div class="fbg-files-upload-progress-bar is-indeterminate"></div>
+            </div>
+        `;
+
+        uploadQueue.prepend(item);
+        return item;
+    }
+
+    function removeFileOperationItem(item, delay = 3500) {
+        setTimeout(() => {
+            if (!item) return;
+
+            item.classList.add('is-completing');
+
+            setTimeout(() => {
+                item.remove();
+
+                if (uploadQueue && uploadQueue.children.length === 0) {
+                    uploadQueue.hidden = true;
+                }
+            }, 250);
+        }, delay);
+    }
+
+    function finishFileOperationItem(item, statusText) {
+        const bar = item?.querySelector('.fbg-files-upload-progress-bar');
+        bar?.classList.remove('is-indeterminate');
+        bar?.classList.add('is-success');
+        updateUploadItem(item, 100, statusText);
+        removeFileOperationItem(item);
+    }
+
+    function failFileOperationItem(item, statusText) {
+        const bar = item?.querySelector('.fbg-files-upload-progress-bar');
+        bar?.classList.remove('is-indeterminate');
+        bar?.classList.add('is-error');
+        updateUploadItem(item, 100, statusText, true);
+        removeFileOperationItem(item);
     }
 
     async function getUploadUrl() {

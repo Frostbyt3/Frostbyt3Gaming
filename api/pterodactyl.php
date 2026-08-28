@@ -207,7 +207,7 @@ if (!function_exists('pteroDatabaseManagementRequest')) {
 }
 
 if (!function_exists('pteroClientRequest')) {
-    function pteroClientRequest(string $method, string $endpoint, ?array $body = null): array
+    function pteroClientRequest(string $method, string $endpoint, ?array $body = null, int $timeout = 20): array
     {
         if (!defined('PTERO_CLIENT_API_KEY') || PTERO_CLIENT_API_KEY === '') {
             return [
@@ -232,7 +232,7 @@ if (!function_exists('pteroClientRequest')) {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST  => strtoupper($method),
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_TIMEOUT        => max(1, $timeout),
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
@@ -1324,6 +1324,29 @@ if (!function_exists('pteroUpdateServerDetails')) {
     }
 }
 
+if (!function_exists('pteroCleanFileNameList')) {
+    function pteroCleanFileNameList(array $files, string $errorPrefix): array
+    {
+        $cleanFiles = [];
+
+        foreach ($files as $file) {
+            $file = trim((string)$file);
+
+            if ($file === '' || $file === '.' || $file === '..') {
+                continue;
+            }
+
+            if (str_contains($file, '/') || str_contains($file, '\\')) {
+                throw new RuntimeException($errorPrefix . ' payload contains an invalid file name.');
+            }
+
+            $cleanFiles[] = $file;
+        }
+
+        return $cleanFiles;
+    }
+}
+
 if (!function_exists('pteroListServerFiles')) {
     function pteroListServerFiles(string $identifier, string $directory = '/'): array
     {
@@ -1352,6 +1375,93 @@ if (!function_exists('pteroListServerFiles')) {
         }
 
         return $items;
+    }
+}
+
+if (!function_exists('pteroCompressServerFiles')) {
+    function pteroCompressServerFiles(string $identifier, string $root, array $files): array
+    {
+        $identifier = trim($identifier);
+        $root = trim(str_replace('\\', '/', $root));
+
+        if ($identifier === '') {
+            throw new RuntimeException('Missing server identifier.');
+        }
+
+        if ($root === '') {
+            $root = '/';
+        }
+
+        if ($root[0] !== '/') {
+            $root = '/' . $root;
+        }
+
+        $cleanFiles = pteroCleanFileNameList($files, 'Compress');
+
+        if ($cleanFiles === []) {
+            throw new RuntimeException('No files were provided to compress.');
+        }
+
+        $result = pteroClientRequest(
+            'POST',
+            'servers/' . rawurlencode($identifier) . '/files/compress',
+            [
+                'root' => $root,
+                'files' => array_values($cleanFiles),
+            ],
+            300
+        );
+
+        if (!$result['ok']) {
+            throw new RuntimeException($result['error'] ?? 'Failed to compress item.');
+        }
+
+        $attributes = $result['data']['attributes'] ?? null;
+
+        return is_array($attributes) ? $attributes : [];
+    }
+}
+
+if (!function_exists('pteroDecompressServerFile')) {
+    function pteroDecompressServerFile(string $identifier, string $root, string $file): bool
+    {
+        $identifier = trim($identifier);
+        $root = trim(str_replace('\\', '/', $root));
+        $file = trim($file);
+
+        if ($identifier === '') {
+            throw new RuntimeException('Missing server identifier.');
+        }
+
+        if ($root === '') {
+            $root = '/';
+        }
+
+        if ($root[0] !== '/') {
+            $root = '/' . $root;
+        }
+
+        $cleanFiles = pteroCleanFileNameList([$file], 'Decompress');
+
+        if ($cleanFiles === []) {
+            throw new RuntimeException('No file was provided to decompress.');
+        }
+
+        $result = pteroClientRequest(
+            'POST',
+            'servers/' . rawurlencode($identifier) . '/files/decompress',
+            [
+                'root' => $root,
+                'file' => $cleanFiles[0],
+            ],
+            300
+        );
+
+        if (!$result['ok']) {
+            throw new RuntimeException($result['error'] ?? 'Failed to decompress item.');
+        }
+
+        return true;
     }
 }
 

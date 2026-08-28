@@ -52,10 +52,14 @@ function fbgBuildDirectoryBreadcrumbs(string $directory): array
 
 $breadcrumbs = fbgBuildDirectoryBreadcrumbs($requestedDir);
 $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
+$canArchiveFiles = isset($hasServerPermission) && is_callable($hasServerPermission) && $hasServerPermission('file.archive');
+$canCreateFiles = isset($hasServerPermission) && is_callable($hasServerPermission) && $hasServerPermission('file.create');
 ?>
 
 <div class="fbg-files-panel" data-server-id="<?php echo htmlspecialchars($serverIdentifier); ?>" 
     data-directory="<?php echo htmlspecialchars($requestedDir); ?>"
+    data-can-archive="<?php echo $canArchiveFiles ? '1' : '0'; ?>"
+    data-can-create="<?php echo $canCreateFiles ? '1' : '0'; ?>"
     data-editable-extensions="<?php echo htmlspecialchars(json_encode($editableExtensions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>"
     data-max-editor-file-size="<?php echo (int)$maxEditorFileSize; ?>">
     <div class="fbg-server-card-header">
