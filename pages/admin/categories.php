@@ -314,9 +314,13 @@ $currentAdminPage = 'admin-shop-categories';
         </header>
 
         <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Category Manager',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -494,7 +498,7 @@ $currentAdminPage = 'admin-shop-categories';
                                                     </button>
                                                 </form>
 
-                                                <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this category? Categories with plans cannot be deleted.');">
+                                                <form method="POST" style="display:inline;" onsubmit="event.preventDefault(); const form = this; window.FBGConfirm('Delete Category', 'Are you sure you want to delete this category? Categories with plans cannot be deleted.', 'Delete', 'Cancel', { variant: 'danger' }).then((confirmed) => { if (confirmed) form.submit(); }); return false;">
                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="id" value="<?= (int)$category['id'] ?>">

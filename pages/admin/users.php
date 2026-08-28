@@ -10,6 +10,7 @@
     require_once __DIR__ . '/../../includes/functions.php';
     require_once __DIR__ . '/../../includes/pagination.php';
     require_once __DIR__ . '/../../api/pterodactyl.php';
+    require_once __DIR__ . '/../../includes/registration.php';
 
     requireLogin();
 
@@ -544,13 +545,14 @@
 
             $result = pteroRequest('DELETE', 'users/' . $userId);
             if (empty($result['ok']) && (int)($result['status'] ?? 0) !== 204) {
-                fbgAdminUsersRedirect((string)($result['error'] ?? 'User could not be deleted from Pterodactyl.'), 'error', $userId);
+                fbgAdminUsersRedirect((string)($result['error'] ?? 'User could not be deleted.'), 'error', $userId);
             }
 
             $deleteAccess = db()->prepare('DELETE FROM admin_access WHERE user_id = :user_id');
             $deleteAccess->execute(['user_id' => $userId]);
 
-            fbgAdminUsersRedirect('User deleted successfully.');
+            fbgDeleteRegistrationById((string)$user['email'],(string)$user['username']);
+            fbgAdminUsersRedirect('User deleted successfully.', 'warning');
         }
 
         fbgAdminUsersRedirect('Unknown user action.', 'error', $userId);
@@ -676,9 +678,13 @@
         </header>
 
         <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'User Manager',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">

@@ -233,8 +233,10 @@ function fbgShopPlansNodeIdsFromCsv(string $nodeIds): array
     ), static fn(int $id): bool => $id > 0)));
 }
 
-$message = '';
-$messageType = 'success';
+$message = $_SESSION['admin_shop_plans_message'] ?? null;
+$messageType = (string)($_SESSION['admin_shop_plans_message_type'] ?? 'success');
+unset($_SESSION['admin_shop_plans_message'], $_SESSION['admin_shop_plans_message_type']);
+
 $editing = null;
 $categories = fbgShopPlansFetchCategories();
 $nodes = fbgShopPlansFetchNodes();
@@ -460,8 +462,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute(['id' => $id]);
 
             $message = 'Plan deleted successfully.';
+            $messageType = 'warning';
 
             if (isset($_GET['edit']) && (int)$_GET['edit'] === $id) {
+                $_SESSION['admin_shop_plans_message'] = $message;
+                $_SESSION['admin_shop_plans_message_type'] = $messageType;
+                
                 fbgRedirect('/page.php?name=admin-shop-plans&category_id=' . $selectedCategoryId);
             }
         } catch (Throwable $e) {
@@ -552,10 +558,14 @@ $selectedNodeIds = fbgShopPlansNodeIdsFromCsv((string)($editing['node_ids'] ?? '
             </div>
         </header>
 
-        <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+        <?php if ($message !== null): ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Plans',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -887,7 +897,26 @@ $selectedNodeIds = fbgShopPlansNodeIdsFromCsv((string)($editing['node_ids'] ?? '
                                                     </button>
                                                 </form>
 
-                                                <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this plan? Plans with linked servers cannot be deleted.');">
+                                                <form
+                                                    method="POST"
+                                                    style="display:inline;"
+                                                    onsubmit="
+                                                        event.preventDefault();
+                                                        const form = this;
+
+                                                        window.FBGConfirm({
+                                                            title: 'Delete Server Plan',
+                                                            message: 'Are you sure you want to delete this server plan? This action cannot be undone.',
+                                                            confirmLabel: 'Delete',
+                                                            cancelLabel: 'Cancel',
+                                                            variant: 'danger'
+                                                        }).then((confirmed) => {
+                                                            if (confirmed) {
+                                                                form.submit();
+                                                            }
+                                                        });
+
+                                                        return false;">
                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="id" value="<?= (int)$plan['id'] ?>">

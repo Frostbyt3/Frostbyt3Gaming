@@ -23,7 +23,7 @@
 
     $currentAdminPage = 'admin-link-shortener';
     $rootDir = dirname(__DIR__, 2);
-    $message = '';
+    $message = null;
     $messageType = 'success';
     $createdShortUrl = null;
 
@@ -76,7 +76,7 @@
                         ]);
 
                         $createdShortUrl = 'https://frostbyt3gaming.com/' . $slug;
-                        $message = 'Short link created successfully.';
+                        $message = "Short link **'" . $slug . "'** created successfully.";
                         $messageType = 'success';
                     }
                 }
@@ -94,8 +94,8 @@
                     ');
                     $deleteStmt->execute(['slug' => $slug]);
 
-                    $message = "Link '{$slug}' deleted successfully.";
-                    $messageType = 'success';
+                    $message = "Short link **'" . $slug . "'** deleted successfully.";
+                    $messageType = 'warning';
                 }
             }
         }
@@ -122,25 +122,14 @@
             </div>
         </header>
 
-        <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($createdShortUrl !== null): ?>
-            <div class="fbg-dashboard-alert is-visible" style="margin-bottom: 20px;">
-                Short link:
-                <a href="<?= htmlspecialchars($createdShortUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">
-                    <?= htmlspecialchars($createdShortUrl, ENT_QUOTES, 'UTF-8') ?>
-                </a>
-
-                <div style="margin-top: 12px;">
-                    <button type="button" class="btn btn-sm" onclick="copyToClipboard('<?= htmlspecialchars($createdShortUrl, ENT_QUOTES, 'UTF-8') ?>', this)">
-                        Copy to Clipboard
-                    </button>
-                </div>
-            </div>
+        <?php if ($message !== null): ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Short Links Manager',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -231,11 +220,11 @@
                                                     Copy
                                                 </button>
 
-                                                <form method="POST" class="fbg-admin-inline-form">
+                                                <form method="POST" class="fbg-admin-inline-form" onsubmit="event.preventDefault(); const form = this; window.FBGConfirm('Delete Short Link', 'Are you sure you want to delete this short link? This action cannot be undone.', 'Delete', 'Cancel', { variant: 'danger' }).then((confirmed) => { if (confirmed) form.submit(); }); return false;">
                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="slug" value="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">
-                                                    <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Delete this link?')">
+                                                    <button type="submit" class="btn btn-sm btn-delete">
                                                         Delete
                                                     </button>
                                                 </form>

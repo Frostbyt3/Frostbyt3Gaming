@@ -183,9 +183,13 @@ $currencyFallback = fbgGetShopCurrency();
         </header>
 
         <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Invoices',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">

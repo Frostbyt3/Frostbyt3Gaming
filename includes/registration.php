@@ -283,7 +283,7 @@ function fbgMarkPendingRegistrationConsumed(int $id): bool
     return $stmt->rowCount() > 0;
 }
 
-function fbgDeletePendingRegistration(int $id): bool
+function fbgDeleteRegistration(int $id): bool
 {
     if ($id <= 0) {
         return false;
@@ -294,8 +294,7 @@ function fbgDeletePendingRegistration(int $id): bool
 
     $stmt = $pdo->prepare(
         'DELETE FROM pending_registrations
-         WHERE id = :id
-           AND consumed_at IS NULL'
+         WHERE id = :id'
     );
 
     $stmt->execute([
@@ -303,6 +302,25 @@ function fbgDeletePendingRegistration(int $id): bool
     ]);
 
     return $stmt->rowCount() > 0;
+}
+
+function fbgDeleteRegistrationById(string $email, string $username): int
+{
+    fbgEnsurePendingRegistrationSecuritySchema();
+    $pdo = fbgPendingRegistrationDb();
+
+    $stmt = $pdo->prepare(
+        'DELETE FROM pending_registrations
+         WHERE email = :email
+            OR username = :username'
+    );
+
+    $stmt->execute([
+        ':email' => $email,
+        ':username' => $username,
+    ]);
+
+    return $stmt->rowCount();
 }
 
 function fbgMarkPendingRegistrationManuallyApproved(int $id, int $adminId, string $reason): bool

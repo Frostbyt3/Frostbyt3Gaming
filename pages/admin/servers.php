@@ -25,7 +25,7 @@
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    $message = (string)($_SESSION['admin_servers_message'] ?? '');
+    $message = $_SESSION['admin_servers_message'] ?? null;
     $messageType = (string)($_SESSION['admin_servers_message_type'] ?? 'success');
     unset($_SESSION['admin_servers_message'], $_SESSION['admin_servers_message_type']);
 
@@ -1005,7 +1005,7 @@
                 fbgAdminServersRedirect(fbgAdminServersDatabaseApiError($result, 'Database could not be deleted.'), 'error', $serverId, 'database');
             }
 
-            fbgAdminServersRedirect('Database deleted successfully.', 'success', $serverId, 'database');
+            fbgAdminServersRedirect('Database deleted successfully.', 'warning', $serverId, 'database');
         }
 
         if ($action === 'attach_mount' || $action === 'detach_mount') {
@@ -1078,7 +1078,7 @@
                 'server_id' => $serverId,
             ]);
 
-            fbgAdminServersRedirect('Mount removed successfully.', 'success', $serverId, 'mounts');
+            fbgAdminServersRedirect('Mount removed successfully.', 'warning', $serverId, 'mounts');
         }
 
         if ($action === 'reinstall_server') {
@@ -1112,7 +1112,7 @@
                 $nextStatus === 'installing'
                     ? 'Server marked as installing.'
                     : 'Server marked as installed.',
-                'success',
+                $nextStatus === 'installing' ? 'warning' : 'success',
                 $serverId,
                 'manage'
             );
@@ -1143,7 +1143,7 @@
 
             fbgAdminServersRedirect(
                 $isSuspended ? 'Server unsuspended successfully.' : 'Server suspended successfully.',
-                'success',
+                $isSuspended ? 'success' : 'warning',
                 $serverId,
                 'manage'
             );
@@ -1164,7 +1164,7 @@
                 );
             }
 
-            fbgAdminServersRedirect('Server deleted successfully.', 'success');
+            fbgAdminServersRedirect('Server deleted successfully.', 'warning');
         }
 
         if ($action === 'force_delete_server') {
@@ -1178,7 +1178,7 @@
                 );
             }
 
-            fbgAdminServersRedirect('Server force deleted successfully.', 'success');
+            fbgAdminServersRedirect('Server force deleted successfully.', 'warning');
         }
 
         fbgAdminServersRedirect('Unknown server action.', 'error', $serverId);
@@ -1663,10 +1663,14 @@
             </div>
         </header>
 
-        <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+        <?php if ($message !== null): ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Server Manager',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -1832,12 +1836,6 @@
                 <h3 id="admin-server-create-title">Create Server</h3>
                 <p>Add a new server to the panel with Pterodactyl-managed resources, startup settings, and service variables.</p>
             </div>
-
-            <?php if ($message !== ''): ?>
-                <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 18px;">
-                    <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-                </div>
-            <?php endif; ?>
 
             <form method="POST" class="fbg-admin-form" id="admin-server-create-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
@@ -2081,12 +2079,6 @@
                 <h3 id="admin-server-edit-title"><?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?></h3>
                 <p>Review server ownership, node placement, allocation, resources, and upcoming administrative controls.</p>
             </div>
-
-            <?php if ($message !== ''): ?>
-                <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 18px;">
-                    <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-                </div>
-            <?php endif; ?>
 
             <div class="fbg-admin-server-tabs" role="tablist" aria-label="Server administration sections">
                 <?php
@@ -2538,7 +2530,7 @@
             <section class="fbg-admin-server-tab-panel<?= $activeServerTab === 'database' ? ' is-active' : '' ?>" data-admin-server-panel="database" <?= $activeServerTab === 'database' ? '' : 'hidden' ?>>
                 <div class="fbg-admin-server-about-grid">
                     <div>
-                        <div class="fbg-dashboard-alert is-visible" style="margin-bottom: 18px;">
+                        <div class="fbg-admin-inline-note" style="margin-bottom: 18px;">
                             Database passwords can be viewed when visiting this server on the frontend panel.
                         </div>
 
@@ -2592,7 +2584,7 @@
                                                                 </button>
                                                             </form>
 
-                                                            <form method="POST" onsubmit="return confirm('Delete database <?= htmlspecialchars((string)$database['database'], ENT_QUOTES, 'UTF-8') ?>? This cannot be undone.');">
+                                                            <form method="POST" onsubmit="event.preventDefault(); const form = this; window.FBGConfirm('Delete Database', <?= json_encode('Are you sure you want to delete database "' . (string)$database['database'] . '"? This action cannot be undone.', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>, 'Delete', 'Cancel', { variant: 'danger' }).then((confirmed) => { if (confirmed) form.submit(); }); return false;">
                                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                                 <input type="hidden" name="action" value="delete_database">
                                                                 <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
@@ -2638,11 +2630,11 @@
                             ?>
 
                             <?php if ($databaseLimitReached): ?>
-                                <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                                <div class="fbg-admin-warning-box" style="margin-bottom: 18px;">
                                     This server is at its database limit. Increase the Database Limit on the Build Configuration tab before creating another database.
                                 </div>
                             <?php elseif (!$hasAvailableDatabaseHost): ?>
-                                <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                                <div class="fbg-admin-warning-box" style="margin-bottom: 18px;">
                                     No database hosts are currently available.
                                 </div>
                             <?php endif; ?>
@@ -2808,7 +2800,7 @@
                     <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
                         <h3>Safely Delete Server</h3>
                         <p>This action will attempt to delete the server from both the panel and daemon. If either one reports an error the action will be cancelled.</p>
-                        <div class="fbg-dashboard-alert error is-visible" style="margin: 14px 0 18px;">
+                        <div class="fbg-admin-warning-box" style="margin: 14px 0 18px;">
                             Deleting a server is an irreversible action. All server data, including files and users, will be removed from the system.
                         </div>
                         <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
@@ -2819,7 +2811,7 @@
                     <div class="fbg-admin-server-detail-list" style="border-top: 2px solid #ef4444;">
                         <h3>Force Delete Server</h3>
                         <p>This action will attempt to delete the server from both the panel and daemon. If the daemon does not respond, or reports an error, the deletion will continue.</p>
-                        <div class="fbg-dashboard-alert error is-visible" style="margin: 14px 0 18px;">
+                        <div class="fbg-admin-warning-box" style="margin: 14px 0 18px;">
                             Deleting a server is an irreversible action. All server data, including files and users, will be removed from the system. This method may leave dangling files on your daemon if it reports an error.
                         </div>
                         <div class="fbg-admin-form-actions" style="justify-content: flex-start;">
@@ -2836,7 +2828,7 @@
                         <h3 id="admin-server-reinstall-title">Confirm Reinstall</h3>
                         <p>This will stop the server and re-run its installation script. Files may be deleted or modified during this process.</p>
                     </div>
-                    <div class="fbg-dashboard-alert error is-visible" style="margin-bottom: 18px;">
+                    <div class="fbg-admin-warning-box" style="margin-bottom: 18px;">
                         This is a destructive action. Make sure any needed files are backed up first.
                     </div>
                     <form method="POST" class="fbg-admin-form-actions" style="justify-content: flex-end;">
@@ -2923,7 +2915,7 @@
                             <p class="fbg-admin-help-text">Additional ports to assign to this server on transfer.</p>
                         </div>
 
-                        <div class="fbg-dashboard-alert" style="display:block; margin-top: 16px;">
+                        <div class="fbg-admin-inline-note" style="display:block; margin-top: 16px;">
                             Transfer execution has not been reconnected yet. This restores the modal UI so we can finish wiring the backend workflow cleanly next.
                         </div>
 

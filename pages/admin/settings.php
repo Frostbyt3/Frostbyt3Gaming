@@ -62,7 +62,7 @@ function settingsPostedInt(string $key, int $default, int $min, int $max): strin
     return (string)max($min, min($max, (int)$value));
 }
 
-$message = '';
+$message = null;
 $messageType = 'success';
 $currentAdminPage = 'admin-settings';
 
@@ -114,6 +114,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($messageText === '') {
             $messageText = 'We are currently performing maintenance. Please check back shortly.';
+            $message = 'Maintenance settings updated. The default maintenance message was used.';
+            $messageType = 'warning';
+        } else {
+            $message = 'Maintenance settings updated.';
+            $messageType = 'success';
         }
 
         $stmt = db()->prepare("
@@ -131,9 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         fbgResetSettingsCache();
-
-        $message = 'Maintenance settings updated.';
-        $messageType = 'success';
     }
 }
 ?>
@@ -150,10 +152,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </header>
 
-        <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+        <?php if ($message !== null): ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Settings',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">

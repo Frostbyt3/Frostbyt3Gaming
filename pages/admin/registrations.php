@@ -29,7 +29,7 @@
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    $message = (string)($_SESSION['admin_registration_message'] ?? '');
+    $message = $_SESSION['admin_registration_message'] ?? null;
     $messageType = (string)($_SESSION['admin_registration_message_type'] ?? 'success');
     unset($_SESSION['admin_registration_message'], $_SESSION['admin_registration_message_type']);
 
@@ -86,7 +86,7 @@
             $deleted = fbgCleanupExpiredPendingRegistrations();
 
             fbgAdminRegistrationRedirect(
-                'Registration cleanup complete. Marked ' . $marked . ' expired and deleted ' . $deleted . ' retained row(s).'
+                'Registration cleanup complete. Marked ' . $marked . ' expired and deleted ' . $deleted . ' retained row(s).', 'info'
             );
         }
 
@@ -97,17 +97,17 @@
             fbgAdminRegistrationRedirect('Registration could not be found.', 'error');
         }
 
-        if (!empty($pending['consumed_at'])) {
-            fbgAdminRegistrationRedirect('That registration has already been completed.', 'error');
-        }
-
         if ($action === 'delete_registration') {
-            $deleted = fbgDeletePendingRegistration((int)$pending['id']);
+            $deleted = fbgDeleteRegistration((int)$pending['id']);
 
             fbgAdminRegistrationRedirect(
-                $deleted ? 'Pending registration deleted.' : 'Pending registration could not be deleted.',
-                $deleted ? 'success' : 'error'
+                $deleted ? 'Registration deleted.' : 'Registration could not be deleted.',
+                $deleted ? 'warning' : 'error'
             );
+        }
+
+        if (!empty($pending['consumed_at'])) {
+            fbgAdminRegistrationRedirect('That registration has already been completed.', 'error');
         }
 
         if (!empty($pending['rejected_at'])) {
@@ -368,10 +368,14 @@
             </div>
         </header>
 
-        <?php if ($message !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $messageType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+        <?php if ($message !== null): ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($messageType) ?>,
+                    title: 'Registrations Manager',
+                    message: <?= json_encode($message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -455,8 +459,8 @@
 
                             <?php foreach ($registrations as $registration): ?>
                                 <?php
-                                $canDelete = empty($registration['consumed_at']);
-                                $canModify = $canDelete && empty($registration['rejected_at']);
+                                $canDelete = true;
+                                $canModify = empty($registration['consumed_at']) && empty($registration['rejected_at']);
                                 $canManualApprove = $canModify && empty($registration['email_verified_at']);
                                 $canSetPassword = $canModify && !empty($registration['email_verified_at']);
                                 $registrationLabel = trim((string)($registration['username'] ?? ''));
@@ -522,7 +526,23 @@
                                                         <form
                                                             method="POST"
                                                             class="fbg-registration-actions-form"
-                                                            onsubmit="return confirm('Delete this pending registration? This cannot be undone.');">
+                                                            onsubmit="
+                                                                event.preventDefault();
+                                                                const form = this;
+
+                                                                window.FBGConfirm({
+                                                                    title: 'Delete Pending Registration',
+                                                                    message: 'Are you sure you want to delete this registration record? This action cannot be undone.',
+                                                                    confirmLabel: 'Delete',
+                                                                    cancelLabel: 'Cancel',
+                                                                    variant: 'danger'
+                                                                }).then((confirmed) => {
+                                                                    if (confirmed) {
+                                                                        form.submit();
+                                                                    }
+                                                                });
+
+                                                                return false;">
                                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                             <input type="hidden" name="action" value="delete_registration">
                                                             <input type="hidden" name="registration_id" value="<?= (int)$registration['id'] ?>">

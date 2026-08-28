@@ -229,16 +229,24 @@ $currentAdminPage = 'admin-file-upload';
         </header>
 
         <?php if (!empty($_SESSION['flash_msg'])): ?>
-            <div class="fbg-dashboard-alert <?= ($_SESSION['flash_msg_type'] ?? 'success') === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars((string)$_SESSION['flash_msg'], ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($_SESSION['flash_msg_type'] ?? 'success') ?>,
+                    title: 'File Upload',
+                    message: <?= json_encode((string)$_SESSION['flash_msg'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
             <?php unset($_SESSION['flash_msg'], $_SESSION['flash_msg_type']); ?>
         <?php endif; ?>
 
         <?php if ($msg !== ''): ?>
-            <div class="fbg-dashboard-alert <?= $msgType === 'error' ? 'error' : 'success' ?> is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($msgType === 'error' ? 'error' : 'success') ?>,
+                    title: 'File Upload',
+                    message: <?= json_encode($msg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -331,13 +339,12 @@ $currentAdminPage = 'admin-file-upload';
                                                     Copy Link
                                                 </button>
 
-                                                <form method="POST" class="fbg-admin-inline-form">
+                                                <form method="POST" class="fbg-admin-inline-form" onsubmit="event.preventDefault(); const form = this; window.FBGConfirm('Delete File', 'Are you sure you want to delete this file permanently? This action cannot be undone.', 'Delete', 'Cancel', { variant: 'danger' }).then((confirmed) => { if (confirmed) form.submit(); }); return false;">
                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                                     <input type="hidden" name="delete_file" value="<?= htmlspecialchars((string)$file['name'], ENT_QUOTES, 'UTF-8') ?>">
                                                     <button
                                                         type="submit"
                                                         class="btn btn-sm btn-delete"
-                                                        onclick="return confirm('Delete this file permanently?');"
                                                     >
                                                         Delete
                                                     </button>

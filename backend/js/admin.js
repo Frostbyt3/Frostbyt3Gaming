@@ -1,17 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const alerts = document.querySelectorAll('.fbg-dashboard-alert.is-visible');
-
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            alert.classList.remove('is-visible');
-            alert.classList.add('is-hiding');
-
-            setTimeout(() => {
-                alert.remove();
-            }, 400);
-        }, 3000);
-    });
-
     const initSortableTable = (sortableBody, reorderForm, idAttribute, orderSelector) => {
         if (!sortableBody || !reorderForm) {
             return;

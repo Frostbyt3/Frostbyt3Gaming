@@ -76,15 +76,16 @@ $currentAdminPage = 'admin-webp-png';
 
                        <div class="fbg-admin-inline-options">
                             <div class="fbg-admin-radio-group">
-                            <label class="fbg-admin-radio-option">
-                                <input type="radio" name="mode" value="upload" checked>
-                                <span>Upload File</span>
-                            </label>
+                                <label class="fbg-admin-radio-option">
+                                    <input type="radio" name="mode" value="upload" checked>
+                                    <span>Upload File</span>
+                                </label>
 
-                            <label class="fbg-admin-radio-option">
-                                <input type="radio" name="mode" value="url">
-                                <span>From URL</span>
-                            </label>
+                                <label class="fbg-admin-radio-option">
+                                    <input type="radio" name="mode" value="url">
+                                    <span>From URL</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -158,6 +159,16 @@ $currentAdminPage = 'admin-webp-png';
     const radios = document.querySelectorAll('input[name="mode"]');
     const form = document.getElementById('fbg-webp2png-form');
 
+    function showWebpToast(message) {
+        if (typeof window.FBGToast === 'function') {
+            window.FBGToast({
+                type: 'warning',
+                title: 'WEBP to PNG Converter',
+                message,
+            });
+        }
+    }
+
     function setMode(mode) {
         uploadBlock.style.display = mode === 'url' ? 'none' : '';
         urlBlock.style.display = mode === 'url' ? '' : 'none';
@@ -172,13 +183,13 @@ $currentAdminPage = 'admin-webp-png';
 
         if (selectedMode === 'upload' && (!fileInput.files || !fileInput.files[0])) {
             event.preventDefault();
-            alert('Select a WEBP file first.');
+            showWebpToast('Select a WEBP file first.');
             return;
         }
 
         if (selectedMode === 'url' && !urlInput.value.trim()) {
             event.preventDefault();
-            alert('Paste a WEBP URL first.');
+            showWebpToast('Paste a WEBP URL first.');
         }
     });
 

@@ -60,11 +60,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_image'])) {
     if (is_file($targetPath)) {
         if (@unlink($targetPath)) {
             $_SESSION['flash_msg'] = "Deleted: {$fileToDelete}";
+            $_SESSION['flash_msg_type'] = 'success';
         } else {
             $_SESSION['flash_msg'] = "Failed to delete: {$fileToDelete}";
+            $_SESSION['flash_msg_type'] = 'error';
         }
     } else {
         $_SESSION['flash_msg'] = "File not found: {$fileToDelete}";
+        $_SESSION['flash_msg_type'] = 'error';
     }
 
     header('Location: ./page.php?name=admin-image-upload');
@@ -196,28 +199,37 @@ $currentAdminPage = 'admin-image-upload';
         </header>
 
         <?php if (!empty($_SESSION['flash_msg'])): ?>
-            <div class="fbg-dashboard-alert success is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars((string)$_SESSION['flash_msg'], ENT_QUOTES, 'UTF-8') ?>
-            </div>
-            <?php unset($_SESSION['flash_msg']); ?>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($_SESSION['flash_msg_type'] ?? 'success') ?>,
+                    title: 'Image Upload',
+                    message: <?= json_encode((string)$_SESSION['flash_msg'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
+            <?php unset($_SESSION['flash_msg'], $_SESSION['flash_msg_type']); ?>
         <?php endif; ?>
 
         <?php if ($msg !== ''): ?>
-            <div class="fbg-dashboard-alert success is-visible" style="margin-bottom: 20px;">
-                <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: <?= json_encode($msg === 'Upload successful!' ? 'success' : 'error') ?>,
+                    title: 'Image Upload',
+                    message: <?= json_encode($msg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <?php if ($uploadedUrl !== null): ?>
             <?php
             $fullUrl = $scheme . '://' . $_SERVER['HTTP_HOST'] . $uploadedUrl;
             ?>
-            <div class="fbg-dashboard-alert is-visible" style="margin-bottom: 20px;">
-                Uploaded file:
-                <a href="<?= htmlspecialchars($fullUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">
-                    <?= htmlspecialchars($fullUrl, ENT_QUOTES, 'UTF-8') ?>
-                </a>
-            </div>
+            <script>
+                window.FBGToast?.({
+                    type: 'info',
+                    title: 'Image Upload',
+                    message: <?= json_encode("Uploaded file:\n{$fullUrl}", JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+                });
+            </script>
         <?php endif; ?>
 
         <div class="fbg-admin-grid">
@@ -306,13 +318,12 @@ $currentAdminPage = 'admin-image-upload';
                                         Copy link
                                     </button>
 
-                                    <form method="POST" class="fbg-admin-inline-form" style="margin-top: 8px;">
+                                    <form method="POST" class="fbg-admin-inline-form" style="margin-top: 8px;" onsubmit="event.preventDefault(); const form = this; window.FBGConfirm('Delete Image', 'Are you sure you want to delete this image permanently? This action cannot be undone.', 'Delete', 'Cancel', { variant: 'danger' }).then((confirmed) => { if (confirmed) form.submit(); }); return false;">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="delete_image" value="<?= htmlspecialchars((string)$img['name'], ENT_QUOTES, 'UTF-8') ?>">
                                         <button
                                             type="submit"
                                             class="btn btn-sm btn-delete"
-                                            onclick="return confirm('Delete this image permanently?');"
                                         >
                                             Delete
                                         </button>
