@@ -71,7 +71,6 @@ if ($variableKey === '' && $dockerImage === '') {
 
 try {
     pteroEnsureServerAccessSession(false);
-    pteroRequireServerPermission($serverIdentifier, 'startup.update');
 
     $selectedServer = pteroGetSessionServerMeta($serverIdentifier);
 
@@ -93,22 +92,12 @@ try {
     |--------------------------------------------------------------------------
     */
     if ($dockerImage !== '') {
-        $serverId = (int)($selectedServer['id'] ?? 0);
-        $eggId = (int)($selectedServer['egg_id'] ?? $selectedServer['egg'] ?? 0);
-
-        if ($serverId <= 0) {
-            startupJsonResponse(400, [
-                'ok' => false,
-                'error' => 'Invalid server ID.',
-            ]);
-        }
+        pteroRequireServerPermission($serverIdentifier, 'startup.docker-image');
 
         $startupData = pteroGetServerStartup($serverIdentifier);
         $payload = is_array($startupData['data'] ?? null) ? $startupData['data'] : [];
         $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
-        $variables = is_array($payload['data'] ?? null) ? $payload['data'] : [];
 
-        $startupCommand = (string)($meta['startup_command'] ?? $meta['startup'] ?? '');
         $currentDockerImage = (string)($meta['docker_image'] ?? $meta['image'] ?? '');
         $availableDockerImages = is_array($meta['docker_images'] ?? null) ? $meta['docker_images'] : [];
 
@@ -130,30 +119,9 @@ try {
             ]);
         }
 
-        $environment = [];
-
-        foreach ($variables as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $envKey = (string)($item['env_variable'] ?? $item['envVariable'] ?? '');
-            if ($envKey === '') {
-                continue;
-            }
-
-            $environment[$envKey] = (string)($item['server_value'] ?? $item['value'] ?? '');
-        }
-
         session_write_close();
 
-        $result = pteroUpdateServerStartupSettings(
-            $serverId,
-            $startupCommand,
-            $environment,
-            $eggId,
-            $dockerImage
-        );
+        $result = pteroUpdateServerDockerImage($serverIdentifier, $dockerImage);
 
         if (empty($result['ok'])) {
             startupJsonResponse((int)($result['status'] ?? 500), [
@@ -177,6 +145,8 @@ try {
     | Startup variable update
     |--------------------------------------------------------------------------
     */
+    pteroRequireServerPermission($serverIdentifier, 'startup.update');
+
     session_write_close();
 
     $result = pteroUpdateServerStartupVariable($serverIdentifier, $variableKey, $value);

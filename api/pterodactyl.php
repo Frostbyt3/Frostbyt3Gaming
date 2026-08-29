@@ -1963,8 +1963,9 @@ if (!function_exists('pteroSubuserPermissionCatalog')) {
                 'user.delete' => 'Delete subusers',
             ],
             'Startup' => [
-                'startup.read'   => 'View startup settings',
-                'startup.update' => 'Edit startup settings',
+                'startup.read'         => 'View startup settings',
+                'startup.update'       => 'Edit startup variables',
+                'startup.docker-image' => 'Change the Docker image used to run the server',
             ],
             'Settings' => [
                 'settings.rename'    => 'Allows a user to rename this server and change the description of it.',
@@ -2065,6 +2066,7 @@ if (!function_exists('pteroSubuserPermissionTemplates')) {
                     'schedule.delete',
                     'startup.read',
                     'startup.update',
+                    'startup.docker-image',
                     'settings.rename',
                     'settings.reinstall',
                     'activity.read',
@@ -2986,6 +2988,36 @@ if (!function_exists('pteroUpdateServerStartupSettings')) {
         ];
 
         return pteroRequest('PATCH', "servers/{$serverId}/startup", $payload);
+    }
+}
+
+if (!function_exists('pteroUpdateServerDockerImage')) {
+    function pteroUpdateServerDockerImage(string $serverIdentifier, string $dockerImage): array
+    {
+        $serverIdentifier = trim($serverIdentifier);
+        $dockerImage = trim($dockerImage);
+
+        if ($serverIdentifier === '') {
+            return [
+                'ok' => false,
+                'status' => 0,
+                'error' => 'Missing server identifier.',
+                'data' => null,
+            ];
+        }
+
+        if ($dockerImage === '') {
+            return [
+                'ok' => false,
+                'status' => 0,
+                'error' => 'Missing Docker image.',
+                'data' => null,
+            ];
+        }
+
+        return pteroClientRequest('PUT', "servers/{$serverIdentifier}/settings/docker-image", [
+            'docker_image' => $dockerImage,
+        ]);
     }
 }
 

@@ -5,6 +5,7 @@
     const serverId = panel.dataset.serverId || '';
     const csrfToken = panel.dataset.csrfToken || '';
     const canUpdate = panel.dataset.canUpdate === '1';
+    const canUpdateDockerImage = panel.dataset.canUpdateDockerImage === '1';
 
     const contentEl = document.getElementById('fbg-startup-content');
     const messageEl = document.getElementById('startup-message');
@@ -311,7 +312,7 @@
                                 <select
                                     class="fbg-text-input startup-variable-input"
                                     id="startup-docker-image"
-                                    ${canUpdate ? '' : 'disabled'}
+                                    ${canUpdateDockerImage ? '' : 'disabled'}
                                 >
                                     ${dockerImageEntries.map(([image, label]) => `
                                         <option
@@ -456,7 +457,7 @@
     function bindActions() {
         const dockerSelect = document.getElementById('startup-docker-image');
 
-        if (dockerSelect && canUpdate) {
+        if (dockerSelect && canUpdateDockerImage) {
             dockerSelect.addEventListener('change', async () => {
                 const previousValue = String(startupMeta.docker_image || '');
 
@@ -488,9 +489,10 @@
                     });
                 } catch (error) {
                     dockerSelect.value = previousValue;
+                    console.error('Docker image update failed:', error);
                     showStartupToast({
                         type: 'error',
-                        message: "We couldn't update the Docker image.\nPlease try again in a moment.",
+                        message: "We couldn't update the Docker image.\nThis image may not be available for this server, or your account may not have permission to change it.",
                     });
                 } finally {
                     dockerSelect.disabled = false;

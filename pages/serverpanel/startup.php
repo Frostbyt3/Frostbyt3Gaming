@@ -6,6 +6,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 
 $canReadStartup = $hasServerPermission('startup.read');
 $canUpdateStartup = $hasServerPermission('startup.update');
+$canUpdateDockerImage = $hasServerPermission('startup.docker-image');
 
 /* Adjust this to match your admin logic */
 $canEditStartupCommand = !empty($_SESSION['is_admin']);
@@ -16,6 +17,7 @@ $canEditStartupCommand = !empty($_SESSION['is_admin']);
     data-server-id="<?php echo htmlspecialchars($serverIdentifier); ?>"
     data-csrf-token="<?php echo htmlspecialchars($csrfToken); ?>"
     data-can-update="<?php echo $canUpdateStartup ? '1' : '0'; ?>"
+    data-can-update-docker-image="<?php echo $canUpdateDockerImage ? '1' : '0'; ?>"
     data-can-edit-startup-command="<?php echo $canEditStartupCommand ? '1' : '0'; ?>"
 >
     <div class="fbg-server-card-header">
