@@ -527,7 +527,7 @@
         const attr = getAttr(item);
         const confirmed = await confirmAction(
             'Delete Database?',
-            `Delete database ${attr.name || databaseId}? This cannot be undone.`,
+            `Delete database **${attr.name || databaseId}**? This cannot be undone.`,
             'Delete',
             'Cancel',
             { variant: 'danger' }

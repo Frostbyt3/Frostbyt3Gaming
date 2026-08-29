@@ -25,9 +25,9 @@
         }
     </script>
     <script src="<?php echo asset('./backend/js/external-redirect.js'); ?>"></script>
-    <script src="<?php echo asset('./backend/js/confirm-modal.js'); ?>"></script>
     <script src="<?php echo asset('./backend/js/pagination.js'); ?>"></script>
     <script src="<?php echo asset('./backend/js/toast.js'); ?>"></script>
+    <script src="<?php echo asset('./backend/js/confirm-modal.js'); ?>"></script>
     <script src="<?php echo asset('./backend/js/purchase-confirmation.js'); ?>"></script>
 </head>
 <body>

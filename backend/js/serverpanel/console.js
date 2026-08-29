@@ -185,7 +185,7 @@
 
             const confirmed = await window.FBGConfirm(
                 'Minecraft EULA',
-                "By clicking the Agree button below, you are indicating your agreement to Minecraft's EULA.\n\nhttps://aka.ms/MinecraftEULA",
+                "By clicking the Agree button below, you are indicating your agreement to **[Minecraft's EULA](https://aka.ms/MinecraftEULA)**.",
                 'Agree',
                 'Close'
             );

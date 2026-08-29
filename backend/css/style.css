@@ -2687,6 +2687,18 @@ a.button {
     font-style: italic;
 }
 
+.fbg-markdown-link {
+    color: var(--fbg-brightblue);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.fbg-markdown-link:hover {
+    color: var(--fbg-white);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
 .fbg-toast-close {
     align-items: center;
     background: transparent;
@@ -4577,7 +4589,16 @@ body.fbg-purchase-confirmation-open {
     color: rgba(255, 255, 255, 0.78);
     font-size: 0.98rem;
     line-height: 1.5;
-    white-space: pre-line;
+    /* white-space: pre-line; */
+}
+
+.fbg-confirm-title .fbg-toast-line,
+.fbg-confirm-title .fbg-toast-heading,
+.fbg-confirm-title .fbg-toast-subtext {
+    display: inline;
+    font-size: inherit;
+    line-height: inherit;
+    margin: 0;
 }
 
 .fbg-purchase-confirmation-backdrop {

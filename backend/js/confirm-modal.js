@@ -26,8 +26,8 @@
                         <i class="fas fa-triangle-exclamation"></i>
                     </div>
 
-                    <h3 class="fbg-files-modal-title" id="fbg-confirm-title" data-fbg-confirm-title></h3>
-                    <p class="fbg-confirm-message" data-fbg-confirm-message></p>
+                    <h3 class="fbg-files-modal-title fbg-confirm-title" id="fbg-confirm-title" data-fbg-confirm-title></h3>
+                    <div class="fbg-confirm-message" data-fbg-confirm-message></div>
 
                     <div class="fbg-files-modal-actions">
                         <button type="button" class="btn fbg-neutral-button btn-sm" data-fbg-confirm-cancel>Cancel</button>
@@ -107,8 +107,13 @@
         const variant = options.variant === 'danger' ? 'danger' : 'default';
         const iconClass = options.icon || (variant === 'danger' ? 'fas fa-triangle-exclamation' : 'fas fa-circle-question');
 
-        titleEl.textContent = options.title || 'Are you sure?';
-        messageEl.textContent = options.message || 'Please confirm this action.';
+        if (window.FBGMarkdown && typeof window.FBGMarkdown.append === 'function') {
+            window.FBGMarkdown.append(titleEl, options.title || 'Are you sure?');
+            window.FBGMarkdown.append(messageEl, options.message || 'Please confirm this action.');
+        } else {
+            titleEl.textContent = options.title || 'Are you sure?';
+            messageEl.textContent = options.message || 'Please confirm this action.';
+        }
         iconEl.className = `fbg-confirm-icon is-${variant}`;
         iconEl.innerHTML = `<i class="${iconClass}"></i>`;
         confirmButton.textContent = options.confirmLabel || 'Confirm';

@@ -388,7 +388,7 @@
             const confirmed = typeof window.FBGConfirm === 'function'
                 ? await window.FBGConfirm(
                     'Delete Server Files?',
-                    'This will delete all server files before installing the selected modpack. This cannot be undone.',
+                    'This will delete **all server files** before installing the selected modpack. This cannot be undone.',
                     'Delete Files & Install',
                     'Cancel',
                     { variant: 'danger' }

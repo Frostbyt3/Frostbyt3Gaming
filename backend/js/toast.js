@@ -92,11 +92,57 @@
      * __**underline bold**__,
      * __***underline bold italic***__
      * --strikethrough--,
+     * [link text](https://example.com)
+     * https://example.com
      * # Big Heading
      * ## Smaller Heading
      * ### Even Smaller Heading
      * -# Subtext.
     */
+
+    function isSafeMarkdownUrl(url) {
+        try {
+            const parsed = new URL(String(url), window.location.origin);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function appendMarkdownLink(parent, label, url) {
+        const href = String(url || '').trim();
+
+        if (!isSafeMarkdownUrl(href)) {
+            parent.appendChild(document.createTextNode(label || href));
+            return;
+        }
+
+        const link = document.createElement('a');
+        link.className = 'fbg-markdown-link';
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        appendMarkdownInline(link, String(label || href));
+        parent.appendChild(link);
+    }
+
+    function findNextMarkdownTokenIndex(text, startIndex, tokens) {
+        const indexes = tokens
+            .map((candidate) => text.indexOf(candidate.marker, startIndex))
+            .filter((markerIndex) => markerIndex !== -1);
+        const markdownLinkIndex = text.indexOf('[', startIndex);
+        const plainUrlMatches = Array.from(text.slice(startIndex).matchAll(/https?:\/\/[^\s<>()]+/g));
+
+        if (markdownLinkIndex !== -1) {
+            indexes.push(markdownLinkIndex);
+        }
+
+        if (plainUrlMatches.length > 0) {
+            indexes.push(startIndex + plainUrlMatches[0].index);
+        }
+
+        return indexes.sort((a, b) => a - b)[0] ?? text.length;
+    }
 
     function appendMarkdownInline(parent, text, stopToken = '') {
         const tokens = [
@@ -113,13 +159,34 @@
                 return index + stopToken.length;
             }
 
+            const markdownLink = text.slice(index).match(/^\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/i);
+
+            if (markdownLink) {
+                appendMarkdownLink(parent, markdownLink[1], markdownLink[2]);
+                index += markdownLink[0].length;
+                continue;
+            }
+
+            const plainUrl = text.slice(index).match(/^https?:\/\/[^\s<>()]+/i);
+
+            if (plainUrl) {
+                const url = plainUrl[0].replace(/[.,!?;:]+$/, '');
+                const trailing = plainUrl[0].slice(url.length);
+
+                appendMarkdownLink(parent, url, url);
+
+                if (trailing) {
+                    parent.appendChild(document.createTextNode(trailing));
+                }
+
+                index += plainUrl[0].length;
+                continue;
+            }
+
             const token = tokens.find((candidate) => text.startsWith(candidate.marker, index));
 
             if (!token) {
-                const nextMarkerIndex = tokens
-                    .map((candidate) => text.indexOf(candidate.marker, index + 1))
-                    .filter((markerIndex) => markerIndex !== -1)
-                    .sort((a, b) => a - b)[0] ?? text.length;
+                const nextMarkerIndex = findNextMarkdownTokenIndex(text, index + 1, tokens);
 
                 parent.appendChild(document.createTextNode(text.slice(index, nextMarkerIndex)));
                 index = nextMarkerIndex;
@@ -165,10 +232,15 @@
     }
 
     function appendMarkdownMessage(parent, message) {
+        parent.textContent = '';
         String(message).replace(/\\n/g, '\n').split(/\r?\n/).forEach((line) => {
             appendMarkdownLine(parent, line);
         });
     }
+
+    window.FBGMarkdown = {
+        append: appendMarkdownMessage,
+    };
 
     function showToast(messageOrOptions, type = 'info', duration) {
         const options = normalizeOptions(messageOrOptions, type, duration);

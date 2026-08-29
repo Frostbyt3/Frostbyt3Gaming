@@ -1366,7 +1366,7 @@
         if (action === 'compress') {
             const confirmed = await confirmFilesAction(
                 'Compress item?',
-                `Create a compressed copy of "${name}" in this folder?`,
+                `Create a compressed copy of **${name}** in this folder?`,
                 'Compress',
                 'Cancel'
             );
@@ -1415,7 +1415,7 @@
         if (action === 'decompress') {
             const confirmed = await confirmFilesAction(
                 'Decompress archive?',
-                `Existing files with matching names may be overwritten. This action could change your server files.\n\nArchive: ${name}`,
+                `Existing files with matching names may be overwritten. This action could change your server files.\n\nArchive: **${name}**`,
                 'Decompress',
                 'Cancel'
             );
@@ -1461,7 +1461,7 @@
         if (action === 'delete') {
             const confirmed = await confirmFilesAction(
                 'Delete item?',
-                `Delete "${name}"? This cannot be undone.`,
+                `Delete **${name}**? This cannot be undone.`,
                 'Delete',
                 'Cancel',
                 { variant: 'danger' }
