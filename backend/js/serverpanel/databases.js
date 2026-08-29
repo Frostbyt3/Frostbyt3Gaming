@@ -587,14 +587,14 @@
     detailsCancel?.addEventListener('click', closeDetailsModal);
     rotateButton?.addEventListener('click', rotatePassword);
 
-    [createModal, detailsModal].forEach((modal) => {
+    /* [createModal, detailsModal].forEach((modal) => {
         modal?.addEventListener('click', (event) => {
             if (event.target === modal) {
                 if (modal === createModal) closeCreateModal();
                 if (modal === detailsModal) closeDetailsModal();
             }
         });
-    });
+    }); */
 
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;

@@ -571,11 +571,11 @@
     createButton?.addEventListener('click', openCreateModal);
     createClose?.addEventListener('click', closeCreateModal);
     createCancel?.addEventListener('click', closeCreateModal);
-    createModal?.addEventListener('click', (event) => {
+    /* createModal?.addEventListener('click', (event) => {
         if (event.target === createModal) {
             closeCreateModal();
         }
-    });
+    }); */
     createForm?.addEventListener('submit', createBackup);
 
     hideMessage();

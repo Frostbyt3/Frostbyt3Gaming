@@ -2204,22 +2204,22 @@
     renameCloseButton?.addEventListener('click', closeRenameModal);
     renameCancelButton?.addEventListener('click', closeRenameModal);
 
-    renameModal?.addEventListener('click', (event) => {
+    /* renameModal?.addEventListener('click', (event) => {
         if (event.target === renameModal) {
             closeRenameModal();
         }
-    });
+    }); */
 
     newFolderButton?.addEventListener('click', openNewFolderModal);
     newFolderClose?.addEventListener('click', closeNewFolderModal);
     newFolderCancel?.addEventListener('click', closeNewFolderModal);
     newFileButton?.addEventListener('click', openCreateFileModal);
 
-    newFolderModal?.addEventListener('click', (event) => {
+    /* newFolderModal?.addEventListener('click', (event) => {
         if (event.target === newFolderModal) {
             closeNewFolderModal();
         }
-    });
+    }); */
 
     renameForm?.addEventListener('submit', async (event) => {
         event.preventDefault();

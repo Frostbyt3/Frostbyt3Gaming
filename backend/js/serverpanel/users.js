@@ -567,9 +567,6 @@
             setCheckedPermissions([]);
         }
 
-        if (event.target === modal) {
-            closeModal();
-        }
     });
 
     document.addEventListener('keydown', (event) => {

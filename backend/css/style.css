@@ -7122,16 +7122,52 @@ body.fbg-modal-open {
    ========================= */
 
 .fbg-subuser-modal-card {
-    width: min(940px, calc(100vw - 32px));
-    max-height: calc(100vh - 48px);
-    overflow: auto;
-
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(1120px, calc(100vw - 48px));
+    max-height: calc(100vh - 64px);
+    min-height: 0;
+    overflow: hidden;
+    padding: 28px;
     border-radius: 18px;
     border: 1px solid var(--fbg-border-medium);
-    background: var(--fbg-card-bg);
+    background: linear-gradient(135deg, var(--fbg-body-bg), var(--fbg-lighter-gray));
     box-shadow: 0 24px 60px var(--fbg-box-shadow);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+}
+
+.fbg-subuser-modal-card .fbg-modal-header {
+    flex: 0 0 auto;
+    padding-right: 52px;
+}
+
+.fbg-subuser-modal-card .fbg-modal-close {
+    top: 18px;
+    right: 18px;
+}
+
+#subuser-form {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+}
+
+#subuser-permission-groups {
+    flex: 1 1 auto;
+    min-height: 220px;
+    max-height: min(52vh, 560px);
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.fbg-subuser-modal-card .fbg-modal-actions {
+    flex: 0 0 auto;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--fbg-border-medium);
 }
 
 .fbg-user-permission-group {

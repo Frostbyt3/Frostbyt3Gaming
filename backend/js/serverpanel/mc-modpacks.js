@@ -474,11 +474,6 @@
 
     modalCloseEl?.addEventListener('click', closeInstallModal);
     modalCancelEl?.addEventListener('click', closeInstallModal);
-    modalEl?.addEventListener('click', (event) => {
-        if (event.target === modalEl) {
-            closeInstallModal();
-        }
-    });
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && modalEl && !modalEl.hidden) {
             closeInstallModal();

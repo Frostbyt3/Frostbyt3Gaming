@@ -1159,14 +1159,6 @@
             editCancel.addEventListener('click', closeEditModal);
         }
 
-        if (editModal) {
-            editModal.addEventListener('click', (event) => {
-                if (event.target === editModal) {
-                    closeEditModal();
-                }
-            });
-        }
-
         if (editForm) {
             editForm.addEventListener('submit', submitEditForm);
         }
@@ -1177,14 +1169,6 @@
 
         if (taskEditCancel) {
             taskEditCancel.addEventListener('click', closeTaskEditModal);
-        }
-
-        if (taskEditModal) {
-            taskEditModal.addEventListener('click', (event) => {
-                if (event.target === taskEditModal) {
-                    closeTaskEditModal();
-                }
-            });
         }
 
         if (taskEditForm) {
