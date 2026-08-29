@@ -134,6 +134,15 @@
         return set.has(value) || set.has(defaultValue);
     }
 
+    function isSensitiveVariable(variable) {
+        const haystack = [
+            variable.name,
+            variable.envVariable
+        ].join(' ').toLowerCase();
+
+        return /\b(token|key)\b/.test(haystack) || haystack.includes('token') || haystack.includes('key');
+    }
+
     function toCheckboxChecked(value) {
         const normalized = String(value).trim().toLowerCase();
         return normalized === '1' || normalized === 'true';
@@ -342,6 +351,26 @@
                                 const editable = canUpdate && variable.userEditable && variable.envVariable !== '';
                                 const isBoolean = isBooleanLike(variable);
                                 const currentValue = String(variable.value ?? '');
+                                const sensitive = !isBoolean && isSensitiveVariable(variable);
+                                const inputMarkup = currentValue.length > 40
+                                    ? `
+                                        <textarea
+                                            class="fbg-text-input startup-variable-input${sensitive ? ' is-sensitive' : ''}"
+                                            data-variable-key="${escapeHtml(variable.envVariable)}"
+                                            data-last-saved-value="${escapeHtml(currentValue)}"
+                                            ${editable ? '' : 'disabled'}
+                                        >${escapeHtml(currentValue)}</textarea>
+                                    `
+                                    : `
+                                        <input
+                                            type="text"
+                                            class="fbg-text-input startup-variable-input${sensitive ? ' is-sensitive' : ''}"
+                                            data-variable-key="${escapeHtml(variable.envVariable)}"
+                                            data-last-saved-value="${escapeHtml(currentValue)}"
+                                            value="${escapeHtml(currentValue)}"
+                                            ${editable ? '' : 'disabled'}
+                                        >
+                                    `;
 
                                 return `
                                     <div class="fbg-startup-variable-card" data-variable-key="${escapeHtml(variable.envVariable)}">
@@ -376,28 +405,24 @@
                                                             </span>
                                                             <span class="fbg-toggle-label">${toCheckboxChecked(currentValue) ? 'Enabled' : 'Disabled'}</span>
                                                         </label>
-                                                    `
+                                                    `  
                                                     : `
                                                         ${
-                                                            currentValue.length > 40
+                                                            sensitive
                                                                 ? `
-                                                                    <textarea
-                                                                        class="fbg-text-input startup-variable-input"
-                                                                        data-variable-key="${escapeHtml(variable.envVariable)}"
-                                                                        data-last-saved-value="${escapeHtml(currentValue)}"
-                                                                        ${editable ? '' : 'disabled'}
-                                                                    >${escapeHtml(currentValue)}</textarea>
+                                                                    <div class="fbg-startup-sensitive-field is-concealed">
+                                                                        ${inputMarkup}
+                                                                        <button
+                                                                            type="button"
+                                                                            class="fbg-startup-sensitive-toggle"
+                                                                            aria-label="Show value"
+                                                                            title="Show value"
+                                                                        >
+                                                                            <i class="fas fa-eye" aria-hidden="true"></i>
+                                                                        </button>
+                                                                    </div>
                                                                 `
-                                                                : `
-                                                                    <input
-                                                                        type="text"
-                                                                        class="fbg-text-input startup-variable-input"
-                                                                        data-variable-key="${escapeHtml(variable.envVariable)}"
-                                                                        data-last-saved-value="${escapeHtml(currentValue)}"
-                                                                        value="${escapeHtml(currentValue)}"
-                                                                        ${editable ? '' : 'disabled'}
-                                                                    >
-                                                                `
+                                                                : inputMarkup
                                                         }
                                                     `
                                             }
@@ -508,6 +533,22 @@
                     }
                 });
             }
+        });
+
+        contentEl.querySelectorAll('.fbg-startup-sensitive-toggle').forEach((button) => {
+            button.addEventListener('mousedown', (event) => {
+                event.preventDefault();
+            });
+
+            button.addEventListener('click', () => {
+                const wrap = button.closest('.fbg-startup-sensitive-field');
+                if (!wrap) return;
+
+                const concealed = wrap.classList.toggle('is-concealed');
+                button.setAttribute('aria-label', concealed ? 'Show value' : 'Hide value');
+                button.setAttribute('title', concealed ? 'Show value' : 'Hide value');
+                button.innerHTML = `<i class="fas ${concealed ? 'fa-eye' : 'fa-eye-slash'}" aria-hidden="true"></i>`;
+            });
         });
     }
 

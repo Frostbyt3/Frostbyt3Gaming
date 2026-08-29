@@ -7748,6 +7748,61 @@ textarea.startup-variable-input {
     font-size: 0.95rem;
 }
 
+.fbg-startup-sensitive-field {
+    position: relative;
+}
+
+.fbg-startup-sensitive-field .startup-variable-input {
+    padding-right: 3.25rem;
+    transition: filter 0.18s ease, color 0.18s ease;
+}
+
+.fbg-startup-sensitive-field.is-concealed .startup-variable-input {
+    filter: blur(5px);
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.fbg-startup-sensitive-toggle {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--fbg-light-gray);
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.fbg-startup-sensitive-toggle:hover,
+.fbg-startup-sensitive-toggle:focus-visible {
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.fbg-startup-sensitive-toggle:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.22);
+    outline-offset: 2px;
+}
+
+.fbg-startup-sensitive-field:not(.is-concealed) .fbg-startup-sensitive-toggle {
+    color: var(--fbg-brightblue);
+}
+
+.fbg-startup-sensitive-toggle .svg-inline--fa,
+.fbg-startup-sensitive-toggle i {
+    width: 1rem;
+    height: 1rem;
+    line-height: 1;
+}
+
 .fbg-startup-variable-footer {
     display: flex;
     align-items: center;
