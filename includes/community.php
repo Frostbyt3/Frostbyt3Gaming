@@ -19,7 +19,7 @@
 
         <p>Want to help us continue building cool stuff?</p>
         <div class="community-links">
-            <a href="https://www.paypal.com/donate/?hosted_button_id=8ME4P629QYZNJ" class="btn">
+            <a href="https://www.paypal.com/donate/?hosted_button_id=8ME4P629QYZNJ" class="btn fbg-support-link">
                 <i class="fa-brands fa-paypal"></i>&nbsp;SUPPORT&nbsp;<i class="fas fa-heart" style="color: #22aeff;"></i>
             </a>
         </div>

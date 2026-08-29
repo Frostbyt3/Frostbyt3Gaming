@@ -32,12 +32,12 @@
 	--fbg-yellow: #ffcc00;
     --fbg-opaque-white: #ffffffc0;
     --fbg-light-gray: #808080;
-	--fbg-lighter-gray: #1a1a1a;
+	--fbg-lighter-gray: #171c22;
 	--fbg-darker-gray: #2f2f2f;
 	--fbg-blue-hover-glow: rgba(0, 180, 255, 0.6);
     --fbg-brightblue-hover-glow: rgba(34, 174, 255, 0.8);
-    --fbg-body-bg: #111;
-    --fbg-card-bg: #1c1c1c;
+    --fbg-body-bg: #0d1117;
+    --fbg-card-bg: #171c22;
     --fbg-input-bg: #212121;
     --fbg-text-main: #eee;
     --fbg-text-muted: #cfcfcf;
@@ -189,10 +189,19 @@ main {
 
 header {
     background-color: var(--fbg-lighter-gray);
-    padding: 10px 20px;
+    padding: 5px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+
+    position: relative;
+    z-index: 100;
+
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.28),
+        0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .logo {
@@ -491,9 +500,23 @@ nav ul li a img {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: var(--fbg-button-bg);
-    border: none;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(255, 255, 255, 0.02) 45%,
+            rgba(0, 0, 0, 0.08) 100%
+        ),
+        var(--fbg-button-bg);
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 10px;
+
+    box-shadow:
+        0 3px 8px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
     color: var(--fbg-white);
     cursor: pointer;
     display: inline-block;
@@ -510,17 +533,37 @@ nav ul li a img {
     letter-spacing: .05em;
 
     transition:
-        background-color 0.3s ease,
-        transform 0.3s ease;
+        background 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.15s ease;
 }
 
 .btn:hover {
-    background-color: var(--fbg-button-bg-hover);
-    transform: translateY(-2px);
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.03) 45%,
+            rgba(0, 0, 0, 0.06) 100%
+        ),
+        var(--fbg-button-bg-hover);
+
+    border-color: rgba(255, 255, 255, 0.16);
+
+    box-shadow:
+        0 5px 12px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+    transform: translateY(-1px);
 }
 
 .btn:active {
     transform: translateY(0);
+
+    box-shadow:
+        0 2px 5px rgba(0, 0, 0, 0.28),
+        inset 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 .btn-sm {
@@ -1107,7 +1150,7 @@ feature {
    ========================= */
 
 .community {
-    background: #181818;
+    background: var(--fbg-lighter-gray);
     padding: 20px;
     text-align: center;
 }
@@ -1158,6 +1201,18 @@ feature {
     justify-content: center;
     gap: 12px;
     margin-top: 10px;
+}
+
+.fbg-support-link {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.fbg-support-link:hover {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 /* =========================
@@ -2021,9 +2076,32 @@ a.button {
 
 .fbg-shop-category-card {
     overflow: hidden;
-    border: 1px solid var(--fbg-border-medium);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    background: var(--fbg-card-bg);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.025) 0%,
+            rgba(255, 255, 255, 0.005) 100%
+        ),
+        var(--fbg-card-bg);
+
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.20),
+        inset 0 1px 0 rgba(255, 255, 255, 0.025);
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.fbg-shop-category-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+
+    box-shadow:
+        0 6px 16px rgba(0, 0, 0, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .fbg-shop-category-trigger {
@@ -2927,7 +3005,12 @@ a.button {
     background: var(--fbg-card-bg);
     backdrop-filter: blur(6px);
     border: 1px solid var(--fbg-border-medium);
-    box-shadow: 0 6px 20px var(--fbg-box-shadow);
+
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.32),
+        0 2px 6px rgba(0, 0, 0, 0.20),
+        inset 0 1px 0 rgba(255, 255, 255, 0.025);
+
     overflow: hidden;
 }
 
@@ -3439,8 +3522,8 @@ a.button {
 }
 
 .fbg-sidebar-stat-icon {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 10px;
     display: inline-flex;
     align-items: center;
@@ -3448,7 +3531,20 @@ a.button {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.05);
     color: var(--fbg-off-white);
-    font-size: 1rem;
+    font-size: 1.35rem;
+}
+
+.fbg-sidebar-stat-icon-power {
+    background-color: rgba(255, 0, 0, 0.356);
+}
+
+.fbg-sidebar-stat-icon-memory {
+    background-color: rgba(100, 0, 150, 0.356);
+}
+
+.fbg-sidebar-stat-icon-memory i {
+    color: rgba(143, 0, 214, 0.8);
+    background-color: rgba(143, 0, 214, 0.8);
 }
 
 .fbg-sidebar-stat-content {
@@ -3700,6 +3796,37 @@ a.button {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.fbg-server-heading-layout {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.fbg-server-heading-game-icon {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.fbg-server-heading-game-icon img {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    display: block;
+}
+
+.fbg-server-heading-details {
+    min-width: 0;
+    flex: 1;
 }
 
 .fbg-server-heading-installing {
@@ -4274,9 +4401,16 @@ a.button {
 
 .fbg-files-table {
     width: 100%;
-    border-collapse: collapse;
-    border: 2px solid var(--fbg-border-medium);
-    background: linear-gradient(135deg, var(--fbg-body-bg), var(--fbg-lighter-gray));
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 12px;
+    background: var(--fbg-card-bg);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.24),
+        0 2px 6px rgba(0, 0, 0, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    overflow: hidden;
 }
 
 .fbg-files-table th,
@@ -4290,6 +4424,7 @@ a.button {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.025);
     opacity: 0.8;
 }
 
@@ -4319,7 +4454,7 @@ a.button {
 }
 
 .fbg-folder-row:hover td {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .fbg-files-name-cell i {
@@ -4340,12 +4475,21 @@ a.button {
 .fbg-files-row-actions .btn {
     background: transparent;
     color: var(--fbg-off-white-dim);
-    transition: color 0.3s ease;
+    box-shadow: none;
+    border: none;
+    text-shadow: 0 0 0 transparent;
+    font-size: 0.85rem;
+    transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
 .fbg-files-row-actions .btn:hover {
     background: transparent;
+    box-shadow: none;
+    border: none;
     color: var(--fbg-white);
+    text-shadow:
+        0 0 4px rgba(255, 255, 255, 0.55),
+        0 0 8px rgba(255, 255, 255, 0.20);
 }
 
 .fbg-files-action-toggle {
@@ -5642,7 +5786,21 @@ body.fbg-purchase-confirmation-open {
     min-height: calc(100vh - 72px);
     padding: 24px 16px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.025),
+            rgba(255, 255, 255, 0.008)
+        ),
+        var(--fbg-lighter-gray);
+
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+
+    box-shadow:
+        6px 0 18px rgba(0, 0, 0, 0.22),
+        inset -1px 0 rgba(255, 255, 255, 0.02);
+
     backdrop-filter: blur(10px);
 }
 
@@ -5695,7 +5853,7 @@ body.fbg-purchase-confirmation-open {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding-top: 12px;
+    padding-top: 18px;
     margin-bottom: 18px;
 }
 
@@ -5922,12 +6080,16 @@ body.fbg-purchase-confirmation-open {
     border-radius: 18px;
     background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
     box-shadow: 0 18px 34px rgba(0, 0, 0, 0.16);
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    transition:
+        border-color 0.35s ease,
+        box-shadow 0.35s ease;
 }
 
 .fbg-dashboard-item:hover {
     border-color: var(--fbg-brightblue);
-    box-shadow: 0 0 8px var(--fbg-brightblue-hover-glow);
+    box-shadow:
+        0 18px 34px rgba(0, 0, 0, 0.16),
+        0 0 8px rgba(34, 174, 255, 0.35);
 }
 
 .fbg-dashboard-item[data-status="running"] {
@@ -8437,9 +8599,9 @@ textarea.startup-variable-input {
     flex: 0 0 auto;
     max-width: 260px;
     padding: 7px 12px;
-    border-radius: 999px;
+    border-radius: 10px;
     border: 1px solid var(--fbg-border-medium);
-    background: rgba(77, 163, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
     color: var(--fbg-brightblue);
     font-size: 0.72rem;
     font-weight: 700;
@@ -8565,25 +8727,25 @@ textarea.startup-variable-input {
 
 /* Optional event accent variants */
 .fbg-activity-item[data-event^="server:power"]::before {
-    background: linear-gradient(180deg, #34d399, rgba(52, 211, 153, 0.25));
+    background: #22c55e;
 }
 
 .fbg-activity-item[data-event^="server:file"]::before {
-    background: linear-gradient(180deg, #60a5fa, rgba(96, 165, 250, 0.25));
+    background: var(--fbg-brightblue);
 }
 
 .fbg-activity-item[data-event^="server:backup"]::before {
-    background: linear-gradient(180deg, #f59e0b, rgba(245, 158, 11, 0.25));
+    background: #f59e0b;
 }
 
 .fbg-activity-item[data-event^="server:schedule"]::before {
-    background: linear-gradient(180deg, #a78bfa, rgba(167, 139, 250, 0.25));
+    background: #8056ff;
 }
 
 .fbg-activity-item[data-event^="server:database"]::before,
 .fbg-activity-item[data-event^="server:allocation"]::before,
 .fbg-activity-item[data-event^="server:network"]::before {
-    background: linear-gradient(180deg, #f472b6, rgba(244, 114, 182, 0.25));
+    background: #ef4444;
 }
 
 /* =========================

@@ -189,6 +189,8 @@ if (!function_exists('getGameIcon')) {
     }
 }
 
+$selectedGameIcon = getGameIcon($selectedServer);
+
 if (!function_exists('fbgServerSupportsModpacks')) {
     function fbgServerSupportsModpacks(array $server): bool
     {
@@ -640,62 +642,112 @@ session_write_close();
                 </div>
                 <div class="fbg-server-card-header">
                     <div class="fbg-server-heading">
-                        <div class="fbg-editable-row" data-field="name">
-                            <div class="fbg-editable-display">
-                                <h1 id="server-name-text"><?php echo htmlspecialchars($selectedServer['name'] ?? 'Unnamed Server'); ?></h1>
-                                <?php if ($canRenameServer): ?>
-                                    <button type="button" class="btn fbg-neutral-button btn-sm fbg-edit-toggle" data-field="name" aria-label="Edit server name">
-                                        <i class="fas fa-pen-to-square"></i>
-                                    </button>
-                                <?php endif; ?>
+                        <div class="fbg-server-heading-layout">
+                            <div class="fbg-server-heading-game-icon">
+                                <img
+                                    src="<?php echo htmlspecialchars($selectedGameIcon); ?>"
+                                    alt=""
+                                    aria-hidden="true"
+                                >
                             </div>
 
-                            <?php if ($canRenameServer): ?>
-                                <div class="fbg-editable-editor" data-editor="name" style="display:none;">
-                                    <input
-                                        type="text"
-                                        id="server-name-input"
-                                        class="fbg-text-input"
-                                        maxlength="191"
-                                        value="<?php echo htmlspecialchars($selectedServer['name'] ?? ''); ?>"
-                                    >
-                                    <div class="fbg-edit-actions">
-                                        <button type="button" class="btn fbg-neutral-button btn-sm fbg-save-edit" data-field="name">Save</button>
-                                        <button type="button" class="btn fbg-neutral-button btn-sm fbg-cancel-edit" data-field="name">Cancel</button>
+                            <div class="fbg-server-heading-details">
+                                <div class="fbg-editable-row" data-field="name">
+                                    <div class="fbg-editable-display">
+                                        <h1 id="server-name-text"><?php echo htmlspecialchars($selectedServer['name'] ?? 'Unnamed Server'); ?></h1>
+                                        <?php if ($canRenameServer): ?>
+                                            <button
+                                                type="button"
+                                                class="btn fbg-neutral-button btn-sm fbg-edit-toggle"
+                                                data-field="name"
+                                                aria-label="Edit server name"
+                                            >
+                                                <i class="fas fa-pen-to-square"></i>
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
 
-                        <div class="fbg-editable-row" data-field="description">
-                            <div class="fbg-editable-display">
-                                <p id="server-description-text"><?php echo htmlspecialchars(($selectedServer['description'] ?? '') ?: 'No description'); ?></p>
-                                <?php if ($canRenameServer): ?>
-                                    <button type="button" class="btn fbg-neutral-button btn-sm fbg-edit-toggle" data-field="description" aria-label="Edit server description">
-                                        <i class="fas fa-pen-to-square"></i>
-                                    </button>
-                                <?php endif; ?>
+                                    <?php if ($canRenameServer): ?>
+                                        <div class="fbg-editable-editor" data-editor="name" style="display:none;">
+                                            <input
+                                                type="text"
+                                                id="server-name-input"
+                                                class="fbg-text-input"
+                                                maxlength="191"
+                                                value="<?php echo htmlspecialchars($selectedServer['name'] ?? ''); ?>"
+                                            >
+                                            <div class="fbg-edit-actions">
+                                                <button
+                                                    type="button"
+                                                    class="btn fbg-neutral-button btn-sm fbg-save-edit"
+                                                    data-field="name"
+                                                >
+                                                    Save
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="btn fbg-neutral-button btn-sm fbg-cancel-edit"
+                                                    data-field="name"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="fbg-editable-row" data-field="description">
+                                    <div class="fbg-editable-display">
+                                        <p id="server-description-text"><?php echo htmlspecialchars(($selectedServer['description'] ?? '') ?: 'No description'); ?></p>
+                                        <?php if ($canRenameServer): ?>
+                                            <button
+                                                type="button"
+                                                class="btn fbg-neutral-button btn-sm fbg-edit-toggle"
+                                                data-field="description"
+                                                aria-label="Edit server description"
+                                            >
+                                                <i class="fas fa-pen-to-square"></i>
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <?php if ($canRenameServer): ?>
+                                        <div class="fbg-editable-editor" data-editor="description" style="display:none;">
+                                            <input
+                                                type="text"
+                                                id="server-description-input"
+                                                class="fbg-text-input"
+                                                maxlength="191"
+                                                value="<?php echo htmlspecialchars($selectedServer['description'] ?? ''); ?>"
+                                                placeholder="No description"
+                                            >
+                                            <div class="fbg-edit-actions">
+                                                <button
+                                                    type="button"
+                                                    class="btn fbg-neutral-button btn-sm fbg-save-edit"
+                                                    data-field="description"
+                                                >
+                                                    Save
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="btn fbg-neutral-button btn-sm fbg-cancel-edit"
+                                                    data-field="description"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
                             </div>
-
-                            <?php if ($canRenameServer): ?>
-                                <div class="fbg-editable-editor" data-editor="description" style="display:none;">
-                                    <input
-                                        type="text"
-                                        id="server-description-input"
-                                        class="fbg-text-input"
-                                        maxlength="191"
-                                        value="<?php echo htmlspecialchars($selectedServer['description'] ?? ''); ?>"
-                                        placeholder="No description"
-                                    >
-                                    <div class="fbg-edit-actions">
-                                        <button type="button" class="btn fbg-neutral-button btn-sm fbg-save-edit" data-field="description">Save</button>
-                                        <button type="button" class="btn fbg-neutral-button btn-sm fbg-cancel-edit" data-field="description">Cancel</button>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
                         </div>
 
-                        <div class="fbg-dashboard-alert" id="server-details-message" style="display:none; margin-top: 12px;"></div>
+                        <div
+                            class="fbg-dashboard-alert"
+                            id="server-details-message"
+                            style="display:none; margin-top: 12px;"
+                        ></div>
                     </div>
                 </div>
 

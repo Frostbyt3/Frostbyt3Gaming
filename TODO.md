@@ -28,10 +28,6 @@
 - [ ] Add egg export/download support.
 - [ ] Add egg delete flow with safeguards when servers or shop plans still reference the egg.
 
-## Frontend Shop
-
-- [ ] Add post-purchase confirmation modals for server rentals, renewals, and balance uploads that show the friendly purchase summary, pricing/tax/total, remaining/new wallet balance, invoice link, and next-step actions.
-
 ## Frontend Invoice System
 
 - [ ] Fix invoice/server notification email CSS rendering issues in the iOS Gmail app.
