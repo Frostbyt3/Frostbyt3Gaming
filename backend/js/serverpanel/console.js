@@ -8,6 +8,7 @@
     if (!identifier || !csrfToken) return;
 
     const CONSOLE_URL = '/api/server/console.php?server_identifier=' + encodeURIComponent(identifier);
+    const EULA_AGREE_URL = '/api/server/eula/agree.php';
     const TOKEN_REFRESH_FALLBACK_MS = 12 * 60 * 1000;
     const RECONNECT_MIN_MS = 1000;
     const RECONNECT_MAX_MS = 15000;
@@ -46,6 +47,8 @@
     let consoleMessageTimeout = null;
     let pendingConsoleHtml = '';
     let consoleFlushFrame = null;
+    let minecraftEulaPromptOpen = false;
+    let minecraftEulaPromptHandled = false;
 
     function clearNamedTimeout(name) {
         if (name === 'command' && commandMessageTimeout) {
@@ -121,6 +124,103 @@
         }
 
         showConsoleMessage(fallbackMessage, isError);
+    }
+
+    async function parseJsonResponse(response) {
+        const rawText = await response.text();
+        let data;
+
+        try {
+            data = JSON.parse(rawText);
+        } catch (error) {
+            console.error('Non-JSON response from server endpoint:', rawText);
+            throw new Error('The server returned an unexpected response.');
+        }
+
+        if (!response.ok || !data?.ok) {
+            throw new Error(data?.error || 'Request failed.');
+        }
+
+        return data;
+    }
+
+    async function postJson(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload),
+            cache: 'no-store'
+        });
+
+        return parseJsonResponse(response);
+    }
+
+    async function acceptMinecraftEula() {
+        return postJson(EULA_AGREE_URL, {
+            id: identifier,
+            csrf_token: csrfToken
+        });
+    }
+
+    async function promptForMinecraftEula() {
+        if (minecraftEulaPromptOpen || minecraftEulaPromptHandled) return;
+
+        minecraftEulaPromptOpen = true;
+        minecraftEulaPromptHandled = true;
+
+        try {
+            if (typeof window.FBGConfirm !== 'function') {
+                showConsoleToast({
+                    type: 'warning',
+                    title: 'Minecraft EULA',
+                    message: 'Minecraft needs its EULA accepted before this server can run.\nOpen /eula.txt and set eula=true.',
+                    persistent: true,
+                });
+                return;
+            }
+
+            const confirmed = await window.FBGConfirm(
+                'Minecraft EULA',
+                "By clicking the Agree button below, you are indicating your agreement to Minecraft's EULA.\n\nhttps://aka.ms/MinecraftEULA",
+                'Agree',
+                'Close'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            await acceptMinecraftEula();
+
+            showConsoleToast({
+                type: 'success',
+                title: 'Minecraft EULA',
+                message: 'Minecraft EULA accepted.\nStart the server again when you are ready.',
+            });
+        } catch (error) {
+            console.error('Minecraft EULA accept failed:', error);
+            minecraftEulaPromptHandled = false;
+
+            showConsoleToast({
+                type: 'error',
+                title: 'Minecraft EULA',
+                message: "We couldn't update eula.txt.\nPlease try again or contact support.",
+            });
+        } finally {
+            minecraftEulaPromptOpen = false;
+        }
+    }
+
+    function detectMinecraftEulaPrompt(text) {
+        if (!text) return;
+
+        if (String(text).toLowerCase().includes('you need to agree to the eula in order to run the server')) {
+            promptForMinecraftEula();
+        }
     }
 
     function setCommandEnabled(enabled) {
@@ -551,6 +651,7 @@
             case 'console output':
             case 'install output':
             case 'transfer logs':
+                detectMinecraftEulaPrompt(args.join('\n'));
                 updateValheimJoinCodeFromConsole(args.join('\n'));
                 appendConsoleText(args.join('\n'));
                 return;
