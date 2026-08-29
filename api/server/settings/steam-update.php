@@ -35,6 +35,22 @@ function steamUpdateFindAppManifests(string $identifier): array
     return $manifests;
 }
 
+function steamUpdateHasRuntimeFolder(string $identifier): bool
+{
+    $files = pteroListServerFiles($identifier, '/');
+
+    foreach ($files as $file) {
+        $fileName = strtolower(trim((string)($file['name'] ?? '')));
+        $isFile = (bool)($file['is_file'] ?? false);
+
+        if (!$isFile && in_array($fileName, ['steam', 'steamcmd'], true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     steamUpdateJsonResponse(405, [
         'ok' => false,
@@ -86,8 +102,6 @@ if ($serverIdentifier === '') {
 try {
     pteroEnsureServerAccessSession(false);
     pteroRequireServerPermission($serverIdentifier, 'file.read');
-    pteroRequireServerPermission($serverIdentifier, 'file.delete');
-    pteroRequireServerPermission($serverIdentifier, 'control.restart');
 
     $selectedServer = pteroGetSessionServerMeta($serverIdentifier);
 
@@ -116,6 +130,26 @@ try {
 
     $manifestNames = array_values(array_column($manifests, 'name'));
     $appIds = array_values(array_column($manifests, 'app_id'));
+    $hasRuntimeFolder = steamUpdateHasRuntimeFolder($serverIdentifier);
+
+    if (!$hasRuntimeFolder) {
+        session_write_close();
+
+        steamUpdateJsonResponse(200, [
+            'ok' => true,
+            'error' => null,
+            'message' => 'Half-Life 3 confirmed.',
+            'data' => [
+                'message' => 'Half-Life 3 confirmed.',
+                'easter_egg' => true,
+                'app_ids' => $appIds,
+                'manifests' => $manifestNames,
+            ],
+        ]);
+    }
+
+    pteroRequireServerPermission($serverIdentifier, 'file.delete');
+    pteroRequireServerPermission($serverIdentifier, 'control.restart');
 
     session_write_close();
 

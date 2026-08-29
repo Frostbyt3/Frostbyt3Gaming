@@ -7,6 +7,8 @@
     const canRename = panel.dataset.canRename === '1';
     const canReinstall = panel.dataset.canReinstall === '1';
     const canRenew = panel.dataset.canRenew === '1';
+    const canSteamUpdate = panel.dataset.canSteamUpdate === '1';
+    const steamUpdateEasterEgg = panel.dataset.steamUpdateEasterEgg === '1';
 
     const DETAILS_URL = '/api/server/update-details.php';
     const REINSTALL_URL = '/api/server/settings/reinstall.php';
@@ -35,6 +37,26 @@
     const renewWarning = document.getElementById('settings-renew-warning');
 
     let messageTimeout = null;
+    const steamEasterEggMessages = [
+        'Half-Life 3 confirmed.',
+        'Valve time is running exactly on schedule.',
+        'GabeN has personally inspected this button.',
+        'Steam says this update is in another library folder.',
+        'Achievement unlocked: found a Steam manifest with commitment issues.',
+        'The G-Man has declined your update request.',
+        'Source 2 migration scheduled immediately after Half-Life 3.',
+        'Your download region has been automatically changed to Antarctica.',
+        'The Steam Summer Sale will begin before this update finishes.',
+        'VAC was unable to verify your Minecraft installation.',
+        'Please insert Disc 2.',
+        'Task failed successfully.',
+        'You made the file. You made the folder. Are you happy now?',
+        'We checked. This is still not a Steam server.',
+        'This is not how Steam works, but I admire the commitment.',
+        'Congratulations! You have invented SteamCMD for Minecraft.',
+        'Your manifest has been forwarded to GabeN for review.',
+        'One file failed to validate. As is tradition.',
+    ];
 
     function showMessage(text, isError) {
         if (!messageEl) return;
@@ -82,6 +104,10 @@
 
         console.warn('FBGConfirm is not available.');
         return false;
+    }
+
+    function randomSteamEasterEggMessage() {
+        return steamEasterEggMessages[Math.floor(Math.random() * steamEasterEggMessages.length)];
     }
 
     async function parseJsonResponse(response) {
@@ -335,6 +361,24 @@
 
     if (steamUpdateButton) {
         steamUpdateButton.addEventListener('click', async () => {
+            if (steamUpdateEasterEgg && !canSteamUpdate) {
+                await confirmAction(
+                    'Steam Update',
+                    randomSteamEasterEggMessage(),
+                    'Close',
+                    'Cancel'
+                );
+                return;
+            }
+
+            if (!canSteamUpdate) {
+                showSettingsToast({
+                    type: 'warning',
+                    message: 'This server needs file delete and restart permissions before a Steam update can be started.',
+                });
+                return;
+            }
+
             const confirmed = await confirmAction(
                 'Update Server?',
                 'This will remove the Steam app manifest and restart the server so Steam can verify the files and install any available updates.',

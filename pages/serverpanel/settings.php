@@ -90,7 +90,9 @@ $canRenewServer = false;
 $renewDisabledReason = 'Renewal information is unavailable for this server. Please contact support.';
 $hasValidRenewData = false;
 $steamAppManifests = [];
+$hasSteamRuntimeFolder = false;
 $canForceSteamUpdate = false;
+$isSteamUpdateEasterEgg = false;
 $expiryRaw = $selectedServer['expired_at'] ?? null;
 $expiryDisplay = $expiryRaw ? date('M j, Y g:i A', strtotime((string)$expiryRaw)) : null;
 $showRenewalSection = !$isManualSuspension;
@@ -211,9 +213,28 @@ if ($serverIdentifier !== '' && $canReadFiles) {
     } catch (Throwable $e) {
         $steamAppManifests = [];
     }
+
+    if ($steamAppManifests !== []) {
+        try {
+            $rootFiles = pteroListServerFiles($serverIdentifier, '/');
+
+            foreach ($rootFiles as $rootFile) {
+                $fileName = strtolower(trim((string)($rootFile['name'] ?? '')));
+                $isFile = (bool)($rootFile['is_file'] ?? false);
+
+                if (!$isFile && in_array($fileName, ['steam', 'steamcmd'], true)) {
+                    $hasSteamRuntimeFolder = true;
+                    break;
+                }
+            }
+        } catch (Throwable $e) {
+            $hasSteamRuntimeFolder = false;
+        }
+    }
 }
 
-$canForceSteamUpdate = $steamAppManifests !== [] && $canDeleteFiles && $canRestartServer;
+$isSteamUpdateEasterEgg = $steamAppManifests !== [] && !$hasSteamRuntimeFolder;
+$canForceSteamUpdate = $steamAppManifests !== [] && $hasSteamRuntimeFolder && $canDeleteFiles && $canRestartServer;
 ?>
 
 <div
@@ -225,6 +246,7 @@ $canForceSteamUpdate = $steamAppManifests !== [] && $canDeleteFiles && $canResta
     data-can-reinstall="<?php echo $canReinstallServer ? '1' : '0'; ?>"
     data-can-renew="<?php echo $canRenewServer ? '1' : '0'; ?>"
     data-can-steam-update="<?php echo $canForceSteamUpdate ? '1' : '0'; ?>"
+    data-steam-update-easter-egg="<?php echo $isSteamUpdateEasterEgg ? '1' : '0'; ?>"
 >
     <div class="fbg-server-card-header">
         <div class="fbg-server-heading">
@@ -440,11 +462,13 @@ $canForceSteamUpdate = $steamAppManifests !== [] && $canDeleteFiles && $canResta
                         <p class="fbg-settings-note">
                             <?php if ($canForceSteamUpdate): ?>
                                 The server will restart after the update check is queued.
+                            <?php elseif ($isSteamUpdateEasterEgg): ?>
+                                The server will restart after the update check is queued.
                             <?php else: ?>
                                 You need file delete and restart permissions to use this action.
                             <?php endif; ?>
                         </p>
-                        <button type="button" class="btn fbg-primary-button" id="settings-steam-update-button" <?php echo $canForceSteamUpdate ? '' : 'disabled'; ?>>
+                        <button type="button" class="btn fbg-primary-button" id="settings-steam-update-button" <?php echo ($canForceSteamUpdate || $isSteamUpdateEasterEgg) ? '' : 'disabled'; ?>>
                             Update Server
                         </button>
                     </div>
