@@ -11,6 +11,9 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 $canRenameSettings = $hasServerPermission('settings.rename');
 $canReinstallServer = $hasServerPermission('settings.reinstall');
 $canUseSftp = $hasServerPermission('file.sftp');
+$canReadFiles = $hasServerPermission('file.read');
+$canDeleteFiles = $hasServerPermission('file.delete');
+$canRestartServer = $hasServerPermission('control.restart');
 $isManualSuspension = !empty($selectedServer['suspend_manual']);
 
 $currentUsername = trim((string)($_SESSION['username'] ?? $selectedServer['owner_username'] ?? 'user'));
@@ -86,6 +89,8 @@ $renewTotal = 0.00;
 $canRenewServer = false;
 $renewDisabledReason = 'Renewal information is unavailable for this server. Please contact support.';
 $hasValidRenewData = false;
+$steamAppManifests = [];
+$canForceSteamUpdate = false;
 $expiryRaw = $selectedServer['expired_at'] ?? null;
 $expiryDisplay = $expiryRaw ? date('M j, Y g:i A', strtotime((string)$expiryRaw)) : null;
 $showRenewalSection = !$isManualSuspension;
@@ -188,6 +193,27 @@ try {
 if (!$showRenewalSection) {
     $canRenewServer = false;
 }
+
+if ($serverIdentifier !== '' && $canReadFiles) {
+    try {
+        $steamFiles = pteroListServerFiles($serverIdentifier, '/steamapps');
+
+        foreach ($steamFiles as $steamFile) {
+            $fileName = trim((string)($steamFile['name'] ?? ''));
+
+            if ($fileName !== '' && preg_match('/^appmanifest_(\d+)\.acf$/i', $fileName, $matches)) {
+                $steamAppManifests[] = [
+                    'name' => $fileName,
+                    'app_id' => $matches[1],
+                ];
+            }
+        }
+    } catch (Throwable $e) {
+        $steamAppManifests = [];
+    }
+}
+
+$canForceSteamUpdate = $steamAppManifests !== [] && $canDeleteFiles && $canRestartServer;
 ?>
 
 <div
@@ -198,6 +224,7 @@ if (!$showRenewalSection) {
     data-can-rename="<?php echo $canRenameSettings ? '1' : '0'; ?>"
     data-can-reinstall="<?php echo $canReinstallServer ? '1' : '0'; ?>"
     data-can-renew="<?php echo $canRenewServer ? '1' : '0'; ?>"
+    data-can-steam-update="<?php echo $canForceSteamUpdate ? '1' : '0'; ?>"
 >
     <div class="fbg-server-card-header">
         <div class="fbg-server-heading">
@@ -388,6 +415,39 @@ if (!$showRenewalSection) {
                             </button>
                         </div>
                     </form>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($steamAppManifests !== []): ?>
+                <section class="fbg-settings-section">
+                    <div class="fbg-settings-section-header">
+                        <h3>Steam Update</h3>
+                    </div>
+
+                    <p class="fbg-settings-note">
+                        Force Steam to verify this server's files by removing the Steam app manifest and restarting the server.
+                        Use this when a Steam game update is available but the server has not picked it up yet.
+                    </p>
+
+                    <div class="fbg-settings-debug-grid">
+                        <div class="fbg-settings-debug-row">
+                            <span class="fbg-meta-label">Detected App ID<?= count($steamAppManifests) === 1 ? '' : 's' ?></span>
+                            <code><?php echo htmlspecialchars(implode(', ', array_column($steamAppManifests, 'app_id'))); ?></code>
+                        </div>
+                    </div>
+
+                    <div class="fbg-settings-section-footer">
+                        <p class="fbg-settings-note">
+                            <?php if ($canForceSteamUpdate): ?>
+                                The server will restart after the update check is queued.
+                            <?php else: ?>
+                                You need file delete and restart permissions to use this action.
+                            <?php endif; ?>
+                        </p>
+                        <button type="button" class="btn fbg-primary-button" id="settings-steam-update-button" <?php echo $canForceSteamUpdate ? '' : 'disabled'; ?>>
+                            Update Server
+                        </button>
+                    </div>
                 </section>
             <?php endif; ?>
 

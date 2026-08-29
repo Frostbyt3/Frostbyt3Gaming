@@ -11,6 +11,7 @@
     const DETAILS_URL = '/api/server/update-details.php';
     const REINSTALL_URL = '/api/server/settings/reinstall.php';
     const RENEW_URL = '/api/server/settings/renew.php';
+    const STEAM_UPDATE_URL = '/api/server/settings/steam-update.php';
 
     const messageEl = document.getElementById('settings-message');
 
@@ -20,6 +21,7 @@
     const descriptionInput = document.getElementById('settings-server-description');
 
     const reinstallButton = document.getElementById('settings-reinstall-button');
+    const steamUpdateButton = document.getElementById('settings-steam-update-button');
     const renewButton = document.getElementById('settings-renew-button');
 
     const headerNameText = document.getElementById('server-name-text');
@@ -327,6 +329,47 @@
             } finally {
                 reinstallButton.disabled = false;
                 reinstallButton.textContent = originalText;
+            }
+        });
+    }
+
+    if (steamUpdateButton) {
+        steamUpdateButton.addEventListener('click', async () => {
+            const confirmed = await confirmAction(
+                'Update Server?',
+                'This will remove the Steam app manifest and restart the server so Steam can verify the files and install any available updates.',
+                'Update',
+                'Cancel'
+            );
+
+            if (!confirmed) return;
+
+            const originalText = steamUpdateButton.textContent;
+            steamUpdateButton.disabled = true;
+            steamUpdateButton.textContent = 'Updating...';
+
+            try {
+                const result = await postJson(STEAM_UPDATE_URL, {
+                    csrf_token: csrfToken,
+                    id: serverIdentifier
+                });
+
+                const appIds = Array.isArray(result?.data?.app_ids) && result.data.app_ids.length
+                    ? `\nSteam App ID${result.data.app_ids.length === 1 ? '' : 's'}: ${result.data.app_ids.join(', ')}`
+                    : '';
+
+                showSettingsToast({
+                    type: 'success',
+                    message: `Steam update check has started.${appIds}`,
+                });
+                steamUpdateButton.textContent = 'Update Queued';
+            } catch (error) {
+                showSettingsToast({
+                    type: 'error',
+                    message: "We couldn't start the Steam update check.\nPlease try again in a moment.",
+                });
+                steamUpdateButton.disabled = false;
+                steamUpdateButton.textContent = originalText;
             }
         });
     }
