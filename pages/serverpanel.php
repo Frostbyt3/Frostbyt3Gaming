@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
 require_once __DIR__ . '/../api/pterodactyl.php';
+require_once __DIR__ . '/../includes/palworld-settings.php';
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -109,6 +110,7 @@ $isExpiredServer = $expiredAtRaw !== '' && strtotime($expiredAtRaw) !== false &&
 $canShowSuspendedRenewal = $isSuspended && !$isManualSuspension && $isExpiredServer;
 $selectedEggName = trim((string)($selectedServer['egg_name'] ?? ''));
 $isValheimServer = stripos($selectedEggName, 'valheim') !== false;
+$isPalworldServer = fbgPalworldIsServer($selectedServer);
 
 $resources = [
     'status' => $isSuspended ? 'suspended' : ($isInstalling ? 'installing' : 'unknown'),
@@ -311,6 +313,10 @@ if ($hasServerPermission('control.console') || $hasServerPermission('websocket.c
 
 if (fbgServerSupportsModpacks($selectedServer) && $hasServerPermission('file.create')) {
     $availableTabs['mc-modpacks'] = ['label' => 'Modpacks', 'icon' => 'fas fa-cubes'];
+}
+
+if ($isPalworldServer && $hasServerPermission('file.read-content')) {
+    $availableTabs['palworld-settings'] = ['label' => 'Palworld Settings', 'icon' => 'fas fa-sliders'];
 }
 
 if (
