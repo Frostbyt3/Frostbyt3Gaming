@@ -29,13 +29,18 @@
 ?>
 <button
     type="button"
-    class="fbg-sidebar-mobile-toggle"
+    class="fbg-sidebar-mobile-toggle fbg-mobile-sidebar-handle"
     id="fbg-sidebar-mobile-toggle"
     aria-controls="fbg-shared-sidebar"
     aria-expanded="false"
     aria-label="Open sidebar"
 >
-    <span aria-hidden="true">&gt;</span>
+    <span class="fbg-mobile-sidebar-icon fbg-mobile-sidebar-icon-closed" aria-hidden="true">
+        <i class="fas fa-angle-right"></i>
+    </span>
+    <span class="fbg-mobile-sidebar-icon fbg-mobile-sidebar-icon-open" aria-hidden="true">
+        <i class="fas fa-angle-left"></i>
+    </span>
 </button>
 
 <div class="fbg-sidebar-mobile-backdrop" id="fbg-sidebar-mobile-backdrop" hidden></div>
@@ -43,11 +48,11 @@
 <aside class="fbg-dashboard-sidebar" id="fbg-shared-sidebar" aria-hidden="false">
     <button
         type="button"
-        class="fbg-sidebar-mobile-close"
+        class="fbg-sidebar-mobile-close fbg-mobile-sidebar-handle"
         id="fbg-sidebar-mobile-close"
         aria-label="Close sidebar"
     >
-        <span aria-hidden="true">&lt;</span>
+        <i class="fas fa-angle-left" aria-hidden="true"></i>
     </button>
 
     <div class="fbg-admin-sidebar-brand">
@@ -105,37 +110,176 @@
         const sidebar = document.getElementById('fbg-shared-sidebar');
         const backdrop = document.getElementById('fbg-sidebar-mobile-backdrop');
         const mobileQuery = window.matchMedia('(max-width: 900px)');
+        const openClass = 'fbg-sidebar-mobile-open';
+        const draggingClass = 'fbg-sidebar-mobile-dragging';
+        let activePointerId = null;
+        let dragStartX = 0;
+        let dragStartTime = 0;
+        let dragStartVisibleWidth = 0;
+        let currentDragVisibleWidth = 0;
+        let sidebarWidth = 0;
+        let handleWidth = 0;
+        let handleInset = 0;
+        let isDraggingHandle = false;
+        let suppressNextToggleClick = false;
 
         if (!toggle || !close || !sidebar || !backdrop) {
             return;
         }
 
-        const setOpen = (isOpen) => {
+        const syncToggleIcon = (isOpen) => {
+            toggle.classList.toggle('is-open', isOpen);
+        };
+
+        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+        const isOpen = () => body.classList.contains(openClass);
+        const getSidebarWidth = () => sidebar.getBoundingClientRect().width || 320;
+        const getHandleInset = () => {
+            const inset = Number.parseFloat(window.getComputedStyle(toggle).getPropertyValue('--fbg-mobile-sidebar-handle-inset'));
+            return Number.isFinite(inset) ? inset : 0;
+        };
+
+        const clearDragStyles = () => {
+            sidebar.style.transform = '';
+            toggle.style.left = '';
+            toggle.style.transform = '';
+            body.classList.remove(draggingClass);
+        };
+
+        const applyDragPosition = (visibleWidth) => {
+            const clampedWidth = clamp(visibleWidth, 0, sidebarWidth);
+            const travelDistance = Math.max(0, sidebarWidth - handleWidth - handleInset);
+            const handleOffset = sidebarWidth > 0 ? (clampedWidth / sidebarWidth) * travelDistance : 0;
+
+            currentDragVisibleWidth = clampedWidth;
+            sidebar.style.transform = `translateX(${clampedWidth - sidebarWidth}px)`;
+            toggle.style.left = `${handleInset}px`;
+            toggle.style.transform = `translateY(-50%) translateX(${handleOffset}px)`;
+            backdrop.hidden = clampedWidth <= 4;
+        };
+
+        const setOpen = (isOpen, options = {}) => {
             const shouldOpen = Boolean(isOpen) && mobileQuery.matches;
 
-            body.classList.toggle('fbg-sidebar-mobile-open', shouldOpen);
+            body.classList.toggle(openClass, shouldOpen);
             toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            toggle.setAttribute('aria-label', shouldOpen ? 'Close sidebar' : 'Open sidebar');
             sidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : (mobileQuery.matches ? 'true' : 'false'));
-            toggle.hidden = shouldOpen && mobileQuery.matches;
+            toggle.hidden = !mobileQuery.matches;
             backdrop.hidden = !shouldOpen;
+            syncToggleIcon(shouldOpen);
+
+            if (!options.preserveDragStyles) {
+                clearDragStyles();
+            }
         };
 
         const syncDesktopState = () => {
+            clearDragStyles();
+
             if (!mobileQuery.matches) {
-                body.classList.remove('fbg-sidebar-mobile-open');
+                body.classList.remove(openClass);
                 toggle.hidden = true;
                 backdrop.hidden = true;
                 toggle.setAttribute('aria-expanded', 'false');
+                toggle.setAttribute('aria-label', 'Open sidebar');
                 sidebar.setAttribute('aria-hidden', 'false');
+                syncToggleIcon(false);
                 return;
             }
 
-            toggle.hidden = body.classList.contains('fbg-sidebar-mobile-open');
-            backdrop.hidden = !body.classList.contains('fbg-sidebar-mobile-open');
-            sidebar.setAttribute('aria-hidden', body.classList.contains('fbg-sidebar-mobile-open') ? 'false' : 'true');
+            const sidebarIsOpen = isOpen();
+
+            toggle.hidden = false;
+            toggle.setAttribute('aria-expanded', sidebarIsOpen ? 'true' : 'false');
+            toggle.setAttribute('aria-label', sidebarIsOpen ? 'Close sidebar' : 'Open sidebar');
+            backdrop.hidden = !sidebarIsOpen;
+            sidebar.setAttribute('aria-hidden', sidebarIsOpen ? 'false' : 'true');
+            syncToggleIcon(sidebarIsOpen);
         };
 
-        toggle.addEventListener('click', () => setOpen(true));
+        toggle.addEventListener('pointerdown', (event) => {
+            if (!mobileQuery.matches) {
+                return;
+            }
+
+            activePointerId = event.pointerId;
+            dragStartX = event.clientX;
+            dragStartTime = performance.now();
+            sidebarWidth = getSidebarWidth();
+            handleWidth = toggle.getBoundingClientRect().width || 30;
+            handleInset = getHandleInset();
+            dragStartVisibleWidth = isOpen() ? sidebarWidth : 0;
+            currentDragVisibleWidth = dragStartVisibleWidth;
+            isDraggingHandle = false;
+            toggle.setPointerCapture?.(event.pointerId);
+        });
+
+        toggle.addEventListener('pointermove', (event) => {
+            if (!mobileQuery.matches || activePointerId !== event.pointerId) {
+                return;
+            }
+
+            const dragDistance = event.clientX - dragStartX;
+
+            if (Math.abs(dragDistance) > 4 || isDraggingHandle) {
+                isDraggingHandle = true;
+                body.classList.add(draggingClass);
+                applyDragPosition(dragStartVisibleWidth + dragDistance);
+                event.preventDefault();
+            }
+        });
+
+        toggle.addEventListener('pointerup', (event) => {
+            if (!mobileQuery.matches || activePointerId !== event.pointerId) {
+                return;
+            }
+
+            const dragDistance = event.clientX - dragStartX;
+            const elapsed = Math.max(performance.now() - dragStartTime, 1);
+            const velocity = dragDistance / elapsed;
+
+            if (isDraggingHandle) {
+                applyDragPosition(dragStartVisibleWidth + dragDistance);
+
+                const progress = sidebarWidth > 0 ? currentDragVisibleWidth / sidebarWidth : 0;
+                const shouldOpen = Math.abs(velocity) > 0.45 ? velocity > 0 : progress >= 0.5;
+
+                body.classList.remove(draggingClass);
+                setOpen(shouldOpen, { preserveDragStyles: true });
+
+                suppressNextToggleClick = true;
+                window.setTimeout(() => {
+                    suppressNextToggleClick = false;
+                }, 0);
+
+                requestAnimationFrame(clearDragStyles);
+            }
+
+            activePointerId = null;
+            dragStartX = 0;
+            isDraggingHandle = false;
+        });
+
+        toggle.addEventListener('pointercancel', () => {
+            if (isDraggingHandle) {
+                body.classList.remove(draggingClass);
+                setOpen(isOpen(), { preserveDragStyles: true });
+                requestAnimationFrame(clearDragStyles);
+            }
+
+            activePointerId = null;
+            dragStartX = 0;
+            isDraggingHandle = false;
+        });
+
+        toggle.addEventListener('click', () => {
+            if (suppressNextToggleClick) {
+                return;
+            }
+
+            setOpen(!isOpen());
+        });
         close.addEventListener('click', () => setOpen(false));
         backdrop.addEventListener('click', () => setOpen(false));
 

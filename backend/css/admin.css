@@ -748,13 +748,28 @@
     }
 
     .fbg-admin-sidebar {
-        position: relative;
-        top: auto;
-        height: auto;
-        max-height: none;
-        overflow-y: visible;
+        --fbg-mobile-sidebar-width: min(320px, 86vw);
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1200;
+        width: var(--fbg-mobile-sidebar-width);
+        height: 100vh;
+        max-height: 100vh;
+        overflow-y: auto;
+        transform: translateX(-100%);
+        transition: transform 0.22s ease, box-shadow 0.22s ease;
         border-right: none;
-        border-bottom: 1px solid var(--fbg-border-medium);
+        border-bottom: none;
+        box-shadow: none;
+        overscroll-behavior: contain;
+    }
+
+    body.fbg-admin-sidebar-mobile-open .fbg-admin-sidebar,
+    body.fbg-server-rail-mobile-open .fbg-server-rail {
+        transform: translateX(0);
+        box-shadow: 28px 0 60px rgba(0, 0, 0, 0.42);
     }
 
     .fbg-admin-panel,

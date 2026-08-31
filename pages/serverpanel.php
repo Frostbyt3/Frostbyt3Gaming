@@ -562,7 +562,34 @@ session_write_close();
 ?>
 
 <section class="fbg-admin-shell fbg-server-panel-shell">
-        <aside class="fbg-admin-sidebar fbg-server-rail">
+        <button
+            type="button"
+            class="fbg-server-rail-mobile-toggle fbg-mobile-sidebar-handle"
+            id="fbg-server-rail-mobile-toggle"
+            aria-controls="fbg-server-rail"
+            aria-expanded="false"
+            aria-label="Open server list"
+        >
+            <span class="fbg-mobile-sidebar-icon fbg-mobile-sidebar-icon-closed" aria-hidden="true">
+                <i class="fas fa-angle-right"></i>
+            </span>
+            <span class="fbg-mobile-sidebar-icon fbg-mobile-sidebar-icon-open" aria-hidden="true">
+                <i class="fas fa-angle-left"></i>
+            </span>
+        </button>
+
+        <div class="fbg-server-rail-mobile-backdrop" id="fbg-server-rail-mobile-backdrop" hidden></div>
+
+        <aside class="fbg-admin-sidebar fbg-server-rail" id="fbg-server-rail" aria-hidden="false">
+            <button
+                type="button"
+                class="fbg-server-rail-mobile-close fbg-mobile-sidebar-handle"
+                id="fbg-server-rail-mobile-close"
+                aria-label="Close server list"
+            >
+                <i class="fas fa-angle-left" aria-hidden="true"></i>
+            </button>
+
             <div class="fbg-admin-sidebar-brand fbg-server-rail-brand">
                 <span class="fbg-admin-sidebar-eyebrow">Server Panel</span>
                 <h2>Servers</h2>
@@ -917,5 +944,203 @@ session_write_close();
             </div>
         </div>
 </section>
+
+<script>
+    (() => {
+        if (window.__fbgServerRailMobileBound) {
+            return;
+        }
+
+        window.__fbgServerRailMobileBound = true;
+
+        const body = document.body;
+        const toggle = document.getElementById('fbg-server-rail-mobile-toggle');
+        const close = document.getElementById('fbg-server-rail-mobile-close');
+        const sidebar = document.getElementById('fbg-server-rail');
+        const backdrop = document.getElementById('fbg-server-rail-mobile-backdrop');
+        const mobileQuery = window.matchMedia('(max-width: 1100px)');
+        const openClass = 'fbg-server-rail-mobile-open';
+        const draggingClass = 'fbg-server-rail-mobile-dragging';
+        let activePointerId = null;
+        let dragStartX = 0;
+        let dragStartTime = 0;
+        let dragStartVisibleWidth = 0;
+        let currentDragVisibleWidth = 0;
+        let sidebarWidth = 0;
+        let handleWidth = 0;
+        let handleInset = 0;
+        let isDraggingHandle = false;
+        let suppressNextToggleClick = false;
+
+        if (!toggle || !close || !sidebar || !backdrop) {
+            return;
+        }
+
+        const syncToggleIcon = (isOpen) => {
+            toggle.classList.toggle('is-open', isOpen);
+        };
+
+        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+        const isOpen = () => body.classList.contains(openClass);
+        const getSidebarWidth = () => sidebar.getBoundingClientRect().width || 320;
+        const getHandleInset = () => {
+            const inset = Number.parseFloat(window.getComputedStyle(toggle).getPropertyValue('--fbg-mobile-sidebar-handle-inset'));
+            return Number.isFinite(inset) ? inset : 0;
+        };
+
+        const clearDragStyles = () => {
+            sidebar.style.transform = '';
+            toggle.style.left = '';
+            toggle.style.transform = '';
+            body.classList.remove(draggingClass);
+        };
+
+        const applyDragPosition = (visibleWidth) => {
+            const clampedWidth = clamp(visibleWidth, 0, sidebarWidth);
+            const travelDistance = Math.max(0, sidebarWidth - handleWidth - handleInset);
+            const handleOffset = sidebarWidth > 0 ? (clampedWidth / sidebarWidth) * travelDistance : 0;
+
+            currentDragVisibleWidth = clampedWidth;
+            sidebar.style.transform = `translateX(${clampedWidth - sidebarWidth}px)`;
+            toggle.style.left = `${handleInset}px`;
+            toggle.style.transform = `translateY(-50%) translateX(${handleOffset}px)`;
+            backdrop.hidden = clampedWidth <= 4;
+        };
+
+        const setOpen = (isOpen, options = {}) => {
+            const shouldOpen = Boolean(isOpen) && mobileQuery.matches;
+
+            body.classList.toggle(openClass, shouldOpen);
+            toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            toggle.setAttribute('aria-label', shouldOpen ? 'Close server list' : 'Open server list');
+            sidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : (mobileQuery.matches ? 'true' : 'false'));
+            toggle.hidden = !mobileQuery.matches;
+            backdrop.hidden = !shouldOpen;
+            syncToggleIcon(shouldOpen);
+
+            if (!options.preserveDragStyles) {
+                clearDragStyles();
+            }
+        };
+
+        const syncDesktopState = () => {
+            clearDragStyles();
+
+            if (!mobileQuery.matches) {
+                body.classList.remove(openClass);
+                toggle.hidden = true;
+                backdrop.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.setAttribute('aria-label', 'Open server list');
+                sidebar.setAttribute('aria-hidden', 'false');
+                syncToggleIcon(false);
+                return;
+            }
+
+            const sidebarIsOpen = isOpen();
+
+            toggle.hidden = false;
+            toggle.setAttribute('aria-expanded', sidebarIsOpen ? 'true' : 'false');
+            toggle.setAttribute('aria-label', sidebarIsOpen ? 'Close server list' : 'Open server list');
+            backdrop.hidden = !sidebarIsOpen;
+            sidebar.setAttribute('aria-hidden', sidebarIsOpen ? 'false' : 'true');
+            syncToggleIcon(sidebarIsOpen);
+        };
+
+        toggle.addEventListener('pointerdown', (event) => {
+            if (!mobileQuery.matches) {
+                return;
+            }
+
+            activePointerId = event.pointerId;
+            dragStartX = event.clientX;
+            dragStartTime = performance.now();
+            sidebarWidth = getSidebarWidth();
+            handleWidth = toggle.getBoundingClientRect().width || 30;
+            handleInset = getHandleInset();
+            dragStartVisibleWidth = isOpen() ? sidebarWidth : 0;
+            currentDragVisibleWidth = dragStartVisibleWidth;
+            isDraggingHandle = false;
+            toggle.setPointerCapture?.(event.pointerId);
+        });
+
+        toggle.addEventListener('pointermove', (event) => {
+            if (!mobileQuery.matches || activePointerId !== event.pointerId) {
+                return;
+            }
+
+            const dragDistance = event.clientX - dragStartX;
+
+            if (Math.abs(dragDistance) > 4 || isDraggingHandle) {
+                isDraggingHandle = true;
+                body.classList.add(draggingClass);
+                applyDragPosition(dragStartVisibleWidth + dragDistance);
+                event.preventDefault();
+            }
+        });
+
+        toggle.addEventListener('pointerup', (event) => {
+            if (!mobileQuery.matches || activePointerId !== event.pointerId) {
+                return;
+            }
+
+            const dragDistance = event.clientX - dragStartX;
+            const elapsed = Math.max(performance.now() - dragStartTime, 1);
+            const velocity = dragDistance / elapsed;
+
+            if (isDraggingHandle) {
+                applyDragPosition(dragStartVisibleWidth + dragDistance);
+
+                const progress = sidebarWidth > 0 ? currentDragVisibleWidth / sidebarWidth : 0;
+                const shouldOpen = Math.abs(velocity) > 0.45 ? velocity > 0 : progress >= 0.5;
+
+                body.classList.remove(draggingClass);
+                setOpen(shouldOpen, { preserveDragStyles: true });
+
+                suppressNextToggleClick = true;
+                window.setTimeout(() => {
+                    suppressNextToggleClick = false;
+                }, 0);
+
+                requestAnimationFrame(clearDragStyles);
+            }
+
+            activePointerId = null;
+            dragStartX = 0;
+            isDraggingHandle = false;
+        });
+
+        toggle.addEventListener('pointercancel', () => {
+            if (isDraggingHandle) {
+                body.classList.remove(draggingClass);
+                setOpen(isOpen(), { preserveDragStyles: true });
+                requestAnimationFrame(clearDragStyles);
+            }
+
+            activePointerId = null;
+            dragStartX = 0;
+            isDraggingHandle = false;
+        });
+
+        toggle.addEventListener('click', () => {
+            if (suppressNextToggleClick) {
+                return;
+            }
+
+            setOpen(!isOpen());
+        });
+        close.addEventListener('click', () => setOpen(false));
+        backdrop.addEventListener('click', () => setOpen(false));
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        });
+
+        mobileQuery.addEventListener('change', syncDesktopState);
+        syncDesktopState();
+    })();
+</script>
 
 <script src="<?php echo asset('./backend/js/serverpanel/panel.js'); ?>"></script>
