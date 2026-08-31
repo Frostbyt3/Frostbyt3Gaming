@@ -9936,6 +9936,144 @@ textarea.startup-variable-input {
     width: 100%;
 }
 
+    /* padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1.2;
+    border-radius: 8px; */
+
+input[type="file"] {
+    font-family: var(--fbg-font-body);
+    font-size: 14px;
+    font-variation-settings: "wght" 600;
+    cursor: pointer;
+    text-decoration: none;
+    letter-spacing: .05em;
+}
+
+input[type="file"]:active {
+    border: 1px solid var(--fbg-brightblue);
+}
+
+input[type="file"]::file-selector-button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(255, 255, 255, 0.02) 45%,
+            rgba(0, 0, 0, 0.08) 100%
+        ),
+        var(--fbg-button-bg);
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 10px;
+
+    box-shadow:
+        0 3px 8px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    color: var(--fbg-white);
+    cursor: pointer;
+    display: inline-block;
+    font-family: var(--fbg-font-body);
+    font-size: 14px;
+    font-variation-settings: "wght" 600;
+    font-weight: 600;
+    line-height: 1.0;
+    outline: 0;
+    padding: 6px 12px;
+    text-align: center;
+    text-transform: uppercase;
+    text-decoration: none;
+    letter-spacing: .05em;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.15s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.03) 45%,
+            rgba(0, 0, 0, 0.06) 100%
+        ),
+        var(--fbg-button-bg-hover);
+
+    border-color: rgba(255, 255, 255, 0.16);
+
+    box-shadow:
+        0 5px 12px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+    transform: translateY(-1px);
+}
+
+input[type="file"]::file-selector-button:active {
+    transform: translateY(0);
+
+    box-shadow:
+        0 2px 5px rgba(0, 0, 0, 0.28),
+        inset 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.035);
+    cursor: pointer;
+    position: relative;
+    flex: 0 0 18px;
+    transition:
+        border-color 0.18s ease,
+        background-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+input[type="radio"]::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fbg-white);
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.16s ease;
+}
+
+input[type="radio"]:hover {
+    border-color: rgba(34, 174, 255, 0.5);
+}
+
+input[type="radio"]:checked {
+    border-color: var(--fbg-brightblue);
+    background: var(--fbg-button-bg);
+    box-shadow: 0 0 0 3px rgba(34, 174, 255, 0.12);
+}
+
+input[type="radio"]:checked::after {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+input[type="radio"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(34, 174, 255, 0.18);
+}
+
 @media (max-width: 1200px) {
     .fbg-palworld-setting-list {
         grid-template-columns: 1fr;

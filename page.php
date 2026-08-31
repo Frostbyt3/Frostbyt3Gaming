@@ -46,6 +46,7 @@ $allowed = [
     'admin-database-hosts'  => 'admin/database-hosts.php',
     'admin-locations'       => 'admin/locations.php',
     'admin-nodes'           => 'admin/nodes.php',
+    'admin-nests'           => 'admin/nests.php',
     'admin-image-upload'    => 'admin/image.php',
     'admin-file-upload'     => 'admin/fileupload.php',
     'admin-link-shortener'  => 'admin/shorten.php',
@@ -95,6 +96,15 @@ if (
 if (
     $_SERVER['REQUEST_METHOD'] === 'GET'
     && $page === 'invoice-pdf'
+) {
+    include('./pages/' . $allowed[$page]);
+    exit;
+}
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && $page === 'admin-nests'
+    && isset($_GET['export_egg'])
 ) {
     include('./pages/' . $allowed[$page]);
     exit;

@@ -106,6 +106,14 @@ if (function_exists('asset')) {
         </div>
 
         <div class="fbg-admin-nav-group">
+            <span class="fbg-admin-nav-group-title">Service Management</span>
+            
+            <a href="./page.php?name=admin-nests" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-nests', $currentAdminPage) ?>">
+                Nests & Eggs
+            </a>
+        </div>
+
+        <div class="fbg-admin-nav-group">
             <span class="fbg-admin-nav-group-title">Invoice</span>
 
             <a href="./page.php?name=admin-invoice-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoice-settings', $currentAdminPage) ?>">

@@ -16,18 +16,6 @@
 - [ ] Add mount node assignment controls for linking and unlinking nodes.
 - [ ] Add mount delete behavior or document why deletes should remain panel-only.
 
-## Admin Nest/Egg Management
-
-- [ ] Add admin nest list page with nest name, description, author, and egg count.
-- [ ] Add admin nest create/edit/delete flow with name, description, and author fields.
-- [ ] Add nest detail view listing eggs with author, Docker images, startup command, and export action.
-- [ ] Add egg import flow for Pterodactyl egg JSON files.
-- [ ] Add egg create/edit flow for nest, name, description, author, UUID, Docker images, startup command, config files, startup config, logs config, stop command, and file denylist.
-- [ ] Add egg variable management for create, edit, delete, validation rules, default values, user-viewable, and user-editable flags.
-- [ ] Add egg install script management for copy-from behavior, script container/image, entrypoint, and install script body.
-- [ ] Add egg export/download support.
-- [ ] Add egg delete flow with safeguards when servers or shop plans still reference the egg.
-
 ## Frontend Invoice System
 
 - [ ] Fix invoice/server notification email CSS rendering issues in the iOS Gmail app.
