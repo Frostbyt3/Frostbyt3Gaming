@@ -615,6 +615,7 @@
 
 .fbg-admin-header {
     margin-bottom: 24px;
+    z-index: 0;
 }
 
 .fbg-admin-kicker {

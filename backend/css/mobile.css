@@ -913,13 +913,13 @@
 }
 
 @media (max-width: 540px) {
-    body {
-        --fbg-mobile-sidebar-width: min(300px, 90vw);
-    }
-
     .fbg-dashboard-sidebar {
         width: min(300px, 90vw);
         padding: 72px 16px 18px;
+    }
+
+    body.fbg-sidebar-mobile-open .fbg-sidebar-mobile-toggle {
+        left: calc(min(300px, 90vw) - 30px);
     }
 
     /* Hard reset the dashboard card body */
