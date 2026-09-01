@@ -167,7 +167,8 @@ declare(strict_types=1);
             "No dodos were harmed",
             "Emergency maintenance complete!",
             "Dragons?",
-            "I used to be an adventurer like you..."
+            "I used to be an adventurer like you...",
+            "Hey Chief!" // RIP
         ];
 
         // If there is only one message, just return it.
