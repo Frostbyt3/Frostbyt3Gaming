@@ -77,6 +77,7 @@ if (!$permissions) {
 try {
     pteroEnsureServerAccessSession(false);
     pteroRequireServerPermission($serverIdentifier, 'user.update');
+    $serverMeta = pteroGetSessionServerMeta($serverIdentifier);
 
     session_write_close();
 
@@ -94,6 +95,49 @@ try {
         exit;
     }
 
+    $emailSent = false;
+    $updatedSubuser = $result['data']['attributes'] ?? [];
+    $subuserEmail = is_array($updatedSubuser) ? trim((string)($updatedSubuser['email'] ?? '')) : '';
+    $subuserName = is_array($updatedSubuser) ? trim((string)($updatedSubuser['username'] ?? '')) : '';
+
+    if ($subuserEmail === '') {
+        try {
+            $subuserResult = pteroGetSubuser($serverIdentifier, $subuserUuid);
+            $subuserAttributes = $subuserResult['data']['attributes'] ?? [];
+
+            if (is_array($subuserAttributes)) {
+                $subuserEmail = trim((string)($subuserAttributes['email'] ?? ''));
+                $subuserName = trim((string)($subuserAttributes['username'] ?? $subuserName));
+            }
+        } catch (Throwable $lookupError) {
+            error_log('Subuser email lookup failed: ' . $lookupError->getMessage());
+        }
+    }
+
+    if ($subuserEmail !== '') {
+        try {
+            require_once __DIR__ . '/../../../includes/mailer.php';
+
+            $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $baseUrl = function_exists('fbgShopBaseUrl')
+                ? rtrim((string)fbgShopBaseUrl(), '/')
+                : ($host !== '' ? "{$scheme}://{$host}" : 'https://frostbyt3gaming.com');
+            $serverPanelUrl = $baseUrl . '/page.php?name=serverpanel&id=' . rawurlencode($serverIdentifier);
+            $serverName = trim((string)($serverMeta['name'] ?? ''));
+
+            $emailSent = fbgSendServerSubuserAccessEmail([
+                'type' => 'updated',
+                'to_email' => $subuserEmail,
+                'display_name' => $subuserName,
+                'server_name' => $serverName !== '' ? $serverName : 'your server',
+                'server_panel_url' => $serverPanelUrl,
+            ]);
+        } catch (Throwable $mailError) {
+            error_log('Subuser permission update email failed: ' . $mailError->getMessage());
+        }
+    }
+
     echo json_encode([
         'ok' => true,
         'error' => null,
@@ -101,6 +145,7 @@ try {
             'message' => 'Subuser permissions updated successfully.',
             'item' => $result['data']['attributes'] ?? null,
             'subuser_uuid' => $subuserUuid,
+            'email_sent' => $emailSent,
         ],
     ]);
     exit;

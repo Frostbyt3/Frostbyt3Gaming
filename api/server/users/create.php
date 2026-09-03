@@ -77,6 +77,7 @@ if (!$permissions) {
 try {
     pteroEnsureServerAccessSession(false);
     pteroRequireServerPermission($serverIdentifier, 'user.create');
+    $serverMeta = pteroGetSessionServerMeta($serverIdentifier);
 
     session_write_close();
 
@@ -95,12 +96,35 @@ try {
         exit;
     }
 
+    $emailSent = false;
+    try {
+        require_once __DIR__ . '/../../../includes/mailer.php';
+
+        $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $baseUrl = function_exists('fbgShopBaseUrl')
+            ? rtrim((string)fbgShopBaseUrl(), '/')
+            : ($host !== '' ? "{$scheme}://{$host}" : 'https://frostbyt3gaming.com');
+        $serverPanelUrl = $baseUrl . '/page.php?name=serverpanel&id=' . rawurlencode($serverIdentifier);
+        $serverName = trim((string)($serverMeta['name'] ?? ''));
+
+        $emailSent = fbgSendServerSubuserAccessEmail([
+            'type' => 'added',
+            'to_email' => $email,
+            'server_name' => $serverName !== '' ? $serverName : 'your server',
+            'server_panel_url' => $serverPanelUrl,
+        ]);
+    } catch (Throwable $mailError) {
+        error_log('Subuser creation email failed: ' . $mailError->getMessage());
+    }
+
     echo json_encode([
         'ok' => true,
         'error' => null,
         'data' => [
             'message' => 'Subuser created successfully.',
             'item' => $result['data']['attributes'] ?? null,
+            'email_sent' => $emailSent,
         ],
     ]);
     exit;

@@ -1292,17 +1292,26 @@ feature {
 
 .auth-section {
     display: flex;
+    flex: 1;
+    align-items: center;
     justify-content: center;
-    margin-top: 40px;
+    width: 100%;
+    min-height: clamp(520px, 72vh, 760px);
+    padding: clamp(48px, 8vh, 96px) 20px;
+    box-sizing: border-box;
 }
 
 .auth-card {
+    width: min(100%, 420px);
     background: var(--fbg-card-bg);
     border: 1px solid var(--fbg-border-medium);
-    border-radius: 8px;
-    padding: 18px;
-    margin-bottom: 16px;
+    border-radius: 12px;
+    padding: 30px;
     text-align: center;
+    box-sizing: border-box;
+    box-shadow:
+        0 20px 45px rgba(0, 0, 0, 0.32),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .auth-card h1 {
@@ -1314,6 +1323,10 @@ feature {
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+
+.auth-card .btn {
+    width: 100%;
 }
 
 .form-group {
