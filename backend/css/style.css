@@ -1297,11 +1297,11 @@ feature {
 }
 
 .auth-card {
-    background: var(--fbg-body-bg);
-    padding: 30px;
-    border-radius: 6px;
-    width: 100%;
-    max-width: 420px;
+    background: var(--fbg-card-bg);
+    border: 1px solid var(--fbg-border-medium);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 16px;
     text-align: center;
 }
 
@@ -1330,7 +1330,7 @@ feature {
 }
 
 .form-group input {
-    background-color: var(--fbg-input-bg);
+    background-color: var(--fbg-body-bg);
     border: 2px solid var(--fbg-border-medium);
     border-radius: 4px;
     color: var(--fbg-text-main);
@@ -7338,6 +7338,50 @@ body.fbg-modal-open {
     flex-direction: column;
 }
 
+.fbg-subuser-templates {
+    flex: 0 0 auto;
+    margin-bottom: 2px;
+}
+
+.fbg-subuser-template-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.fbg-subuser-template-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: min(100%, 520px);
+}
+
+.fbg-subuser-code-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: min(100%, 360px);
+    margin-left: auto;
+}
+
+.fbg-subuser-code-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#subuser-permission-code {
+    width: min(320px, 100%);
+    font-family: Consolas, Monaco, monospace;
+    letter-spacing: 0;
+}
+
+.fbg-subuser-code-controls .btn {
+    white-space: nowrap;
+}
+
 #subuser-permission-groups {
     flex: 1 1 auto;
     min-height: 220px;
@@ -9256,8 +9300,8 @@ textarea.startup-variable-input {
 }
 
 .fbg-account-section {
-    background: #1b1b1b;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--fbg-card-bg);
+    border: 1px solid var(--fbg-border-medium);
     border-radius: 8px;
     padding: 18px;
     margin-bottom: 16px;

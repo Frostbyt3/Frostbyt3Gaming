@@ -1,4 +1,5 @@
 <?php
+#users.php
 declare(strict_types=1);
 
 $serverIdentifier = (string)($selectedServer['identifier'] ?? '');
@@ -65,48 +66,39 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
                 </div>
 
                 <div class="fbg-subuser-templates">
-                    <span class="fbg-meta-label">Quick Templates</span>
+                    <div class="fbg-subuser-template-row">
+                        <div class="fbg-subuser-template-group">
+                            <span class="fbg-meta-label">Quick Templates</span>
+                            <div class="fbg-schedule-preset-buttons" id="subuser-template-buttons">
+                                <button type="button" class="btn fbg-neutral-button btn-sm subuser-template-button" data-template="readonly">
+                                    Read Only
+                                </button>
 
-                    <div class="fbg-schedule-preset-buttons" id="subuser-template-buttons">
-                        <button
-                            type="button"
-                            class="btn fbg-neutral-button btn-sm subuser-template-button"
-                            data-template="readonly"
-                        >
-                            Read Only
-                        </button>
+                                <button type="button" class="btn fbg-neutral-button btn-sm subuser-template-button" data-template="moderator">
+                                    Moderator
+                                </button>
 
-                        <button
-                            type="button"
-                            class="btn fbg-neutral-button btn-sm subuser-template-button"
-                            data-template="moderator"
-                        >
-                            Moderator
-                        </button>
+                                <button type="button" class="btn fbg-neutral-button btn-sm subuser-template-button" data-template="developer">
+                                    Developer
+                                </button>
 
-                        <button
-                            type="button"
-                            class="btn fbg-neutral-button btn-sm subuser-template-button"
-                            data-template="developer"
-                        >
-                            Developer
-                        </button>
+                                <button type="button" class="btn fbg-neutral-button btn-sm subuser-template-button" data-template="admin">
+                                    Administrator
+                                </button>
 
-                        <button
-                            type="button"
-                            class="btn fbg-neutral-button btn-sm subuser-template-button"
-                            data-template="admin"
-                        >
-                            Administrator
-                        </button>
+                                <button type="button" class="btn fbg-neutral-button btn-sm" id="subuser-clear-permissions">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
 
-                        <button
-                            type="button"
-                            class="btn fbg-neutral-button btn-sm"
-                            id="subuser-clear-permissions"
-                        >
-                            Clear
-                        </button>
+                        <div class="fbg-subuser-code-group">
+                            <label class="fbg-meta-label" for="subuser-permission-code">Permission Code</label>
+                            <div class="fbg-subuser-code-controls">
+                                <input type="text" class="fbg-files-text-input" id="subuser-permission-code" inputmode="numeric" autocomplete="off" pattern="[0-9]*" spellcheck="false">
+                                <button type="button" class="btn fbg-neutral-button btn-sm" id="subuser-permission-code-copy">Copy</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

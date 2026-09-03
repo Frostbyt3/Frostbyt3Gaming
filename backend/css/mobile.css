@@ -457,6 +457,27 @@
     }
 
     /* Users */
+    .fbg-subuser-template-row {
+        align-items: stretch;
+    }
+
+    .fbg-subuser-template-group,
+    .fbg-subuser-code-group {
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+
+    .fbg-subuser-code-controls {
+        width: 100%;
+    }
+
+    #subuser-permission-code {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+    }
+
     .fbg-user-permission-grid {
         grid-template-columns: 1fr;
     }

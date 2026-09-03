@@ -22,6 +22,8 @@
     const emailGroup = document.getElementById('subuser-email-group');
     const emailField = document.getElementById('subuser_email');
     const permissionGroupsEl = document.getElementById('subuser-permission-groups');
+    const permissionCodeField = document.getElementById('subuser-permission-code');
+    const permissionCodeCopyButton = document.getElementById('subuser-permission-code-copy');
 
     const endpoints = {
         list: '/api/server/users/list.php?id=' + encodeURIComponent(serverId),
@@ -31,10 +33,59 @@
         delete: '/api/server/users/delete.php'
     };
 
+    const permissionCodeVersion = '01';
+    const permissionCodeMaskWidth = 18;
+    const permissionCodeBits = Object.freeze([
+        'websocket.connect',
+        'control.console',
+        'control.start',
+        'control.stop',
+        'control.restart',
+        'user.create',
+        'user.read',
+        'user.update',
+        'user.delete',
+        'file.create',
+        'file.read',
+        'file.read-content',
+        'file.update',
+        'file.delete',
+        'file.archive',
+        'file.sftp',
+        'backup.create',
+        'backup.read',
+        'backup.delete',
+        'backup.download',
+        'backup.restore',
+        'allocation.read',
+        'allocation.create',
+        'allocation.update',
+        'allocation.delete',
+        'startup.read',
+        'startup.update',
+        'startup.docker-image',
+        'database.create',
+        'database.read',
+        'database.update',
+        'database.delete',
+        'database.view_password',
+        'schedule.create',
+        'schedule.read',
+        'schedule.update',
+        'schedule.delete',
+        'settings.rename',
+        'settings.reinstall',
+        'activity.read'
+    ]);
+
+    const permissionCodeBitByKey = new Map(permissionCodeBits.map((permission, index) => [permission, BigInt(index)]));
+
     let mode = 'create';
     let permissionCatalog = {};
     let templates = {};
     let usersByUuid = {};
+    let lastValidPermissionCode = '';
+    let isApplyingPermissionCode = false;
 
     function mountModalsToBody() {
         if (modalRoot && modalRoot.parentElement !== document.body) {
@@ -154,7 +205,138 @@
         ).map((input) => input.value);
     }
 
-    function setCheckedPermissions(permissions) {
+    function getCatalogPermissionKeys() {
+        const keys = new Set();
+
+        Object.values(permissionCatalog || {}).forEach((items) => {
+            Object.keys(items || {}).forEach((permissionKey) => {
+                keys.add(permissionKey);
+            });
+        });
+
+        return keys;
+    }
+
+    function getAvailablePermissionMask() {
+        let mask = 0n;
+
+        getCatalogPermissionKeys().forEach((permissionKey) => {
+            const bit = permissionCodeBitByKey.get(permissionKey);
+            if (bit !== undefined) {
+                mask |= 1n << bit;
+            }
+        });
+
+        return mask;
+    }
+
+    function getKnownPermissionMask() {
+        let mask = 0n;
+
+        permissionCodeBits.forEach((permissionKey) => {
+            const bit = permissionCodeBitByKey.get(permissionKey);
+            if (bit !== undefined) {
+                mask |= 1n << bit;
+            }
+        });
+
+        return mask;
+    }
+
+    function formatPermissionCode(mask) {
+        return permissionCodeVersion + mask.toString().padStart(permissionCodeMaskWidth, '0');
+    }
+
+    function encodePermissionCode(permissions) {
+        let mask = 0n;
+
+        (Array.isArray(permissions) ? permissions : []).forEach((permissionKey) => {
+            const bit = permissionCodeBitByKey.get(permissionKey);
+            if (bit !== undefined) {
+                mask |= 1n << bit;
+            }
+        });
+
+        return formatPermissionCode(mask);
+    }
+
+    function decodePermissionCode(code) {
+        const rawCode = String(code || '').trim();
+
+        if (!/^\d+$/.test(rawCode)) {
+            return {
+                ok: false,
+                message: 'Permission codes can only contain numbers.'
+            };
+        }
+
+        if (rawCode.length <= permissionCodeVersion.length) {
+            return {
+                ok: false,
+                message: 'That permission code is too short.'
+            };
+        }
+
+        const version = rawCode.slice(0, permissionCodeVersion.length);
+        if (version !== permissionCodeVersion) {
+            return {
+                ok: false,
+                message: "This permission code uses a version we don't support yet."
+            };
+        }
+
+        const maskText = rawCode.slice(permissionCodeVersion.length);
+        let mask;
+
+        try {
+            mask = BigInt(maskText);
+        } catch (error) {
+            return {
+                ok: false,
+                message: "We couldn't read that permission code."
+            };
+        }
+
+        if ((mask & ~getKnownPermissionMask()) !== 0n) {
+            return {
+                ok: false,
+                message: 'That permission code contains permissions this panel does not recognize.'
+            };
+        }
+
+        if ((mask & ~getAvailablePermissionMask()) !== 0n) {
+            return {
+                ok: false,
+                message: "That permission code includes permissions this server can't use here."
+            };
+        }
+
+        const permissions = [];
+        permissionCodeBits.forEach((permissionKey, index) => {
+            const bitMask = 1n << BigInt(index);
+            if ((mask & bitMask) !== 0n) {
+                permissions.push(permissionKey);
+            }
+        });
+
+        return {
+            ok: true,
+            permissions,
+            code: formatPermissionCode(mask)
+        };
+    }
+
+    function syncPermissionCodeFromSelection() {
+        if (!permissionCodeField || isApplyingPermissionCode) {
+            return;
+        }
+
+        const code = encodePermissionCode(getCheckedPermissions());
+        permissionCodeField.value = code;
+        lastValidPermissionCode = code;
+    }
+
+    function setCheckedPermissions(permissions, options = {}) {
         const selected = new Set(Array.isArray(permissions) ? permissions : []);
 
         permissionGroupsEl
@@ -164,6 +346,49 @@
             });
 
         syncGroupCheckboxes();
+
+        if (options.syncCode !== false) {
+            syncPermissionCodeFromSelection();
+        }
+    }
+
+    function applyPermissionCodeFromField(showErrors = false) {
+        if (!permissionCodeField || isApplyingPermissionCode) {
+            return;
+        }
+
+        const rawCode = permissionCodeField.value.trim();
+        if (!rawCode) {
+            if (showErrors) {
+                showUsersToast({
+                    type: 'error',
+                    title: 'Permission Code',
+                    message: 'Enter a permission code before applying it.'
+                });
+                permissionCodeField.value = lastValidPermissionCode;
+            }
+            return;
+        }
+
+        const decoded = decodePermissionCode(rawCode);
+        if (!decoded.ok) {
+            if (showErrors) {
+                showUsersToast({
+                    type: 'error',
+                    title: 'Permission Code',
+                    message: decoded.message
+                });
+                permissionCodeField.value = lastValidPermissionCode;
+            }
+            return;
+        }
+
+        isApplyingPermissionCode = true;
+        setCheckedPermissions(decoded.permissions, { syncCode: false });
+        isApplyingPermissionCode = false;
+
+        permissionCodeField.value = decoded.code;
+        lastValidPermissionCode = decoded.code;
     }
 
     function syncGroupCheckboxes() {
@@ -209,6 +434,7 @@
                 });
 
                 syncGroupCheckboxes();
+                syncPermissionCodeFromSelection();
             });
         });
 
@@ -217,6 +443,7 @@
             .forEach((input) => {
                 input.addEventListener('change', () => {
                     syncGroupCheckboxes();
+                    syncPermissionCodeFromSelection();
                 });
             });
     }
@@ -272,6 +499,7 @@
 
         bindPermissionGroupToggles();
         syncGroupCheckboxes();
+        syncPermissionCodeFromSelection();
     }
 
     function openCreateModal() {
@@ -574,6 +802,53 @@
             closeModal();
         }
     });
+
+    if (permissionCodeField) {
+        permissionCodeField.addEventListener('input', () => {
+            if (/^\d+$/.test(permissionCodeField.value.trim())) {
+                applyPermissionCodeFromField(false);
+            }
+        });
+
+        permissionCodeField.addEventListener('change', () => {
+            applyPermissionCodeFromField(true);
+        });
+
+        permissionCodeField.addEventListener('paste', () => {
+            window.setTimeout(() => {
+                applyPermissionCodeFromField(true);
+            }, 0);
+        });
+    }
+
+    if (permissionCodeCopyButton) {
+        permissionCodeCopyButton.addEventListener('click', async () => {
+            const code = permissionCodeField ? permissionCodeField.value.trim() : '';
+            if (!code) {
+                showUsersToast({
+                    type: 'error',
+                    title: 'Permission Code',
+                    message: 'There is no permission code to copy yet.'
+                });
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(code);
+                showUsersToast({
+                    type: 'success',
+                    title: 'Permission Code',
+                    message: 'Permission code copied.'
+                });
+            } catch (error) {
+                showUsersToast({
+                    type: 'error',
+                    title: 'Permission Code',
+                    message: "We couldn't copy the permission code.\nPlease copy it manually."
+                });
+            }
+        });
+    }
 
     if (newButton) newButton.addEventListener('click', openCreateModal);
     if (modalClose) modalClose.addEventListener('click', closeModal);
