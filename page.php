@@ -49,6 +49,7 @@ $allowed = [
     'admin-nests'           => 'admin/nests.php',
     'admin-image-upload'    => 'admin/image.php',
     'admin-file-upload'     => 'admin/fileupload.php',
+    'admin-fbcode'          => 'admin/fbcode.php',
     'admin-link-shortener'  => 'admin/shorten.php',
     'admin-service-manager' => 'admin/servicemanager.php',
     'admin-payments'        => 'admin/payments.php',

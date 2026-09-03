@@ -160,6 +160,10 @@ if (function_exists('asset')) {
             <a href="./page.php?name=admin-webp-png" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-webp-png', $currentAdminPage) ?>">
                 WEBP to PNG Converter
             </a>
+
+            <a href="./page.php?name=admin-fbcode" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-fbcode', $currentAdminPage) ?>">
+                FBCode Generator
+            </a>
         </div>
 
         <!-- System -->
