@@ -77,13 +77,13 @@ function fbgCodeDefaultOptions(): array
         'pattern_color' => '#14b8ff',
         'background_color' => '#0d1117',
         'module_style' => 'rounded',
-        'logo_enabled' => true,
+        'logo_mode' => 'frostbyt3',
         'logo_scale' => 0.2,
         'ecc_level' => 'H',
         'quiet_zone' => 4,
         'draw_light_modules' => true,
         'connect_paths' => true,
-        'finder_style' => 'square',
+        'eye_style' => 'square',
     ];
 }
 
@@ -110,11 +110,20 @@ function fbgCodeNormalizeOptions(array $input): array
     $backgroundColor = fbgCodeNormalizeHexColor((string)($input['background_color'] ?? $defaults['background_color']), 'background color');
     $moduleStyle = strtolower(trim((string)($input['module_style'] ?? $defaults['module_style'])));
 
-    if (!in_array($moduleStyle, ['square', 'rounded'], true)) {
+    if (!in_array($moduleStyle, ['square', 'rounded', 'dots'], true)) {
         $moduleStyle = $defaults['module_style'];
     }
 
-    $logoEnabled = fbgCodeNormalizeBool($input['logo_enabled'] ?? $defaults['logo_enabled']);
+    $logoMode = strtolower(trim((string)($input['logo_mode'] ?? '')));
+    if ($logoMode === '') {
+        $logoMode = fbgCodeNormalizeBool($input['logo_enabled'] ?? true) ? $defaults['logo_mode'] : 'none';
+    }
+
+    if (!in_array($logoMode, ['none', 'frostbyt3', 'custom'], true)) {
+        $logoMode = $defaults['logo_mode'];
+    }
+
+    $logoEnabled = $logoMode !== 'none';
     $logoScale = max(0.12, min(0.3, (float)($input['logo_scale'] ?? $defaults['logo_scale'])));
     $eccLevel = strtoupper(trim((string)($input['ecc_level'] ?? $defaults['ecc_level'])));
 
@@ -129,10 +138,10 @@ function fbgCodeNormalizeOptions(array $input): array
     $quietZone = max(0, min(12, (int)($input['quiet_zone'] ?? $defaults['quiet_zone'])));
     $drawLightModules = fbgCodeNormalizeBool($input['draw_light_modules'] ?? $defaults['draw_light_modules']);
     $connectPaths = fbgCodeNormalizeBool($input['connect_paths'] ?? $defaults['connect_paths']);
-    $finderStyle = strtolower(trim((string)($input['finder_style'] ?? $defaults['finder_style'])));
+    $eyeStyle = strtolower(trim((string)($input['eye_style'] ?? $input['finder_style'] ?? $defaults['eye_style'])));
 
-    if (!in_array($finderStyle, ['square', 'match'], true)) {
-        $finderStyle = $defaults['finder_style'];
+    if (!in_array($eyeStyle, ['square', 'dot', 'match'], true)) {
+        $eyeStyle = $defaults['eye_style'];
     }
 
     return [
@@ -142,40 +151,49 @@ function fbgCodeNormalizeOptions(array $input): array
         'pattern_color' => $patternColor,
         'background_color' => $backgroundColor,
         'module_style' => $moduleStyle,
+        'logo_mode' => $logoMode,
         'logo_enabled' => $logoEnabled,
         'logo_scale' => $logoScale,
         'ecc_level' => $eccLevel,
         'quiet_zone' => $quietZone,
         'draw_light_modules' => $drawLightModules,
         'connect_paths' => $connectPaths,
-        'finder_style' => $finderStyle,
+        'eye_style' => $eyeStyle,
     ];
 }
 
-function fbgCodeGenerate(array $input): array
+function fbgCodeGenerate(array $input, array|null $logoUpload = null): array
 {
     $options = fbgCodeNormalizeOptions($input);
+    $logoPath = null;
+    $temporaryLogoPath = null;
 
     if ($options['format'] === 'png' && !extension_loaded('gd')) {
         throw new FBGCodeException('PNG output needs the GD PHP extension.');
     }
 
-    if ($options['logo_enabled'] && !is_readable(fbgCodeLogoPath())) {
-        throw new FBGCodeException('The Frostbyt3 logo asset could not be loaded.');
-    }
+    try {
+        if ($options['logo_enabled']) {
+            [$logoPath, $temporaryLogoPath] = fbgCodeResolveLogoPath($options['logo_mode'], $logoUpload);
+        }
 
-    $qrOptions = fbgCodeBuildQrOptions($options);
-    $qrCode = new QRCode($qrOptions);
+        $qrOptions = fbgCodeBuildQrOptions($options);
+        $qrCode = new QRCode($qrOptions);
 
-    if ($options['format'] === 'png' && $options['logo_enabled']) {
-        $renderer = new FBGCodePngWithLogo($qrOptions, $qrCode->addByteSegment($options['content'])->getQRMatrix());
-        $body = $renderer->dump(null, fbgCodeLogoPath());
-    } else {
-        $body = $qrCode->render($options['content']);
-    }
+        if ($options['format'] === 'png' && $options['logo_enabled'] && $logoPath !== null) {
+            $renderer = new FBGCodePngWithLogo($qrOptions, $qrCode->addByteSegment($options['content'])->getQRMatrix());
+            $body = $renderer->dump(null, $logoPath);
+        } else {
+            $body = $qrCode->render($options['content']);
+        }
 
-    if ($options['format'] === 'svg' && $options['logo_enabled']) {
-        $body = fbgCodeInjectSvgLogo($body, $options['logo_scale']);
+        if ($options['format'] === 'svg' && $options['logo_enabled'] && $logoPath !== null) {
+            $body = fbgCodeInjectSvgLogo($body, $options['logo_scale'], $logoPath);
+        }
+    } finally {
+        if ($temporaryLogoPath !== null && is_file($temporaryLogoPath)) {
+            unlink($temporaryLogoPath);
+        }
     }
 
     return [
@@ -197,20 +215,10 @@ function fbgCodeBuildQrOptions(array $options): QROptions
     ];
     $rgbDark = fbgCodeHexToRgb($options['pattern_color']);
     $rgbLight = fbgCodeHexToRgb($options['background_color']);
-    $isRounded = $options['module_style'] === 'rounded';
+    $usesCircularModules = $options['module_style'] !== 'square' || $options['eye_style'] === 'dot';
+    $circleRadius = $options['module_style'] === 'dots' ? 0.32 : 0.45;
     $logoModules = $options['logo_enabled'] ? max(7, min(15, (int)round($options['logo_scale'] * 53))) : null;
-    $keepAsSquare = [];
-
-    if ($isRounded && $options['finder_style'] === 'square') {
-        $keepAsSquare = [
-            QRMatrix::M_FINDER,
-            QRMatrix::M_FINDER_DARK,
-            QRMatrix::M_FINDER_DOT,
-            QRMatrix::M_FINDER_DOT_LIGHT,
-            QRMatrix::M_ALIGNMENT,
-            QRMatrix::M_ALIGNMENT_DARK,
-        ];
-    }
+    $keepAsSquare = fbgCodeModulesKeptSquare($options);
 
     $libraryOptions = [
         'version' => -1,
@@ -222,8 +230,8 @@ function fbgCodeBuildQrOptions(array $options): QROptions
         'addQuietzone' => $options['quiet_zone'] > 0,
         'quietzoneSize' => $options['quiet_zone'],
         'drawLightModules' => $options['draw_light_modules'],
-        'drawCircularModules' => $isRounded,
-        'circleRadius' => $isRounded ? 0.45 : 0.5,
+        'drawCircularModules' => $usesCircularModules,
+        'circleRadius' => $circleRadius,
         'keepAsSquare' => $keepAsSquare,
         'connectPaths' => $options['format'] === 'svg' && $options['connect_paths'],
     ];
@@ -250,6 +258,55 @@ function fbgCodeBuildQrOptions(array $options): QROptions
     return new QROptions($libraryOptions);
 }
 
+function fbgCodeModulesKeptSquare(array $options): array
+{
+    $dataModules = [
+        QRMatrix::M_DATA,
+        QRMatrix::M_DATA_DARK,
+        QRMatrix::M_DARKMODULE,
+        QRMatrix::M_DARKMODULE_LIGHT,
+        QRMatrix::M_TIMING,
+        QRMatrix::M_TIMING_DARK,
+        QRMatrix::M_FORMAT,
+        QRMatrix::M_FORMAT_DARK,
+        QRMatrix::M_VERSION,
+        QRMatrix::M_VERSION_DARK,
+        QRMatrix::M_LOGO,
+        QRMatrix::M_LOGO_DARK,
+    ];
+    $finderRingModules = [
+        QRMatrix::M_FINDER,
+        QRMatrix::M_FINDER_DARK,
+    ];
+    $finderDotModules = [
+        QRMatrix::M_FINDER_DOT,
+        QRMatrix::M_FINDER_DOT_LIGHT,
+    ];
+    $alignmentModules = [
+        QRMatrix::M_ALIGNMENT,
+        QRMatrix::M_ALIGNMENT_DARK,
+    ];
+    $keepAsSquare = [];
+
+    if ($options['module_style'] === 'square') {
+        $keepAsSquare = array_merge($keepAsSquare, $dataModules, $alignmentModules);
+    }
+
+    if ($options['eye_style'] === 'square') {
+        $keepAsSquare = array_merge($keepAsSquare, $finderRingModules, $finderDotModules);
+    } elseif ($options['eye_style'] === 'dot') {
+        $keepAsSquare = array_merge($keepAsSquare, $finderRingModules);
+    } elseif ($options['eye_style'] === 'match' && $options['module_style'] === 'square') {
+        $keepAsSquare = array_merge($keepAsSquare, $finderRingModules, $finderDotModules);
+    }
+
+    if ($options['eye_style'] !== 'match') {
+        $keepAsSquare = array_merge($keepAsSquare, $alignmentModules);
+    }
+
+    return array_values(array_unique($keepAsSquare));
+}
+
 function fbgCodeBuildPngModuleValues(array $rgbDark, array $rgbLight): array
 {
     $moduleValues = [];
@@ -267,7 +324,7 @@ function fbgCodeBuildPngModuleValues(array $rgbDark, array $rgbLight): array
     return $moduleValues;
 }
 
-function fbgCodeInjectSvgLogo(string $svg, float $logoScale): string
+function fbgCodeInjectSvgLogo(string $svg, float $logoScale, string|null $logoPath = null): string
 {
     if (!preg_match('/viewBox="0 0 ([0-9.]+) ([0-9.]+)"/', $svg, $matches)) {
         return $svg;
@@ -279,7 +336,8 @@ function fbgCodeInjectSvgLogo(string $svg, float $logoScale): string
     $logoX = ($viewBoxWidth - $logoSize) / 2;
     $logoY = ($viewBoxHeight - $logoSize) / 2;
     $padding = $logoSize * 0.18;
-    $logoHref = 'data:image/png;base64,' . base64_encode((string)file_get_contents(fbgCodeLogoPath()));
+    $logoPath = $logoPath ?? fbgCodeLogoPath();
+    $logoHref = 'data:image/png;base64,' . base64_encode((string)file_get_contents($logoPath));
     $logoSvg = sprintf(
         '<rect class="fbg-code-logo-bg" x="%1$.3F" y="%2$.3F" width="%3$.3F" height="%3$.3F" rx="%4$.3F"/><image href="%5$s" x="%6$.3F" y="%7$.3F" width="%8$.3F" height="%8$.3F" preserveAspectRatio="xMidYMid meet"/>',
         $logoX - $padding,
@@ -327,6 +385,88 @@ function fbgCodeNormalizeBool(mixed $value): bool
 function fbgCodeLogoPath(): string
 {
     return dirname(__DIR__) . '/backend/img/Snowflake.png';
+}
+
+function fbgCodeResolveLogoPath(string $logoMode, array|null $logoUpload): array
+{
+    if ($logoMode === 'frostbyt3') {
+        $defaultLogoPath = fbgCodeLogoPath();
+
+        if (!is_readable($defaultLogoPath)) {
+            throw new FBGCodeException('The Frostbyt3 logo asset could not be loaded.');
+        }
+
+        return [$defaultLogoPath, null];
+    }
+
+    if ($logoMode !== 'custom') {
+        throw new FBGCodeException('Choose a valid logo option.');
+    }
+
+    if (
+        $logoUpload === null
+        || (int)($logoUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE
+        || (string)($logoUpload['tmp_name'] ?? '') === ''
+    ) {
+        throw new FBGCodeException('Choose a custom logo image or switch back to the Frostbyt3 logo.');
+    }
+
+    if ((int)($logoUpload['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new FBGCodeException('The logo image could not be uploaded. Try a smaller PNG or JPG.');
+    }
+
+    if ((int)($logoUpload['size'] ?? 0) > 1024 * 1024) {
+        throw new FBGCodeException('Logo images must be 1 MB or smaller.');
+    }
+
+    $tmpName = (string)($logoUpload['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_file($tmpName) || !is_readable($tmpName)) {
+        throw new FBGCodeException('The logo image could not be read.');
+    }
+
+    $imageInfo = getimagesize($tmpName);
+    if ($imageInfo === false) {
+        throw new FBGCodeException('Upload a valid PNG or JPG logo image.');
+    }
+
+    [$width, $height, $type] = $imageInfo;
+
+    if (!in_array($type, [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+        throw new FBGCodeException('Logo images must be PNG or JPG.');
+    }
+
+    if ((int)$width !== (int)$height) {
+        throw new FBGCodeException('Logo images must use a 1:1 square canvas.');
+    }
+
+    if ($type === IMAGETYPE_PNG) {
+        return [$tmpName, null];
+    }
+
+    if (!extension_loaded('gd')) {
+        throw new FBGCodeException('JPG logos need the GD PHP extension.');
+    }
+
+    $logoImage = imagecreatefromjpeg($tmpName);
+    if ($logoImage === false) {
+        throw new FBGCodeException('The JPG logo could not be processed.');
+    }
+
+    $convertedPath = tempnam(sys_get_temp_dir(), 'fbgcode-logo-');
+    if ($convertedPath === false) {
+        imagedestroy($logoImage);
+        throw new FBGCodeException('The logo image could not be prepared.');
+    }
+
+    if (!imagepng($logoImage, $convertedPath)) {
+        imagedestroy($logoImage);
+        unlink($convertedPath);
+        throw new FBGCodeException('The JPG logo could not be prepared.');
+    }
+
+    imagedestroy($logoImage);
+
+    return [$convertedPath, $convertedPath];
 }
 
 function fbgCodeDownloadFilename(array $options): string

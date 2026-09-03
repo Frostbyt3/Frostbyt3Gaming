@@ -23,7 +23,7 @@ try {
         exit('Security check failed.');
     }
 
-    $result = fbgCodeGenerate($_POST);
+    $result = fbgCodeGenerate($_POST, $_FILES['logo_image'] ?? null);
     $filename = fbgCodeDownloadFilename($result['options']);
 
     header('Content-Type: ' . $result['mime']);

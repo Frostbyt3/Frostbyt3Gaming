@@ -20,18 +20,13 @@ try {
         throw new RuntimeException('You do not have permission to generate FBCodes.');
     }
 
-    $payload = json_decode((string)file_get_contents('php://input'), true);
-    if (!is_array($payload)) {
-        throw new RuntimeException('The FBCode request could not be read.');
-    }
-
-    if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)($payload['csrf_token'] ?? ''))) {
+    if (!hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)($_POST['csrf_token'] ?? ''))) {
         http_response_code(403);
         throw new RuntimeException('Security check failed. Please refresh and try again.');
     }
 
-    $payload['format'] = 'svg';
-    $result = fbgCodeGenerate($payload);
+    $_POST['format'] = 'svg';
+    $result = fbgCodeGenerate($_POST, $_FILES['logo_image'] ?? null);
 
     echo json_encode([
         'ok' => true,

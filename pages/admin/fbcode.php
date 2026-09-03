@@ -48,7 +48,7 @@ $defaults = fbgCodeDefaultOptions();
                     </div>
                 </div>
 
-                <form class="fbg-admin-form fbg-fbcode-form" data-fbg-fbcode-form>
+                <form class="fbg-admin-form fbg-fbcode-form" data-fbg-fbcode-form enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
 
                     <div class="fbg-admin-field">
@@ -71,15 +71,6 @@ $defaults = fbgCodeDefaultOptions();
                         </div>
 
                         <div class="fbg-admin-field">
-                            <label for="fbcode-module-style">Module Appearance</label>
-                            <select id="fbcode-module-style" name="module_style">
-                                <option value="rounded" selected>Rounded</option>
-                                <option value="square">Square</option>
-                            </select>
-                            <p class="fbg-admin-help-text">Rounded modules feel more branded; square is the safest classic style.</p>
-                        </div>
-
-                        <div class="fbg-admin-field">
                             <label for="fbcode-size">Output Size</label>
                             <input id="fbcode-size" name="size" type="number" min="192" max="1600" step="16" value="<?= (int)$defaults['size'] ?>">
                             <p class="fbg-admin-help-text">Pixel size used for downloaded PNGs.</p>
@@ -94,17 +85,111 @@ $defaults = fbgCodeDefaultOptions();
                             <p class="fbg-admin-help-text">SVG is best for web and print scaling. PNG is best for quick sharing.</p>
                         </div>
 
+                    </div>
+
+                    <div class="fbg-admin-field fbg-admin-field-full">
+                        <label>Pattern Style</label>
+                        <div class="fbg-fbcode-style-tiles" role="radiogroup" aria-label="Pattern Style">
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="module_style" value="square">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-pattern-preview is-square" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                </span>
+                                <span>Square</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="module_style" value="rounded" checked>
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-pattern-preview is-rounded" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                </span>
+                                <span>Rounded</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="module_style" value="dots">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-pattern-preview is-dots" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                </span>
+                                <span>Dots</span>
+                            </label>
+                        </div>
+                        <p class="fbg-admin-help-text">Pattern Style changes the small data modules. Simpler styles are easier for older scanners.</p>
+                    </div>
+
+                    <div class="fbg-admin-field fbg-admin-field-full">
+                        <label>Eye Style</label>
+                        <div class="fbg-fbcode-style-tiles" role="radiogroup" aria-label="Eye Style">
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="eye_style" value="square" checked>
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-eye-preview is-square" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                </span>
+                                <span>Square</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="eye_style" value="dot">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-eye-preview is-dot" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                </span>
+                                <span>Round Dot</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="eye_style" value="match">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-eye-preview is-match" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                </span>
+                                <span>Match</span>
+                            </label>
+                        </div>
+                        <p class="fbg-admin-help-text">Eye Style changes the three large scanner targets using the QR-safe shapes supported by the renderer.</p>
+                    </div>
+
+                    <div class="fbg-admin-field fbg-admin-field-full">
+                        <label>Logo</label>
+                        <div class="fbg-fbcode-style-tiles" role="radiogroup" aria-label="Logo">
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="logo_mode" value="none">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-logo-preview is-none" aria-hidden="true">
+                                    <span></span>
+                                </span>
+                                <span>No Logo</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="logo_mode" value="frostbyt3" checked>
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-logo-preview is-frostbyt3" aria-hidden="true">
+                                    <img src="<?= htmlspecialchars(asset('/backend/img/Snowflake.png'), ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                </span>
+                                <span>Frostbyt3 Logo</span>
+                            </label>
+
+                            <label class="fbg-fbcode-style-tile">
+                                <input type="radio" name="logo_mode" value="custom">
+                                <span class="fbg-fbcode-style-preview fbg-fbcode-logo-preview is-custom" aria-hidden="true">
+                                    <span></span>
+                                </span>
+                                <span>Custom Logo</span>
+                            </label>
+                        </div>
+                        <p class="fbg-admin-help-text">No Logo creates a normal center-free FBCode. Logo options reserve protected space for scan reliability.</p>
+                    </div>
+
+                    <div class="fbg-admin-form-grid fbg-fbcode-logo-options" data-fbg-fbcode-logo-options>
                         <div class="fbg-admin-field">
                             <label for="fbcode-logo-scale">Logo Scale</label>
                             <input id="fbcode-logo-scale" name="logo_scale" type="range" min="0.12" max="0.30" step="0.01" value="<?= htmlspecialchars((string)$defaults['logo_scale'], ENT_QUOTES, 'UTF-8') ?>">
-                            <p class="fbg-admin-help-text">How large the Frostbyt3 snowflake appears in the cleared center space.</p>
+                            <p class="fbg-admin-help-text">How large the selected logo appears in the cleared center space.</p>
+                        </div>
+
+                        <div class="fbg-admin-field" data-fbg-fbcode-custom-logo-field>
+                            <label for="fbcode-logo-image">Custom Logo Image</label>
+                            <input id="fbcode-logo-image" name="logo_image" type="file" accept="image/png,image/jpeg">
+                            <p class="fbg-admin-help-text">Upload a square PNG/JPEG logo, max 1 MB. The image is only used for this preview or download.</p>
                         </div>
                     </div>
-
-                    <label class="fbg-admin-check-row">
-                        <input type="checkbox" name="logo_enabled" value="1" checked>
-                        <span>Use Frostbyt3 snowflake logo</span>
-                    </label>
 
                     <details class="fbg-fbcode-advanced">
                         <summary>Advanced Settings</summary>
@@ -127,14 +212,6 @@ $defaults = fbgCodeDefaultOptions();
                                 <p class="fbg-admin-help-text">Blank space around the code. Most scanners prefer at least 4.</p>
                             </div>
 
-                            <div class="fbg-admin-field">
-                                <label for="fbcode-finder-style">Finder Pattern Style</label>
-                                <select id="fbcode-finder-style" name="finder_style">
-                                    <option value="square" selected>Keep Corners Square</option>
-                                    <option value="match">Match Module Style</option>
-                                </select>
-                                <p class="fbg-admin-help-text">Square corners are easier for scanners to locate.</p>
-                            </div>
                         </div>
 
                         <label class="fbg-admin-check-row">
@@ -169,7 +246,7 @@ $defaults = fbgCodeDefaultOptions();
 
                 <div class="fbg-fbcode-warning" data-fbg-fbcode-warning hidden></div>
 
-                <form class="fbg-admin-form fbg-fbcode-download-form" method="POST" action="/api/admin/fbcode-download.php" data-fbg-fbcode-download-form>
+                <form class="fbg-admin-form fbg-fbcode-download-form" method="POST" action="/api/admin/fbcode-download.php" enctype="multipart/form-data" data-fbg-fbcode-download-form>
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                     <div data-fbg-fbcode-download-fields></div>
 
