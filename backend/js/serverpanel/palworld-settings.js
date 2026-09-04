@@ -17,6 +17,7 @@
 
     let settings = [];
     let categories = ['Gameplay & Balance', 'Server & Network', 'Performance', 'Advanced', 'Other Settings'];
+    let configPath = '/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini';
     let missingPromptShown = false;
     const missingPromptKey = 'fbg-palworld-missing-defaults-' + serverId;
     const collapsedCategoriesKey = 'fbg-palworld-collapsed-categories-' + serverId;
@@ -252,7 +253,7 @@
             <div class="fbg-palworld-toolbar">
                 <div>
                     <span class="fbg-meta-label">Config File</span>
-                    <code>/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini</code>
+                    <code>${escapeHtml(configPath)}</code>
                 </div>
                 <button type="button" class="btn fbg-primary-button" id="palworld-save-button" ${canUpdate ? '' : 'disabled'}>
                     Save Palworld Settings
@@ -381,6 +382,7 @@
             });
 
             settings = Array.isArray(data?.data?.settings) ? data.data.settings : settings;
+            configPath = data?.data?.path || configPath;
             render();
             showToast({
                 type: 'success',
@@ -439,6 +441,7 @@
             });
 
             settings = Array.isArray(data?.data?.settings) ? data.data.settings : settings;
+            configPath = data?.data?.path || configPath;
             render();
             showToast({
                 type: 'success',
@@ -462,6 +465,7 @@
 
             settings = Array.isArray(payload.settings) ? payload.settings : [];
             categories = Array.isArray(payload.categories) && payload.categories.length ? payload.categories : categories;
+            configPath = payload.path || configPath;
 
             render();
 

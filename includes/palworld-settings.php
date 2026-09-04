@@ -12,10 +12,28 @@ function fbgPalworldSettingsConfig(): array
     return $config;
 }
 
-function fbgPalworldConfigPath(): string
+function fbgPalworldIsProtonServer(array $server): bool
+{
+    $source = strtolower(trim(
+        (string)($server['egg_name'] ?? '') . ' ' .
+        (string)($server['name'] ?? '') . ' ' .
+        (string)($server['description'] ?? '') . ' ' .
+        (string)($server['docker_image'] ?? '') . ' ' .
+        (string)($server['image'] ?? '')
+    ));
+
+    return str_contains($source, 'palworld') && str_contains($source, 'proton');
+}
+
+function fbgPalworldConfigPath(?array $server = null): string
 {
     $config = fbgPalworldSettingsConfig();
-    return (string)($config['path'] ?? '/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini');
+
+    if ($server !== null && fbgPalworldIsProtonServer($server)) {
+        return (string)($config['windows_path'] ?? '/Pal/Saved/Config/WindowsServer/PalWorldSettings.ini');
+    }
+
+    return (string)($config['linux_path'] ?? $config['path'] ?? '/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini');
 }
 
 function fbgPalworldCanonicalDefault(): string

@@ -44,7 +44,7 @@ try {
 
     pteroRequireServerPermission($serverIdentifier, 'file.read-content');
 
-    $path = fbgPalworldConfigPath();
+    $path = fbgPalworldConfigPath($server);
     $directory = dirname($path);
     $fileName = basename($path);
     $created = false;

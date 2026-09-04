@@ -63,7 +63,7 @@ try {
 
     session_write_close();
 
-    $path = fbgPalworldConfigPath();
+    $path = fbgPalworldConfigPath($server);
     $contents = pteroReadServerFile($serverIdentifier, $path);
     $parsed = fbgPalworldParseConfig($contents);
     $updated = fbgPalworldApplySubmittedValues($parsed, $settings);
@@ -78,6 +78,7 @@ try {
     echo json_encode([
         'ok' => true,
         'data' => [
+            'path' => $path,
             'settings' => fbgPalworldHydrateSettings($savedParsed['settings'], fbgPalworldMetadata()),
             'missing_defaults' => fbgPalworldFindMissingDefaultKeys($savedParsed['by_key'], $defaultParsed['by_key']),
         ],

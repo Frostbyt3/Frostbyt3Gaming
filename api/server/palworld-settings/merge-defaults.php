@@ -58,7 +58,7 @@ try {
 
     session_write_close();
 
-    $path = fbgPalworldConfigPath();
+    $path = fbgPalworldConfigPath($server);
     $contents = pteroReadServerFile($serverIdentifier, $path);
     $merged = fbgPalworldMergeMissingDefaults($contents);
 
@@ -70,6 +70,7 @@ try {
     echo json_encode([
         'ok' => true,
         'data' => [
+            'path' => $path,
             'settings' => fbgPalworldHydrateSettings($parsed['settings'], fbgPalworldMetadata()),
             'missing_defaults' => [],
         ],
