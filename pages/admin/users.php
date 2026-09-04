@@ -551,6 +551,7 @@
             $deleteAccess = db()->prepare('DELETE FROM admin_access WHERE user_id = :user_id');
             $deleteAccess->execute(['user_id' => $userId]);
 
+            fbgDeleteAllRememberedLoginsForUser($userId);
             fbgDeleteRegistrationById((string)$user['email'],(string)$user['username']);
             fbgAdminUsersRedirect('User deleted successfully.', 'warning');
         }

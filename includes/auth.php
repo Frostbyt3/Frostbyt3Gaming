@@ -85,6 +85,10 @@
             return;
         }
 
+        if (fbgAttemptRememberMeLogin()) {
+            return;
+        }
+
         fbgStoreRedirectAfterLogin();
 
         fbgRedirect($loginUrl);
