@@ -70,35 +70,43 @@ function fbgAdminNestsSlug(string $value): string
     return $slug !== '' ? $slug : 'egg';
 }
 
-function fbgAdminNestsJsonDecode(?string $json, mixed $fallback): mixed
+function fbgAdminNestsJsonDecode(?string $json, mixed $fallback, bool $assoc = true): mixed
 {
     $json = trim((string)$json);
     if ($json === '') {
         return $fallback;
     }
 
-    $decoded = json_decode($json, true);
+    $decoded = json_decode($json, $assoc);
     return json_last_error() === JSON_ERROR_NONE ? $decoded : $fallback;
 }
 
-function fbgAdminNestsNormalizeJsonField(string $value, mixed $emptyValue = []): array
+function fbgAdminNestsNormalizeJsonField(string $value, mixed $emptyValue = [], ?string $expectedType = null): array
 {
     $value = trim($value);
     if ($value === '') {
         return [
             'ok' => true,
-            'value' => json_encode($emptyValue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+            'value' => fbgAdminNestsJsonEncode($emptyValue),
         ];
     }
 
-    $decoded = json_decode($value, true);
+    $decoded = json_decode($value);
     if (json_last_error() !== JSON_ERROR_NONE) {
         return ['ok' => false, 'error' => json_last_error_msg()];
     }
 
+    if ($expectedType === 'array' && !is_array($decoded)) {
+        return ['ok' => false, 'error' => 'Expected a JSON array.'];
+    }
+
+    if ($expectedType === 'object' && !($decoded instanceof stdClass)) {
+        return ['ok' => false, 'error' => 'Expected a JSON object.'];
+    }
+
     return [
         'ok' => true,
-        'value' => json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+        'value' => fbgAdminNestsJsonEncode($decoded),
     ];
 }
 
@@ -737,9 +745,9 @@ function fbgAdminNestsExportEgg(int $eggId): void
         'file_denylist' => fbgAdminNestsJsonDecode($egg['file_denylist'] ?? null, []),
         'startup' => $egg['startup'],
         'config' => [
-            'files' => fbgAdminNestsJsonDecode($egg['config_files'] ?? null, new stdClass()),
-            'startup' => fbgAdminNestsJsonDecode($egg['config_startup'] ?? null, new stdClass()),
-            'logs' => fbgAdminNestsJsonDecode($egg['config_logs'] ?? null, new stdClass()),
+            'files' => fbgAdminNestsJsonDecode($egg['config_files'] ?? null, new stdClass(), false),
+            'startup' => fbgAdminNestsJsonDecode($egg['config_startup'] ?? null, new stdClass(), false),
+            'logs' => fbgAdminNestsJsonDecode($egg['config_logs'] ?? null, new stdClass(), false),
             'stop' => $egg['config_stop'],
         ],
         'scripts' => [
@@ -1006,11 +1014,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $author = trim((string)($_POST['egg_author'] ?? 'support@frostbyt3gaming.com'));
         $description = trim((string)($_POST['egg_description'] ?? ''));
         $dockerImages = fbgAdminNestsDockerImagesFromTextarea((string)($_POST['docker_images'] ?? ''));
-        $fileDenylist = fbgAdminNestsNormalizeJsonField((string)($_POST['file_denylist'] ?? ''), []);
-        $features = fbgAdminNestsNormalizeJsonField((string)($_POST['features'] ?? ''), []);
-        $configFiles = fbgAdminNestsNormalizeJsonField((string)($_POST['config_files'] ?? ''), new stdClass());
-        $configStartup = fbgAdminNestsNormalizeJsonField((string)($_POST['config_startup'] ?? ''), new stdClass());
-        $configLogs = fbgAdminNestsNormalizeJsonField((string)($_POST['config_logs'] ?? ''), new stdClass());
+        $fileDenylist = fbgAdminNestsNormalizeJsonField((string)($_POST['file_denylist'] ?? ''), [], 'array');
+        $features = fbgAdminNestsNormalizeJsonField((string)($_POST['features'] ?? ''), [], 'array');
+        $configFiles = fbgAdminNestsNormalizeJsonField((string)($_POST['config_files'] ?? ''), new stdClass(), 'object');
+        $configStartup = fbgAdminNestsNormalizeJsonField((string)($_POST['config_startup'] ?? ''), new stdClass(), 'object');
+        $configLogs = fbgAdminNestsNormalizeJsonField((string)($_POST['config_logs'] ?? ''), new stdClass(), 'object');
 
         foreach (['file denylist' => $fileDenylist, 'features' => $features, 'configuration files' => $configFiles, 'startup configuration' => $configStartup, 'log configuration' => $configLogs] as $label => $result) {
             if (!$result['ok']) {
