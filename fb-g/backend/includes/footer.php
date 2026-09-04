@@ -1,1 +1,0 @@
-<p>&copy; <?= date('Y') ?> <a href="https://frostbyt3gaming.com/">Frostbyt3 Gaming LLC</a>. All rights reserved.</p>
