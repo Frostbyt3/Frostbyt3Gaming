@@ -22,7 +22,7 @@ function fbgPalworldIsProtonServer(array $server): bool
         (string)($server['image'] ?? '')
     ));
 
-    return str_contains($source, 'palworld') && str_contains($source, 'proton');
+    return str_contains($source, 'palworld') && str_contains($source, 'proton') || str_contains($source, 'wine');
 }
 
 function fbgPalworldConfigPath(?array $server = null): string
