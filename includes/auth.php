@@ -12,6 +12,32 @@
     const FBG_REMEMBER_COOKIE = 'fbg_remember';
     const FBG_REMEMBER_DAYS = 30;
 
+    function fbgRequestIsHttps(): bool
+    {
+        $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+        if ($https !== '' && $https !== 'off') {
+            return true;
+        }
+
+        return strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+    }
+
+    function fbgRememberCookieDomain(): ?string
+    {
+        if (isLocal()) {
+            return null;
+        }
+
+        $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+        $host = preg_replace('/:\d+$/', '', $host) ?: '';
+
+        if ($host === 'frostbyt3gaming.com' || str_ends_with($host, '.frostbyt3gaming.com')) {
+            return '.frostbyt3gaming.com';
+        }
+
+        return null;
+    }
+
     function fbgIsSafeInternalRedirect(string $path): bool
     {
         if ($path === '') {
@@ -230,14 +256,20 @@
 
     function fbgRememberCookieParams(int $expiresTimestamp): array
     {
-        return [
+        $params = [
             'expires'  => $expiresTimestamp,
             'path'     => '/',
-            'domain'   => '',
-            'secure'   => !isLocal(),
+            'secure'   => fbgRequestIsHttps(),
             'httponly' => true,
             'samesite' => 'Lax',
         ];
+
+        $domain = fbgRememberCookieDomain();
+        if ($domain !== null) {
+            $params['domain'] = $domain;
+        }
+
+        return $params;
     }
 
     function fbgSetRememberCookie(string $selector, string $validator, int $expiresTimestamp): void
@@ -247,7 +279,13 @@
         }
 
         $value = $selector . ':' . $validator;
-        setcookie(FBG_REMEMBER_COOKIE, $value, fbgRememberCookieParams($expiresTimestamp));
+        $params = fbgRememberCookieParams($expiresTimestamp);
+        setcookie(FBG_REMEMBER_COOKIE, $value, $params);
+
+        if (array_key_exists('domain', $params)) {
+            unset($params['domain']);
+            setcookie(FBG_REMEMBER_COOKIE, $value, $params);
+        }
     }
 
     function fbgClearRememberCookie(): void
@@ -256,14 +294,21 @@
             return;
         }
 
-        setcookie(FBG_REMEMBER_COOKIE, '', [
+        $params = [
             'expires'  => time() - 3600,
             'path'     => '/',
-            'domain'   => '',
-            'secure'   => !isLocal(),
+            'secure'   => fbgRequestIsHttps(),
             'httponly' => true,
             'samesite' => 'Lax',
-        ]);
+        ];
+
+        setcookie(FBG_REMEMBER_COOKIE, '', $params);
+
+        $domain = fbgRememberCookieDomain();
+        if ($domain !== null) {
+            $params['domain'] = $domain;
+            setcookie(FBG_REMEMBER_COOKIE, '', $params);
+        }
     }
 
     function fbgDeleteAllRememberedLoginsForUser(int $userId): void
