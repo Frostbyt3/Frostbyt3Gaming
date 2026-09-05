@@ -26,8 +26,8 @@ $allowed = [
     'account'               => 'account.php',
     'wallet'                => 'wallet.php',
     'credit'                => 'wallet.php',
-    'invoice'               => 'invoice.php',
-    'invoice-pdf'           => 'invoice-pdf.php',
+    'receipt'               => 'receipt.php',
+    'receipt-pdf'           => 'receipt-pdf.php',
     'verify-email-change'   => 'verify-email-change.php',
     'order'                 => 'order.php',
     'legal'                 => 'legal.php',
@@ -53,8 +53,8 @@ $allowed = [
     'admin-link-shortener'  => 'admin/shorten.php',
     'admin-service-manager' => 'admin/servicemanager.php',
     'admin-payments'        => 'admin/payments.php',
-    'admin-invoice-settings' => 'admin/invoice-settings.php',
-    'admin-invoices'        => 'admin/invoices.php',
+    'admin-receipt-settings' => 'admin/receipt-settings.php',
+    'admin-receipts'        => 'admin/receipts.php',
     'admin-confirmation-backgrounds' => 'admin/confirmation-backgrounds.php',
     'admin-shop-categories' => 'admin/categories.php',
     'admin-shop-plans'      => 'admin/plans.php',
@@ -96,7 +96,7 @@ if (
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'GET'
-    && $page === 'invoice-pdf'
+    && $page === 'receipt-pdf'
 ) {
     include('./pages/' . $allowed[$page]);
     exit;

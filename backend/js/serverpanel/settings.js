@@ -159,14 +159,14 @@
         renewButton.textContent = `Renew Server - ${formatMoney(renewPrice, currency)}`;
     }
 
-    function invoicePayload(invoice) {
-        if (!invoice || !invoice.id || !invoice.invoice_number) {
+    function receiptPayload(receipt) {
+        if (!receipt || !receipt.id || !receipt.receipt_number) {
             return null;
         }
 
         return {
-            number: invoice.invoice_number,
-            url: `/page.php?name=invoice&id=${encodeURIComponent(invoice.id)}`
+            number: receipt.receipt_number,
+            url: `/page.php?name=receipt&id=${encodeURIComponent(receipt.id)}`
         };
     }
 
@@ -205,7 +205,7 @@
                 value: formatMoney(data.balance || 0, currency)
             },
             note: 'Your server access has been extended. You can pick up right where you left off.',
-            invoice: invoicePayload(data.invoice),
+            receipt: receiptPayload(data.receipt),
             actions: [
                 {
                     label: 'Close',

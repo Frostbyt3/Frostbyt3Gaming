@@ -445,7 +445,7 @@ if (!function_exists('fbgGetUserPaymentHistory')) {
 
         try {
             $stmt = fbgPteroDb()->prepare("
-                SELECT id, payment_type, amount, invoice_number, session_id, completed, created_at
+                SELECT id, payment_type, amount, invoice_number AS receipt_number, session_id, completed, created_at
                 FROM payments
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC, id DESC
@@ -670,16 +670,16 @@ if (!function_exists('fbgSetShopSetting')) {
     }
 }
 
-if (!function_exists('fbgEnsureFrontendInvoiceTables')) {
-    function fbgEnsureFrontendInvoiceTables(): bool
+if (!function_exists('fbgEnsureFrontendReceiptTables')) {
+    function fbgEnsureFrontendReceiptTables(): bool
     {
         try {
             $pdo = db();
 
             $pdo->exec("
-                CREATE TABLE IF NOT EXISTS fbg_invoices (
+                CREATE TABLE IF NOT EXISTS fbg_receipts (
                     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                    invoice_number VARCHAR(64) NULL,
+                    receipt_number VARCHAR(64) NULL,
                     user_id INT UNSIGNED NOT NULL,
                     source_type VARCHAR(64) NOT NULL,
                     source_id VARCHAR(191) NOT NULL,
@@ -706,22 +706,22 @@ if (!function_exists('fbgEnsureFrontendInvoiceTables')) {
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     PRIMARY KEY (id),
-                    UNIQUE KEY fbg_invoices_invoice_number_unique (invoice_number),
-                    UNIQUE KEY fbg_invoices_source_unique (source_type, source_id),
-                    KEY fbg_invoices_user_created_idx (user_id, created_at),
-                    KEY fbg_invoices_status_idx (status)
+                    UNIQUE KEY fbg_receipts_receipt_number_unique (receipt_number),
+                    UNIQUE KEY fbg_receipts_source_unique (source_type, source_id),
+                    KEY fbg_receipts_user_created_idx (user_id, created_at),
+                    KEY fbg_receipts_status_idx (status)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
 
-            $taxLabelColumn = $pdo->query("SHOW COLUMNS FROM fbg_invoices LIKE 'tax_label'")->fetch(PDO::FETCH_ASSOC);
+            $taxLabelColumn = $pdo->query("SHOW COLUMNS FROM fbg_receipts LIKE 'tax_label'")->fetch(PDO::FETCH_ASSOC);
             if (!$taxLabelColumn) {
-                $pdo->exec("ALTER TABLE fbg_invoices ADD COLUMN tax_label VARCHAR(64) NOT NULL DEFAULT 'Tax' AFTER tax_amount");
+                $pdo->exec("ALTER TABLE fbg_receipts ADD COLUMN tax_label VARCHAR(64) NOT NULL DEFAULT 'Tax' AFTER tax_amount");
             }
 
             $pdo->exec("
-                CREATE TABLE IF NOT EXISTS fbg_invoice_line_items (
+                CREATE TABLE IF NOT EXISTS fbg_receipt_line_items (
                     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                    invoice_id INT UNSIGNED NOT NULL,
+                    receipt_id INT UNSIGNED NOT NULL,
                     description VARCHAR(255) NOT NULL,
                     quantity DECIMAL(10,2) NOT NULL DEFAULT 1.00,
                     unit_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -732,58 +732,58 @@ if (!function_exists('fbgEnsureFrontendInvoiceTables')) {
                     metadata_json LONGTEXT NULL,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (id),
-                    KEY fbg_invoice_line_items_invoice_idx (invoice_id),
-                    CONSTRAINT fbg_invoice_line_items_invoice_fk
-                        FOREIGN KEY (invoice_id) REFERENCES fbg_invoices (id)
+                    KEY fbg_receipt_line_items_receipt_idx (receipt_id),
+                    CONSTRAINT fbg_receipt_line_items_receipt_fk
+                        FOREIGN KEY (receipt_id) REFERENCES fbg_receipts (id)
                         ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
 
             $pdo->exec("
-                CREATE TABLE IF NOT EXISTS fbg_invoice_events (
+                CREATE TABLE IF NOT EXISTS fbg_receipt_events (
                     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                    invoice_id INT UNSIGNED NOT NULL,
+                    receipt_id INT UNSIGNED NOT NULL,
                     event_type VARCHAR(64) NOT NULL,
                     event_note TEXT NULL,
                     metadata_json LONGTEXT NULL,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (id),
-                    KEY fbg_invoice_events_invoice_idx (invoice_id),
-                    KEY fbg_invoice_events_type_idx (event_type),
-                    CONSTRAINT fbg_invoice_events_invoice_fk
-                        FOREIGN KEY (invoice_id) REFERENCES fbg_invoices (id)
+                    KEY fbg_receipt_events_receipt_idx (receipt_id),
+                    KEY fbg_receipt_events_type_idx (event_type),
+                    CONSTRAINT fbg_receipt_events_receipt_fk
+                        FOREIGN KEY (receipt_id) REFERENCES fbg_receipts (id)
                         ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
 
             return true;
         } catch (Throwable $e) {
-            error_log('Unable to ensure frontend invoice tables: ' . $e->getMessage());
+            error_log('Unable to ensure frontend receipt tables: ' . $e->getMessage());
             return false;
         }
     }
 }
 
-if (!function_exists('fbgGetFrontendInvoiceSettings')) {
-    function fbgGetFrontendInvoiceSettings(): array
+if (!function_exists('fbgGetFrontendReceiptSettings')) {
+    function fbgGetFrontendReceiptSettings(): array
     {
         return [
-            'enabled' => (string)fbgGetSetting('fbg_invoice_enabled', '1') === '1',
-            'prefix' => (string)fbgGetSetting('fbg_invoice_prefix', 'FBG-'),
-            'starting_number' => max(1, (int)fbgGetSetting('fbg_invoice_starting_number', '1001')),
-            'next_number' => max(1, (int)fbgGetSetting('fbg_invoice_next_number', fbgGetSetting('fbg_invoice_starting_number', '1001'))),
-            'company_name' => (string)fbgGetSetting('fbg_invoice_company_name', 'Frostbyt3 Gaming, LLC.'),
-            'company_address' => (string)fbgGetSetting('fbg_invoice_company_address', ''),
-            'company_phone' => (string)fbgGetSetting('fbg_invoice_company_phone', ''),
-            'company_email' => (string)fbgGetSetting('fbg_invoice_company_email', ''),
-            'company_code' => (string)fbgGetSetting('fbg_invoice_company_code', ''),
-            'company_vat' => (string)fbgGetSetting('fbg_invoice_company_vat', ''),
-            'tax_rate' => max(0, (float)fbgGetSetting('fbg_invoice_tax_rate', '0')),
-            'tax_label' => (string)fbgGetSetting('fbg_invoice_tax_label', 'Tax'),
-            'mail_from_name' => (string)fbgGetSetting('fbg_invoice_mail_from_name', ''),
-            'mail_from_email' => (string)fbgGetSetting('fbg_invoice_mail_from_email', ''),
-            'mail_reply_to_name' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_name', ''),
-            'mail_reply_to_email' => (string)fbgGetSetting('fbg_invoice_mail_reply_to_email', ''),
+            'enabled' => (string)fbgGetSetting('fbg_receipt_enabled', '1') === '1',
+            'prefix' => (string)fbgGetSetting('fbg_receipt_prefix', 'FBG-'),
+            'starting_number' => max(1, (int)fbgGetSetting('fbg_receipt_starting_number', '1001')),
+            'next_number' => max(1, (int)fbgGetSetting('fbg_receipt_next_number', fbgGetSetting('fbg_receipt_starting_number', '1001'))),
+            'company_name' => (string)fbgGetSetting('fbg_receipt_company_name', 'Frostbyt3 Gaming, LLC.'),
+            'company_address' => (string)fbgGetSetting('fbg_receipt_company_address', ''),
+            'company_phone' => (string)fbgGetSetting('fbg_receipt_company_phone', ''),
+            'company_email' => (string)fbgGetSetting('fbg_receipt_company_email', ''),
+            'company_code' => (string)fbgGetSetting('fbg_receipt_company_code', ''),
+            'company_vat' => (string)fbgGetSetting('fbg_receipt_company_vat', ''),
+            'tax_rate' => max(0, (float)fbgGetSetting('fbg_receipt_tax_rate', '0')),
+            'tax_label' => (string)fbgGetSetting('fbg_receipt_tax_label', 'Tax'),
+            'mail_from_name' => (string)fbgGetSetting('fbg_receipt_mail_from_name', ''),
+            'mail_from_email' => (string)fbgGetSetting('fbg_receipt_mail_from_email', ''),
+            'mail_reply_to_name' => (string)fbgGetSetting('fbg_receipt_mail_reply_to_name', ''),
+            'mail_reply_to_email' => (string)fbgGetSetting('fbg_receipt_mail_reply_to_email', ''),
         ];
     }
 }
@@ -791,7 +791,7 @@ if (!function_exists('fbgGetFrontendInvoiceSettings')) {
 if (!function_exists('fbgGetShopTaxRate')) {
     function fbgGetShopTaxRate(): float
     {
-        return max(0, round((float)fbgGetSetting('fbg_invoice_tax_rate', '0'), 4));
+        return max(0, round((float)fbgGetSetting('fbg_receipt_tax_rate', '0'), 4));
     }
 }
 
@@ -811,24 +811,24 @@ if (!function_exists('fbgCalculateShopTax')) {
     }
 }
 
-if (!function_exists('fbgFormatFrontendInvoiceNumber')) {
-    function fbgFormatFrontendInvoiceNumber(int $invoiceId, array $settings): string
+if (!function_exists('fbgFormatFrontendReceiptNumber')) {
+    function fbgFormatFrontendReceiptNumber(int $receiptId, array $settings): string
     {
         $prefix = trim((string)($settings['prefix'] ?? 'FBG-'));
         $startingNumber = max(1, (int)($settings['starting_number'] ?? 1001));
-        $number = $startingNumber + max(0, $invoiceId - 1);
+        $number = $startingNumber + max(0, $receiptId - 1);
 
         return $prefix . str_pad((string)$number, 6, '0', STR_PAD_LEFT);
     }
 }
 
-if (!function_exists('fbgReserveFrontendInvoiceNumber')) {
-    function fbgReserveFrontendInvoiceNumber(PDO $pdo, array $settings): string
+if (!function_exists('fbgReserveFrontendReceiptNumber')) {
+    function fbgReserveFrontendReceiptNumber(PDO $pdo, array $settings): string
     {
         $prefix = substr(trim((string)($settings['prefix'] ?? 'FBG-')), 0, 24);
         $startingNumber = max(1, (int)($settings['starting_number'] ?? 1001));
         $nextNumber = max($startingNumber, (int)($settings['next_number'] ?? $startingNumber));
-        $settingKey = 'fbg_invoice_next_number';
+        $settingKey = 'fbg_receipt_next_number';
 
         $ensureStmt = $pdo->prepare("
             INSERT INTO site_settings (setting_key, setting_value)
@@ -852,14 +852,14 @@ if (!function_exists('fbgReserveFrontendInvoiceNumber')) {
         $nextNumber = max($startingNumber, (int)$storedNext);
 
         do {
-            $invoiceNumber = $prefix . str_pad((string)$nextNumber, 6, '0', STR_PAD_LEFT);
+            $receiptNumber = $prefix . str_pad((string)$nextNumber, 6, '0', STR_PAD_LEFT);
             $existsStmt = $pdo->prepare("
                 SELECT id
-                FROM fbg_invoices
-                WHERE invoice_number = :invoice_number
+                FROM fbg_receipts
+                WHERE receipt_number = :receipt_number
                 LIMIT 1
             ");
-            $existsStmt->execute([':invoice_number' => $invoiceNumber]);
+            $existsStmt->execute([':receipt_number' => $receiptNumber]);
 
             if (!$existsStmt->fetchColumn()) {
                 break;
@@ -878,36 +878,36 @@ if (!function_exists('fbgReserveFrontendInvoiceNumber')) {
             ':setting_value' => (string)($nextNumber + 1),
         ]);
 
-        return $invoiceNumber;
+        return $receiptNumber;
     }
 }
 
-if (!function_exists('fbgLogFrontendInvoiceEvent')) {
-    function fbgLogFrontendInvoiceEvent(int $invoiceId, string $eventType, string $eventNote = '', array $metadata = []): void
+if (!function_exists('fbgLogFrontendReceiptEvent')) {
+    function fbgLogFrontendReceiptEvent(int $receiptId, string $eventType, string $eventNote = '', array $metadata = []): void
     {
-        if ($invoiceId <= 0 || $eventType === '' || !fbgEnsureFrontendInvoiceTables()) {
+        if ($receiptId <= 0 || $eventType === '' || !fbgEnsureFrontendReceiptTables()) {
             return;
         }
 
         try {
             $stmt = db()->prepare("
-                INSERT INTO fbg_invoice_events (invoice_id, event_type, event_note, metadata_json, created_at)
-                VALUES (:invoice_id, :event_type, :event_note, :metadata_json, NOW())
+                INSERT INTO fbg_receipt_events (receipt_id, event_type, event_note, metadata_json, created_at)
+                VALUES (:receipt_id, :event_type, :event_note, :metadata_json, NOW())
             ");
             $stmt->execute([
-                ':invoice_id' => $invoiceId,
+                ':receipt_id' => $receiptId,
                 ':event_type' => substr($eventType, 0, 64),
                 ':event_note' => $eventNote,
                 ':metadata_json' => !empty($metadata) ? json_encode($metadata, JSON_UNESCAPED_SLASHES) : null,
             ]);
         } catch (Throwable $e) {
-            error_log('Unable to log frontend invoice event: ' . $e->getMessage());
+            error_log('Unable to log frontend receipt event: ' . $e->getMessage());
         }
     }
 }
 
-if (!function_exists('fbgNormalizeFrontendInvoiceStatus')) {
-    function fbgNormalizeFrontendInvoiceStatus(string $status): ?string
+if (!function_exists('fbgNormalizeFrontendReceiptStatus')) {
+    function fbgNormalizeFrontendReceiptStatus(string $status): ?string
     {
         $status = strtolower(trim($status));
 
@@ -915,15 +915,15 @@ if (!function_exists('fbgNormalizeFrontendInvoiceStatus')) {
     }
 }
 
-if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
-    function fbgUpdateFrontendInvoiceStatus(int $invoiceId, string $status, string $note = '', array $metadata = []): array
+if (!function_exists('fbgUpdateFrontendReceiptStatus')) {
+    function fbgUpdateFrontendReceiptStatus(int $receiptId, string $status, string $note = '', array $metadata = []): array
     {
-        $normalizedStatus = fbgNormalizeFrontendInvoiceStatus($status);
-        if ($invoiceId <= 0 || $normalizedStatus === null || !fbgEnsureFrontendInvoiceTables()) {
+        $normalizedStatus = fbgNormalizeFrontendReceiptStatus($status);
+        if ($receiptId <= 0 || $normalizedStatus === null || !fbgEnsureFrontendReceiptTables()) {
             return [
                 'ok' => false,
-                'error' => 'Choose a valid invoice status.',
-                'invoice' => null,
+                'error' => 'Choose a valid receipt status.',
+                'receipt' => null,
             ];
         }
 
@@ -931,32 +931,32 @@ if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
             $pdo = db();
             $stmt = $pdo->prepare("
                 SELECT *
-                FROM fbg_invoices
+                FROM fbg_receipts
                 WHERE id = :id
                 LIMIT 1
             ");
-            $stmt->execute([':id' => $invoiceId]);
-            $invoice = $stmt->fetch();
+            $stmt->execute([':id' => $receiptId]);
+            $receipt = $stmt->fetch();
 
-            if (!$invoice) {
+            if (!$receipt) {
                 return [
                     'ok' => false,
-                    'error' => 'That invoice could not be found.',
-                    'invoice' => null,
+                    'error' => 'That receipt could not be found.',
+                    'receipt' => null,
                 ];
             }
 
-            $previousStatus = fbgNormalizeFrontendInvoiceStatus((string)($invoice['status'] ?? '')) ?? 'paid';
+            $previousStatus = fbgNormalizeFrontendReceiptStatus((string)($receipt['status'] ?? '')) ?? 'paid';
             if ($previousStatus === $normalizedStatus) {
                 return [
                     'ok' => true,
                     'error' => null,
-                    'invoice' => $invoice,
+                    'receipt' => $receipt,
                 ];
             }
 
             $updateStmt = $pdo->prepare("
-                UPDATE fbg_invoices
+                UPDATE fbg_receipts
                 SET status = :status,
                     updated_at = NOW()
                 WHERE id = :id
@@ -964,7 +964,7 @@ if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
             ");
             $updateStmt->execute([
                 ':status' => $normalizedStatus,
-                ':id' => $invoiceId,
+                ':id' => $receiptId,
             ]);
 
             $eventType = match ($normalizedStatus) {
@@ -975,13 +975,13 @@ if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
 
             if ($note === '') {
                 $note = match ($normalizedStatus) {
-                    'void' => 'Invoice was marked as void.',
-                    'refunded' => 'Invoice was marked as refunded.',
-                    default => 'Invoice status was updated.',
+                    'void' => 'Receipt was marked as void.',
+                    'refunded' => 'Receipt was marked as refunded.',
+                    default => 'Receipt status was updated.',
                 };
             }
 
-            fbgLogFrontendInvoiceEvent($invoiceId, $eventType, $note, array_merge($metadata, [
+            fbgLogFrontendReceiptEvent($receiptId, $eventType, $note, array_merge($metadata, [
                 'previous_status' => $previousStatus,
                 'new_status' => $normalizedStatus,
                 'admin_user_id' => (int)($_SESSION['user_id'] ?? 0),
@@ -990,22 +990,22 @@ if (!function_exists('fbgUpdateFrontendInvoiceStatus')) {
             return [
                 'ok' => true,
                 'error' => null,
-                'invoice' => fbgGetFrontendInvoiceDetail($invoiceId, (int)($invoice['user_id'] ?? 1), true),
+                'receipt' => fbgGetFrontendReceiptDetail($receiptId, (int)($receipt['user_id'] ?? 1), true),
             ];
         } catch (Throwable $e) {
-            error_log('Unable to update frontend invoice status: ' . $e->getMessage());
+            error_log('Unable to update frontend receipt status: ' . $e->getMessage());
 
             return [
                 'ok' => false,
-                'error' => 'The invoice status could not be updated. Check the logs and try again.',
-                'invoice' => null,
+                'error' => 'The receipt status could not be updated. Check the logs and try again.',
+                'receipt' => null,
             ];
         }
     }
 }
 
-if (!function_exists('fbgCreateFrontendInvoice')) {
-    function fbgCreateFrontendInvoice(array $data): ?array
+if (!function_exists('fbgCreateFrontendReceipt')) {
+    function fbgCreateFrontendReceipt(array $data): ?array
     {
         $userId = (int)($data['user_id'] ?? 0);
         $sourceType = trim((string)($data['source_type'] ?? ''));
@@ -1015,11 +1015,11 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
             return null;
         }
 
-        if (!fbgEnsureFrontendInvoiceTables()) {
+        if (!fbgEnsureFrontendReceiptTables()) {
             return null;
         }
 
-        $settings = fbgGetFrontendInvoiceSettings();
+        $settings = fbgGetFrontendReceiptSettings();
         if (empty($settings['enabled'])) {
             return null;
         }
@@ -1029,7 +1029,7 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
         try {
             $existingStmt = $pdo->prepare("
                 SELECT *
-                FROM fbg_invoices
+                FROM fbg_receipts
                 WHERE source_type = :source_type
                 AND source_id = :source_id
                 LIMIT 1
@@ -1088,11 +1088,11 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
             $customer = is_array($data['customer'] ?? null) ? $data['customer'] : [];
 
             $pdo->beginTransaction();
-            $invoiceNumber = fbgReserveFrontendInvoiceNumber($pdo, $settings);
+            $receiptNumber = fbgReserveFrontendReceiptNumber($pdo, $settings);
 
             $insertStmt = $pdo->prepare("
-                INSERT INTO fbg_invoices (
-                    invoice_number,
+                INSERT INTO fbg_receipts (
+                    receipt_number,
                     user_id,
                     source_type,
                     source_id,
@@ -1120,7 +1120,7 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
                     updated_at
                 )
                 VALUES (
-                    :invoice_number,
+                    :receipt_number,
                     :user_id,
                     :source_type,
                     :source_id,
@@ -1149,7 +1149,7 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
                 )
             ");
             $insertStmt->execute([
-                ':invoice_number' => $invoiceNumber,
+                ':receipt_number' => $receiptNumber,
                 ':user_id' => $userId,
                 ':source_type' => substr($sourceType, 0, 64),
                 ':source_id' => substr($sourceId, 0, 191),
@@ -1177,11 +1177,11 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
                     : null,
             ]);
 
-            $invoiceId = (int)$pdo->lastInsertId();
+            $receiptId = (int)$pdo->lastInsertId();
 
             $itemStmt = $pdo->prepare("
-                INSERT INTO fbg_invoice_line_items (
-                    invoice_id,
+                INSERT INTO fbg_receipt_line_items (
+                    receipt_id,
                     description,
                     quantity,
                     unit_amount,
@@ -1193,7 +1193,7 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
                     created_at
                 )
                 VALUES (
-                    :invoice_id,
+                    :receipt_id,
                     :description,
                     :quantity,
                     :unit_amount,
@@ -1211,7 +1211,7 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
                 $lineTotal = round((float)$item['line_subtotal'] + $lineTax, 2);
 
                 $itemStmt->execute([
-                    ':invoice_id' => $invoiceId,
+                    ':receipt_id' => $receiptId,
                     ':description' => $item['description'],
                     ':quantity' => number_format((float)$item['quantity'], 2, '.', ''),
                     ':unit_amount' => number_format((float)$item['unit_amount'], 2, '.', ''),
@@ -1227,72 +1227,72 @@ if (!function_exists('fbgCreateFrontendInvoice')) {
 
             $pdo->commit();
 
-            $invoiceStmt = $pdo->prepare("
+            $receiptStmt = $pdo->prepare("
                 SELECT *
-                FROM fbg_invoices
+                FROM fbg_receipts
                 WHERE id = :id
                 LIMIT 1
             ");
-            $invoiceStmt->execute([':id' => $invoiceId]);
+            $receiptStmt->execute([':id' => $receiptId]);
 
-            $invoice = $invoiceStmt->fetch() ?: null;
+            $receipt = $receiptStmt->fetch() ?: null;
 
-            if ($invoice) {
-                fbgLogFrontendInvoiceEvent($invoiceId, 'generated', 'Invoice generated.');
-                fbgSendFrontendInvoiceEmailNotification($invoiceId, $userId);
+            if ($receipt) {
+                fbgLogFrontendReceiptEvent($receiptId, 'generated', 'Receipt generated.');
+                fbgSendFrontendReceiptEmailNotification($receiptId, $userId);
             }
 
-            return $invoice;
+            return $receipt;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
 
-            error_log('Unable to create frontend invoice: ' . $e->getMessage());
+            error_log('Unable to create frontend receipt: ' . $e->getMessage());
             return null;
         }
     }
 }
 
-if (!function_exists('fbgSendFrontendInvoiceEmailNotification')) {
-    function fbgSendFrontendInvoiceEmailNotification(int $invoiceId, int $userId): bool
+if (!function_exists('fbgSendFrontendReceiptEmailNotification')) {
+    function fbgSendFrontendReceiptEmailNotification(int $receiptId, int $userId): bool
     {
-        if ($invoiceId <= 0 || $userId <= 0) {
+        if ($receiptId <= 0 || $userId <= 0) {
             return false;
         }
 
-        if ((string)fbgGetSetting('fbg_invoice_email_enabled', '1') !== '1') {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'email-skipped', 'Invoice email delivery is disabled.');
+        if ((string)fbgGetSetting('fbg_receipt_email_enabled', '1') !== '1') {
+            fbgLogFrontendReceiptEvent($receiptId, 'email-skipped', 'Receipt email delivery is disabled.');
             return false;
         }
 
-        $invoice = fbgGetFrontendInvoiceDetail($invoiceId, $userId, true);
-        if (!$invoice || empty($invoice['customer_email'])) {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email was not sent because no customer email address was available.');
+        $receipt = fbgGetFrontendReceiptDetail($receiptId, $userId, true);
+        if (!$receipt || empty($receipt['customer_email'])) {
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email was not sent because no customer email address was available.');
             return false;
         }
 
         require_once __DIR__ . '/mailer.php';
 
-        if (!function_exists('fbgSendInvoiceEmail')) {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email helper is unavailable.');
+        if (!function_exists('fbgSendReceiptEmail')) {
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email helper is unavailable.');
             return false;
         }
 
         try {
-            $invoiceUrl = fbgShopBaseUrl() . '/page.php?name=invoice&id=' . rawurlencode((string)$invoiceId);
-            $sent = fbgSendInvoiceEmail($invoice, $invoiceUrl);
+            $receiptUrl = fbgShopBaseUrl() . '/page.php?name=receipt&id=' . rawurlencode((string)$receiptId);
+            $sent = fbgSendReceiptEmail($receipt, $receiptUrl);
 
             if ($sent) {
-                fbgLogFrontendInvoiceEvent($invoiceId, 'emailed', 'Invoice email sent to ' . (string)$invoice['customer_email'] . '.');
+                fbgLogFrontendReceiptEvent($receiptId, 'emailed', 'Receipt email sent to ' . (string)$receipt['customer_email'] . '.');
                 return true;
             }
 
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email could not be sent.');
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email could not be sent.');
             return false;
         } catch (Throwable $e) {
-            error_log('Invoice email failed: ' . $e->getMessage());
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email failed to send.', [
+            error_log('Receipt email failed: ' . $e->getMessage());
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email failed to send.', [
                 'error' => $e->getMessage(),
             ]);
             return false;
@@ -1300,8 +1300,8 @@ if (!function_exists('fbgSendFrontendInvoiceEmailNotification')) {
     }
 }
 
-if (!function_exists('fbgCreateFrontendInvoiceForPayment')) {
-    function fbgCreateFrontendInvoiceForPayment(int $paymentId, string $provider, string $reference = ''): ?array
+if (!function_exists('fbgCreateFrontendReceiptForPayment')) {
+    function fbgCreateFrontendReceiptForPayment(int $paymentId, string $provider, string $reference = ''): ?array
     {
         if ($paymentId <= 0 || !fbgEnsurePteroDbHelper()) {
             return null;
@@ -1329,7 +1329,7 @@ if (!function_exists('fbgCreateFrontendInvoiceForPayment')) {
                 $customerName = trim((string)($panelUser['name_first'] ?? ''));
             }
 
-            $invoice = fbgCreateFrontendInvoice([
+            $receipt = fbgCreateFrontendReceipt([
                 'user_id' => $userId,
                 'source_type' => 'payment',
                 'source_id' => (string)$paymentId,
@@ -1361,33 +1361,33 @@ if (!function_exists('fbgCreateFrontendInvoiceForPayment')) {
                 ],
             ]);
 
-            if ($invoice && !empty($invoice['invoice_number'])) {
+            if ($receipt && !empty($receipt['receipt_number'])) {
                 try {
                     $updatePaymentStmt = fbgPteroDb()->prepare("
                         UPDATE payments
-                        SET invoice_number = :invoice_number
+                        SET invoice_number = :receipt_number
                         WHERE id = :id
                         AND (invoice_number IS NULL OR invoice_number = '')
                     ");
                     $updatePaymentStmt->execute([
-                        ':invoice_number' => (string)$invoice['invoice_number'],
+                        ':receipt_number' => (string)$receipt['receipt_number'],
                         ':id' => $paymentId,
                     ]);
                 } catch (Throwable $e) {
-                    error_log('Unable to backfill payment invoice number: ' . $e->getMessage());
+                    error_log('Unable to backfill payment receipt number: ' . $e->getMessage());
                 }
             }
 
-            return $invoice;
+            return $receipt;
         } catch (Throwable $e) {
-            error_log('Unable to create payment invoice: ' . $e->getMessage());
+            error_log('Unable to create payment receipt: ' . $e->getMessage());
             return null;
         }
     }
 }
 
-if (!function_exists('fbgGetFrontendInvoiceCustomerForUser')) {
-    function fbgGetFrontendInvoiceCustomerForUser(int $userId): array
+if (!function_exists('fbgGetFrontendReceiptCustomerForUser')) {
+    function fbgGetFrontendReceiptCustomerForUser(int $userId): array
     {
         $customer = [
             'name' => '',
@@ -1418,7 +1418,7 @@ if (!function_exists('fbgGetFrontendInvoiceCustomerForUser')) {
                 $customer['username'] = (string)($user['username'] ?? '');
             }
         } catch (Throwable $e) {
-            error_log('Unable to load invoice customer details: ' . $e->getMessage());
+            error_log('Unable to load receipt customer details: ' . $e->getMessage());
         }
 
         if ($customer['name'] === '') {
@@ -1437,15 +1437,15 @@ if (!function_exists('fbgGetFrontendInvoiceCustomerForUser')) {
     }
 }
 
-if (!function_exists('fbgCreateFrontendInvoiceForServerPurchase')) {
-    function fbgCreateFrontendInvoiceForServerPurchase(array $purchase): ?array
+if (!function_exists('fbgCreateFrontendReceiptForServerPurchase')) {
+    function fbgCreateFrontendReceiptForServerPurchase(array $purchase): ?array
     {
         $purchaseId = (int)($purchase['id'] ?? 0);
         $userId = (int)($purchase['user_id'] ?? 0);
         $serverId = (int)($purchase['server_id'] ?? 0);
         $gameId = (int)($purchase['game_id'] ?? 0);
         $gameName = trim((string)($purchase['game_name'] ?? 'Game Server'));
-        $amount = round((float)($purchase['invoice_subtotal'] ?? $purchase['amount'] ?? 0), 2);
+        $amount = round((float)($purchase['receipt_subtotal'] ?? $purchase['amount'] ?? 0), 2);
         $taxRate = fbgGetShopTaxRate();
 
         if ($purchaseId <= 0 || $userId <= 0 || $serverId <= 0 || $amount <= 0) {
@@ -1453,7 +1453,7 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerPurchase')) {
         }
 
         try {
-            return fbgCreateFrontendInvoice([
+            return fbgCreateFrontendReceipt([
                 'user_id' => $userId,
                 'source_type' => 'server_purchase',
                 'source_id' => (string)$purchaseId,
@@ -1462,7 +1462,7 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerPurchase')) {
                 'tax_rate' => $taxRate,
                 'payment_provider' => 'account_balance',
                 'paid_at' => date('Y-m-d H:i:s'),
-                'customer' => fbgGetFrontendInvoiceCustomerForUser($userId),
+                'customer' => fbgGetFrontendReceiptCustomerForUser($userId),
                 'line_items' => [
                     [
                         'description' => $gameName . ' server rental (30 Days)',
@@ -1483,14 +1483,14 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerPurchase')) {
                 ],
             ]);
         } catch (Throwable $e) {
-            error_log('Unable to create server rental invoice: ' . $e->getMessage());
+            error_log('Unable to create server rental receipt: ' . $e->getMessage());
             return null;
         }
     }
 }
 
-if (!function_exists('fbgCreateFrontendInvoiceForServerRenewal')) {
-    function fbgCreateFrontendInvoiceForServerRenewal(
+if (!function_exists('fbgCreateFrontendReceiptForServerRenewal')) {
+    function fbgCreateFrontendReceiptForServerRenewal(
         int $userId,
         int $serverId,
         int $gameId,
@@ -1508,7 +1508,7 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerRenewal')) {
         }
 
         try {
-            return fbgCreateFrontendInvoice([
+            return fbgCreateFrontendReceipt([
                 'user_id' => $userId,
                 'source_type' => 'renewal',
                 'source_id' => $serverId . ':' . $normalizedNewExpiry,
@@ -1517,7 +1517,7 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerRenewal')) {
                 'tax_rate' => $taxRate,
                 'payment_provider' => 'account_balance',
                 'paid_at' => date('Y-m-d H:i:s'),
-                'customer' => fbgGetFrontendInvoiceCustomerForUser($userId),
+                'customer' => fbgGetFrontendReceiptCustomerForUser($userId),
                 'line_items' => [
                     [
                         'description' => trim($gameName) !== '' ? trim($gameName) . ' server renewal (30 Days)' : 'Server renewal (30 Days)',
@@ -1540,20 +1540,20 @@ if (!function_exists('fbgCreateFrontendInvoiceForServerRenewal')) {
                 ],
             ]);
         } catch (Throwable $e) {
-            error_log('Unable to create server renewal invoice: ' . $e->getMessage());
+            error_log('Unable to create server renewal receipt: ' . $e->getMessage());
             return null;
         }
     }
 }
 
-if (!function_exists('fbgAdminGenerateFrontendInvoiceForPayment')) {
-    function fbgAdminGenerateFrontendInvoiceForPayment(int $paymentId): array
+if (!function_exists('fbgAdminGenerateFrontendReceiptForPayment')) {
+    function fbgAdminGenerateFrontendReceiptForPayment(int $paymentId): array
     {
         if ($paymentId <= 0 || !fbgEnsurePteroDbHelper()) {
             return [
                 'ok' => false,
-                'error' => 'Choose a valid completed order before generating an invoice.',
-                'invoice' => null,
+                'error' => 'Choose a valid completed order before generating a receipt.',
+                'receipt' => null,
             ];
         }
 
@@ -1571,60 +1571,60 @@ if (!function_exists('fbgAdminGenerateFrontendInvoiceForPayment')) {
                 return [
                     'ok' => false,
                     'error' => 'That order could not be found.',
-                    'invoice' => null,
+                    'receipt' => null,
                 ];
             }
 
             if ((int)($payment['completed'] ?? 0) !== 1) {
                 return [
                     'ok' => false,
-                    'error' => 'Invoices can only be generated for completed orders.',
-                    'invoice' => null,
+                    'error' => 'Receipts can only be generated for completed orders.',
+                    'receipt' => null,
                 ];
             }
 
-            $invoice = fbgCreateFrontendInvoiceForPayment(
+            $receipt = fbgCreateFrontendReceiptForPayment(
                 $paymentId,
                 (string)($payment['payment_type'] ?? ''),
                 (string)($payment['session_id'] ?? '')
             );
 
-            if (!$invoice) {
+            if (!$receipt) {
                 return [
                     'ok' => false,
-                    'error' => 'The invoice could not be generated. Check invoice settings and try again.',
-                    'invoice' => null,
+                    'error' => 'The receipt could not be generated. Check receipt settings and try again.',
+                    'receipt' => null,
                 ];
             }
 
-            fbgLogFrontendInvoiceEvent(
-                (int)$invoice['id'],
+            fbgLogFrontendReceiptEvent(
+                (int)$receipt['id'],
                 'manual-generation',
-                'Invoice was generated manually from the admin area.',
+                'Receipt was generated manually from the admin area.',
                 ['payment_id' => $paymentId]
             );
 
             return [
                 'ok' => true,
                 'error' => null,
-                'invoice' => $invoice,
+                'receipt' => $receipt,
             ];
         } catch (Throwable $e) {
-            error_log('Unable to manually generate frontend invoice: ' . $e->getMessage());
+            error_log('Unable to manually generate frontend receipt: ' . $e->getMessage());
 
             return [
                 'ok' => false,
-                'error' => 'The invoice could not be generated. Check the logs and try again.',
-                'invoice' => null,
+                'error' => 'The receipt could not be generated. Check the logs and try again.',
+                'receipt' => null,
             ];
         }
     }
 }
 
-if (!function_exists('fbgGetUserFrontendInvoices')) {
-    function fbgGetUserFrontendInvoices(int $userId, int $limit = 100): array
+if (!function_exists('fbgGetUserFrontendReceipts')) {
+    function fbgGetUserFrontendReceipts(int $userId, int $limit = 100): array
     {
-        if ($userId <= 0 || !fbgEnsureFrontendInvoiceTables()) {
+        if ($userId <= 0 || !fbgEnsureFrontendReceiptTables()) {
             return [];
         }
 
@@ -1634,7 +1634,7 @@ if (!function_exists('fbgGetUserFrontendInvoices')) {
             $stmt = db()->prepare("
                 SELECT
                     id,
-                    invoice_number,
+                    receipt_number,
                     source_type,
                     source_id,
                     status,
@@ -1645,7 +1645,7 @@ if (!function_exists('fbgGetUserFrontendInvoices')) {
                     payment_provider,
                     paid_at,
                     created_at
-                FROM fbg_invoices
+                FROM fbg_receipts
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC, id DESC
                 LIMIT {$limit}
@@ -1655,22 +1655,22 @@ if (!function_exists('fbgGetUserFrontendInvoices')) {
 
             return is_array($rows) ? $rows : [];
         } catch (Throwable $e) {
-            error_log('Unable to load frontend invoices: ' . $e->getMessage());
+            error_log('Unable to load frontend receipts: ' . $e->getMessage());
             return [];
         }
     }
 }
 
-if (!function_exists('fbgGetFrontendInvoiceDetail')) {
-    function fbgGetFrontendInvoiceDetail(int $invoiceId, int $viewerUserId, bool $canViewAll = false): ?array
+if (!function_exists('fbgGetFrontendReceiptDetail')) {
+    function fbgGetFrontendReceiptDetail(int $receiptId, int $viewerUserId, bool $canViewAll = false): ?array
     {
-        if ($invoiceId <= 0 || $viewerUserId <= 0 || !fbgEnsureFrontendInvoiceTables()) {
+        if ($receiptId <= 0 || $viewerUserId <= 0 || !fbgEnsureFrontendReceiptTables()) {
             return null;
         }
 
         try {
             $where = 'id = :id';
-            $params = [':id' => $invoiceId];
+            $params = [':id' => $receiptId];
 
             if (!$canViewAll) {
                 $where .= ' AND user_id = :user_id';
@@ -1679,14 +1679,14 @@ if (!function_exists('fbgGetFrontendInvoiceDetail')) {
 
             $stmt = db()->prepare("
                 SELECT *
-                FROM fbg_invoices
+                FROM fbg_receipts
                 WHERE {$where}
                 LIMIT 1
             ");
             $stmt->execute($params);
-            $invoice = $stmt->fetch();
+            $receipt = $stmt->fetch();
 
-            if (!$invoice) {
+            if (!$receipt) {
                 return null;
             }
 
@@ -1702,13 +1702,13 @@ if (!function_exists('fbgGetFrontendInvoiceDetail')) {
                     line_total,
                     metadata_json,
                     created_at
-                FROM fbg_invoice_line_items
-                WHERE invoice_id = :invoice_id
+                FROM fbg_receipt_line_items
+                WHERE receipt_id = :receipt_id
                 ORDER BY id ASC
             ");
-            $itemsStmt->execute([':invoice_id' => $invoiceId]);
+            $itemsStmt->execute([':receipt_id' => $receiptId]);
 
-            $invoice['line_items'] = $itemsStmt->fetchAll() ?: [];
+            $receipt['line_items'] = $itemsStmt->fetchAll() ?: [];
 
             $eventsStmt = db()->prepare("
                 SELECT
@@ -1717,29 +1717,29 @@ if (!function_exists('fbgGetFrontendInvoiceDetail')) {
                     event_note,
                     metadata_json,
                     created_at
-                FROM fbg_invoice_events
-                WHERE invoice_id = :invoice_id
+                FROM fbg_receipt_events
+                WHERE receipt_id = :receipt_id
                 ORDER BY created_at DESC, id DESC
             ");
-            $eventsStmt->execute([':invoice_id' => $invoiceId]);
+            $eventsStmt->execute([':receipt_id' => $receiptId]);
 
-            $invoice['events'] = $eventsStmt->fetchAll() ?: [];
+            $receipt['events'] = $eventsStmt->fetchAll() ?: [];
 
-            return $invoice;
+            return $receipt;
         } catch (Throwable $e) {
-            error_log('Unable to load frontend invoice detail: ' . $e->getMessage());
+            error_log('Unable to load frontend receipt detail: ' . $e->getMessage());
             return null;
         }
     }
 }
 
-if (!function_exists('fbgCreateFrontendInvoicePdf')) {
-    function fbgCreateFrontendInvoicePdf(array $invoice): string
+if (!function_exists('fbgCreateFrontendReceiptPdf')) {
+    function fbgCreateFrontendReceiptPdf(array $receipt): string
     {
-        $currency = trim((string)($invoice['currency'] ?? 'USD')) ?: 'USD';
-        $invoiceNumber = trim((string)($invoice['invoice_number'] ?? 'Invoice')) ?: 'Invoice';
-        $taxLabel = trim((string)($invoice['tax_label'] ?? 'Tax')) ?: 'Tax';
-        $hasTax = round((float)($invoice['tax_rate'] ?? 0), 4) > 0 || round((float)($invoice['tax_amount'] ?? 0), 2) > 0;
+        $currency = trim((string)($receipt['currency'] ?? 'USD')) ?: 'USD';
+        $receiptNumber = trim((string)($receipt['receipt_number'] ?? 'Receipt')) ?: 'Receipt';
+        $taxLabel = trim((string)($receipt['tax_label'] ?? 'Tax')) ?: 'Tax';
+        $hasTax = round((float)($receipt['tax_rate'] ?? 0), 4) > 0 || round((float)($receipt['tax_amount'] ?? 0), 2) > 0;
 
         $formatDate = static function ($value): string {
             $value = trim((string)$value);
@@ -1900,39 +1900,29 @@ if (!function_exists('fbgCreateFrontendInvoicePdf')) {
             $y -= 10;
         };
 
-        $line('INVOICE', 50, 26, true, 34);
-        $line($invoiceNumber, 50, 14, true, 24);
-        $line('Status: ' . ucfirst((string)($invoice['status'] ?? 'paid')), 50, 10, false, 15);
-        $line('Created: ' . $formatDate($invoice['created_at'] ?? ''), 50, 10, false, 15);
-        $line('Paid: ' . $formatDate($invoice['paid_at'] ?? ''), 50, 10, false, 22);
+        $line('RECEIPT', 50, 26, true, 34);
+        $line($receiptNumber, 50, 14, true, 24);
+        $line('Status: ' . ucfirst((string)($receipt['status'] ?? 'paid')), 50, 10, false, 15);
+        $line('Created: ' . $formatDate($receipt['created_at'] ?? ''), 50, 10, false, 15);
+        $line('Paid: ' . $formatDate($receipt['paid_at'] ?? ''), 50, 10, false, 22);
         $rule();
 
-        $line('From', 50, 13, true, 18);
-        $wrapped((string)($invoice['company_name'] ?? 'Frostbyt3 Gaming, LLC.'), 50, 10, true, 70);
-        if (!empty($invoice['company_address'])) {
-            $wrapped((string)$invoice['company_address'], 50, 10, false, 70);
+        $line('Merchant', 50, 13, true, 18);
+        $wrapped((string)($receipt['company_name'] ?? 'Frostbyt3 Gaming, LLC.'), 50, 10, true, 70);
+        if (!empty($receipt['company_address'])) {
+            $wrapped((string)$receipt['company_address'], 50, 10, false, 70);
         }
-        if (!empty($invoice['company_phone'])) {
-            $line((string)$invoice['company_phone']);
+        if (!empty($receipt['company_phone'])) {
+            $line((string)$receipt['company_phone']);
         }
-        if (!empty($invoice['company_email'])) {
-            $line((string)$invoice['company_email']);
+        if (!empty($receipt['company_email'])) {
+            $line((string)$receipt['company_email']);
         }
-        if (!empty($invoice['company_code'])) {
-            $line('Code: ' . (string)$invoice['company_code']);
+        if (!empty($receipt['company_code'])) {
+            $line('Code: ' . (string)$receipt['company_code']);
         }
-        if (!empty($invoice['company_vat'])) {
-            $line('VAT: ' . (string)$invoice['company_vat']);
-        }
-
-        $y -= 10;
-        $line('Bill To', 50, 13, true, 18);
-        $wrapped((string)($invoice['customer_name'] ?: $invoice['customer_username'] ?: 'Customer'), 50, 10, true, 70);
-        if (!empty($invoice['customer_username'])) {
-            $line((string)$invoice['customer_username']);
-        }
-        if (!empty($invoice['customer_email'])) {
-            $line((string)$invoice['customer_email']);
+        if (!empty($receipt['company_vat'])) {
+            $line('VAT: ' . (string)$receipt['company_vat']);
         }
 
         $y -= 14;
@@ -1941,18 +1931,18 @@ if (!function_exists('fbgCreateFrontendInvoicePdf')) {
         $line('Line Items', 50, 13, true, 22);
         $tableHeader();
 
-        foreach (($invoice['line_items'] ?? []) as $item) {
+        foreach (($receipt['line_items'] ?? []) as $item) {
             if (!is_array($item)) {
                 continue;
             }
 
-            $description = (string)($item['description'] ?? 'Invoice item');
+            $description = (string)($item['description'] ?? 'Receipt item');
             $descriptionLines = $wrapByWidth($description, 10, 260);
             $rowHeight = max(18, count($descriptionLines) * 13 + 5);
 
             if ($y - $rowHeight < 70) {
                 $newPage();
-                $line($invoiceNumber . ' - Line Items', 50, 13, true, 22);
+                $line($receiptNumber . ' - Line Items', 50, 13, true, 22);
                 $tableHeader();
             }
 
@@ -1963,7 +1953,7 @@ if (!function_exists('fbgCreateFrontendInvoicePdf')) {
 
             $y = $rowStartY;
             $line(number_format((float)($item['quantity'] ?? 0), 2), 330, 10, false, 0);
-            $line(fbgFormatFrontendInvoiceUnitDisplay($item, $currency), 380, 7, false, 0);
+            $line(fbgFormatFrontendReceiptUnitDisplay($item, $currency), 380, 7, false, 0);
             $line($formatMoney($item['line_total'] ?? 0), 515, 10, false, 0);
             $y = $rowStartY - $rowHeight;
         }
@@ -1971,12 +1961,16 @@ if (!function_exists('fbgCreateFrontendInvoicePdf')) {
         $y -= 8;
         $ensureSpace($hasTax ? 118 : 96);
         $rule();
-        $line('Payment Provider: ' . ucwords(str_replace(['_', '-'], ' ', (string)($invoice['payment_provider'] ?? 'Payment'))), 50, 10, false, 22);
-        $line('Subtotal: ' . $formatMoney($invoice['subtotal'] ?? 0), 390, 11, false, 16);
+        $paymentProvider = (string)($receipt['payment_provider'] ?? 'Payment');
+        $paymentProviderLabel = strtolower(trim($paymentProvider)) === 'account_balance'
+            ? 'Wallet Balance'
+            : ucwords(str_replace(['_', '-'], ' ', $paymentProvider));
+        $line('Payment Details: ' . $paymentProviderLabel, 50, 10, false, 22);
+        $line('Subtotal: ' . $formatMoney($receipt['subtotal'] ?? 0), 390, 11, false, 16);
         if ($hasTax) {
-            $line($taxLabel . ' ' . number_format((float)($invoice['tax_rate'] ?? 0), 2) . '%: ' . $formatMoney($invoice['tax_amount'] ?? 0), 390, 11, false, 16);
+            $line($taxLabel . ' ' . number_format((float)($receipt['tax_rate'] ?? 0), 2) . '%: ' . $formatMoney($receipt['tax_amount'] ?? 0), 390, 11, false, 16);
         }
-        $line('Total: ' . $formatMoney($invoice['total'] ?? 0), 390, 13, true, 20);
+        $line('Total: ' . $formatMoney($receipt['total'] ?? 0), 390, 13, true, 20);
 
         $y = max(45, $y - 20);
         $line('Thank you for choosing Frostbyt3 Gaming.', 50, 9, false, 12);
@@ -2026,8 +2020,8 @@ if (!function_exists('fbgCreateFrontendInvoicePdf')) {
     }
 }
 
-if (!function_exists('fbgFormatFrontendInvoiceUnitDisplay')) {
-    function fbgFormatFrontendInvoiceUnitDisplay(array $item, string $currency): string
+if (!function_exists('fbgFormatFrontendReceiptUnitDisplay')) {
+    function fbgFormatFrontendReceiptUnitDisplay(array $item, string $currency): string
     {
         $currency = trim($currency) !== '' ? trim($currency) : 'USD';
         $unitAmount = (float)($item['unit_amount'] ?? 0);
@@ -2048,10 +2042,10 @@ if (!function_exists('fbgFormatFrontendInvoiceUnitDisplay')) {
     }
 }
 
-if (!function_exists('fbgGetAdminFrontendInvoices')) {
-    function fbgGetAdminFrontendInvoices(array $filters = [], int $limit = 25, int $offset = 0): array
+if (!function_exists('fbgGetAdminFrontendReceipts')) {
+    function fbgGetAdminFrontendReceipts(array $filters = [], int $limit = 25, int $offset = 0): array
     {
-        if (!fbgEnsureFrontendInvoiceTables()) {
+        if (!fbgEnsureFrontendReceiptTables()) {
             return ['rows' => [], 'total' => 0];
         }
 
@@ -2063,7 +2057,7 @@ if (!function_exists('fbgGetAdminFrontendInvoices')) {
         $search = trim((string)($filters['search'] ?? ''));
         if ($search !== '') {
             $where[] = '(
-                invoice_number LIKE :search
+                receipt_number LIKE :search
                 OR customer_name LIKE :search
                 OR customer_email LIKE :search
                 OR customer_username LIKE :search
@@ -2087,14 +2081,14 @@ if (!function_exists('fbgGetAdminFrontendInvoices')) {
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         try {
-            $countStmt = db()->prepare("SELECT COUNT(*) FROM fbg_invoices {$whereSql}");
+            $countStmt = db()->prepare("SELECT COUNT(*) FROM fbg_receipts {$whereSql}");
             $countStmt->execute($params);
             $total = (int)$countStmt->fetchColumn();
 
             $stmt = db()->prepare("
                 SELECT
                     id,
-                    invoice_number,
+                    receipt_number,
                     user_id,
                     source_type,
                     source_id,
@@ -2109,7 +2103,7 @@ if (!function_exists('fbgGetAdminFrontendInvoices')) {
                     payment_provider,
                     paid_at,
                     created_at
-                FROM fbg_invoices
+                FROM fbg_receipts
                 {$whereSql}
                 ORDER BY created_at DESC, id DESC
                 LIMIT {$limit} OFFSET {$offset}
@@ -2121,51 +2115,51 @@ if (!function_exists('fbgGetAdminFrontendInvoices')) {
                 'total' => $total,
             ];
         } catch (Throwable $e) {
-            error_log('Unable to load admin frontend invoices: ' . $e->getMessage());
+            error_log('Unable to load admin frontend receipts: ' . $e->getMessage());
             return ['rows' => [], 'total' => 0];
         }
     }
 }
 
-if (!function_exists('fbgResendFrontendInvoiceEmailNotification')) {
-    function fbgResendFrontendInvoiceEmailNotification(int $invoiceId): bool
+if (!function_exists('fbgResendFrontendReceiptEmailNotification')) {
+    function fbgResendFrontendReceiptEmailNotification(int $receiptId): bool
     {
-        if ($invoiceId <= 0) {
+        if ($receiptId <= 0) {
             return false;
         }
 
-        if ((string)fbgGetSetting('fbg_invoice_email_enabled', '1') !== '1') {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'email-skipped', 'Invoice email delivery is disabled.');
+        if ((string)fbgGetSetting('fbg_receipt_email_enabled', '1') !== '1') {
+            fbgLogFrontendReceiptEvent($receiptId, 'email-skipped', 'Receipt email delivery is disabled.');
             return false;
         }
 
-        $invoice = fbgGetFrontendInvoiceDetail($invoiceId, 1, true);
-        if (!$invoice || empty($invoice['customer_email'])) {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email was not resent because no customer email address was available.');
+        $receipt = fbgGetFrontendReceiptDetail($receiptId, 1, true);
+        if (!$receipt || empty($receipt['customer_email'])) {
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email was not resent because no customer email address was available.');
             return false;
         }
 
         require_once __DIR__ . '/mailer.php';
 
-        if (!function_exists('fbgSendInvoiceEmail')) {
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email helper is unavailable.');
+        if (!function_exists('fbgSendReceiptEmail')) {
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email helper is unavailable.');
             return false;
         }
 
         try {
-            $invoiceUrl = fbgShopBaseUrl() . '/page.php?name=invoice&id=' . rawurlencode((string)$invoiceId);
-            $sent = fbgSendInvoiceEmail($invoice, $invoiceUrl);
+            $receiptUrl = fbgShopBaseUrl() . '/page.php?name=receipt&id=' . rawurlencode((string)$receiptId);
+            $sent = fbgSendReceiptEmail($receipt, $receiptUrl);
 
             if ($sent) {
-                fbgLogFrontendInvoiceEvent($invoiceId, 'resent', 'Invoice email resent to ' . (string)$invoice['customer_email'] . '.');
+                fbgLogFrontendReceiptEvent($receiptId, 'resent', 'Receipt email resent to ' . (string)$receipt['customer_email'] . '.');
                 return true;
             }
 
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email could not be resent.');
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email could not be resent.');
             return false;
         } catch (Throwable $e) {
-            error_log('Invoice resend email failed: ' . $e->getMessage());
-            fbgLogFrontendInvoiceEvent($invoiceId, 'failed-email', 'Invoice email failed to resend.', [
+            error_log('Receipt resend email failed: ' . $e->getMessage());
+            fbgLogFrontendReceiptEvent($receiptId, 'failed-email', 'Receipt email failed to resend.', [
                 'error' => $e->getMessage(),
             ]);
             return false;
@@ -2339,7 +2333,7 @@ if (!function_exists('fbgCreateStripeBalanceCheckout')) {
                         'currency' => $currency,
                         'unit_amount' => $unitAmount,
                         'product_data' => [
-                            'name' => 'Frostbyt3 Gaming Account Balance',
+                            'name' => 'Frostbyt3 Gaming Wallet Balance',
                         ],
                     ],
                 ],
@@ -2429,13 +2423,13 @@ if (!function_exists('fbgCompleteStripeBalanceCheckout')) {
             }
 
             if ((int)($payment['completed'] ?? 0) === 1) {
-                $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'stripe', $sessionId);
+                $receipt = fbgCreateFrontendReceiptForPayment((int)$payment['id'], 'stripe', $sessionId);
                 $pdo->commit();
                 return [
                     'ok' => true,
                     'error' => null,
                     'message' => 'Payment already applied.',
-                    'invoice' => $invoice,
+                    'receipt' => $receipt,
                 ];
             }
 
@@ -2482,13 +2476,13 @@ if (!function_exists('fbgCompleteStripeBalanceCheckout')) {
             $updatePaymentStmt->execute([':id' => (int)$payment['id']]);
 
             $pdo->commit();
-            $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'stripe', $sessionId);
+            $receipt = fbgCreateFrontendReceiptForPayment((int)$payment['id'], 'stripe', $sessionId);
 
             return [
                 'ok' => true,
                 'error' => null,
                 'message' => 'Account balance updated.',
-                'invoice' => $invoice,
+                'receipt' => $receipt,
             ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -2721,7 +2715,7 @@ if (!function_exists('fbgCreatePayPalBalanceCheckout')) {
             'purchase_units' => [
                 [
                     'reference_id' => 'fbg-balance-' . $userId . '-' . time(),
-                    'description' => 'Frostbyt3 Gaming Account Balance',
+                    'description' => 'Frostbyt3 Gaming Wallet Balance',
                     'custom_id' => (string)$userId,
                     'amount' => [
                         'currency_code' => $currency,
@@ -2812,13 +2806,13 @@ if (!function_exists('fbgCompletePayPalBalanceCheckout')) {
             }
 
             if ((int)($payment['completed'] ?? 0) === 1) {
-                $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'paypal', $orderId);
+                $receipt = fbgCreateFrontendReceiptForPayment((int)$payment['id'], 'paypal', $orderId);
                 $pdo->commit();
                 return [
                     'ok' => true,
                     'error' => null,
                     'message' => 'Payment already applied.',
-                    'invoice' => $invoice,
+                    'receipt' => $receipt,
                 ];
             }
 
@@ -2883,13 +2877,13 @@ if (!function_exists('fbgCompletePayPalBalanceCheckout')) {
             $updatePaymentStmt->execute([':id' => (int)$payment['id']]);
 
             $pdo->commit();
-            $invoice = fbgCreateFrontendInvoiceForPayment((int)$payment['id'], 'paypal', $orderId);
+            $receipt = fbgCreateFrontendReceiptForPayment((int)$payment['id'], 'paypal', $orderId);
 
             return [
                 'ok' => true,
                 'error' => null,
                 'message' => 'Account balance updated.',
-                'invoice' => $invoice,
+                'receipt' => $receipt,
             ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -3714,12 +3708,12 @@ if (!function_exists('fbgPurchaseShopGame')) {
                 fbgGetShopCurrency()
             );
             if ($purchaseRecord) {
-                $purchaseRecord['invoice_subtotal'] = $price;
-                $purchaseRecord['invoice_tax_rate'] = (float)$tax['tax_rate'];
-                $purchaseRecord['invoice_tax_amount'] = (float)$tax['tax_amount'];
-                $purchaseRecord['invoice_total'] = $totalPrice;
+                $purchaseRecord['receipt_subtotal'] = $price;
+                $purchaseRecord['receipt_tax_rate'] = (float)$tax['tax_rate'];
+                $purchaseRecord['receipt_tax_amount'] = (float)$tax['tax_amount'];
+                $purchaseRecord['receipt_total'] = $totalPrice;
             }
-            $invoice = $purchaseRecord ? fbgCreateFrontendInvoiceForServerPurchase($purchaseRecord) : null;
+            $receipt = $purchaseRecord ? fbgCreateFrontendReceiptForServerPurchase($purchaseRecord) : null;
 
             if (isset($_SESSION['server_meta'])) {
                 unset($_SESSION['server_meta']);
@@ -3754,7 +3748,7 @@ if (!function_exists('fbgPurchaseShopGame')) {
                     'tax_amount' => (float)$tax['tax_amount'],
                     'total' => $totalPrice,
                     'message' => $provisionWarning ?? 'Server rental started and provisioning has begun.',
-                    'invoice' => $invoice,
+                    'receipt' => $receipt,
                 ],
             ];
         } catch (Throwable $e) {

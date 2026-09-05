@@ -491,31 +491,31 @@ function fbgSendServerExpiredEmail(array $data): bool
     }
 }
 
-function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
+function fbgSendReceiptEmail(array $receipt, string $receiptUrl): bool
 {
-    $toEmail = trim((string)($invoice['customer_email'] ?? ''));
-    $customerName = trim((string)($invoice['customer_name'] ?? $invoice['customer_username'] ?? ''));
-    $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
-    $currency = trim((string)($invoice['currency'] ?? 'USD')) ?: 'USD';
+    $toEmail = trim((string)($receipt['customer_email'] ?? ''));
+    $customerName = trim((string)($receipt['customer_name'] ?? $receipt['customer_username'] ?? ''));
+    $receiptNumber = trim((string)($receipt['receipt_number'] ?? ''));
+    $currency = trim((string)($receipt['currency'] ?? 'USD')) ?: 'USD';
 
-    if ($toEmail === '' || $invoiceNumber === '' || $invoiceUrl === '') {
+    if ($toEmail === '' || $receiptNumber === '' || $receiptUrl === '') {
         return false;
     }
 
     $greetingName = $customerName !== '' ? $customerName : 'there';
-    $companyName = trim((string)($invoice['company_name'] ?? 'Frostbyt3 Gaming')) ?: 'Frostbyt3 Gaming';
-    $safeInvoiceNumber = fbgEmailEscape($invoiceNumber);
-    $getInvoiceMailSetting = static function (string $key, string $default = ''): string {
+    $companyName = trim((string)($receipt['company_name'] ?? 'Frostbyt3 Gaming')) ?: 'Frostbyt3 Gaming';
+    $safeReceiptNumber = fbgEmailEscape($receiptNumber);
+    $getReceiptMailSetting = static function (string $key, string $default = ''): string {
         if (function_exists('fbgGetSetting')) {
             return trim((string)fbgGetSetting($key, $default));
         }
 
         return trim($default);
     };
-    $fromEmail = $getInvoiceMailSetting('fbg_invoice_mail_from_email', defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '');
-    $fromName = $getInvoiceMailSetting('fbg_invoice_mail_from_name', defined('SMTP_FROM_NAME') ? (string)SMTP_FROM_NAME : '');
-    $replyToEmail = $getInvoiceMailSetting('fbg_invoice_mail_reply_to_email');
-    $replyToName = $getInvoiceMailSetting('fbg_invoice_mail_reply_to_name');
+    $fromEmail = $getReceiptMailSetting('fbg_receipt_mail_from_email', defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '');
+    $fromName = $getReceiptMailSetting('fbg_receipt_mail_from_name', defined('SMTP_FROM_NAME') ? (string)SMTP_FROM_NAME : '');
+    $replyToEmail = $getReceiptMailSetting('fbg_receipt_mail_reply_to_email');
+    $replyToName = $getReceiptMailSetting('fbg_receipt_mail_reply_to_name');
 
     if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
         $fromEmail = defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '';
@@ -529,7 +529,7 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
         $replyToEmail = '';
         $replyToName = '';
     }
-    $invoicePdfFilename = (preg_replace('/[^A-Za-z0-9._-]+/', '-', $invoiceNumber) ?: 'invoice') . '.pdf';
+    $receiptPdfFilename = (preg_replace('/[^A-Za-z0-9._-]+/', '-', $receiptNumber) ?: 'receipt') . '.pdf';
     $formatMoney = static function ($amount) use ($currency): string {
         return function_exists('fbgFormatCredit')
             ? fbgFormatCredit((float)$amount, $currency)
@@ -537,7 +537,7 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
     };
 
     $lineRows = '';
-    foreach (($invoice['line_items'] ?? []) as $item) {
+    foreach (($receipt['line_items'] ?? []) as $item) {
         if (!is_array($item)) {
             continue;
         }
@@ -552,20 +552,20 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
     if ($lineRows === '') {
         $lineRows = '
             <tr>
-                <td style="padding:10px 0;border-bottom:1px solid #2d333b;color:#ffffff;">Frostbyt3 Gaming invoice</td>
-                <td align="right" style="padding:10px 0;border-bottom:1px solid #2d333b;color:#cfcfcf;">' . fbgEmailEscape($formatMoney($invoice['total'] ?? 0)) . '</td>
+                <td style="padding:10px 0;border-bottom:1px solid #2d333b;color:#ffffff;">Frostbyt3 Gaming receipt</td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #2d333b;color:#cfcfcf;">' . fbgEmailEscape($formatMoney($receipt['total'] ?? 0)) . '</td>
             </tr>';
     }
 
-    $hasTax = round((float)($invoice['tax_rate'] ?? 0), 4) > 0 || round((float)($invoice['tax_amount'] ?? 0), 2) > 0;
-    $taxLabel = trim((string)($invoice['tax_label'] ?? 'Tax')) ?: 'Tax';
+    $hasTax = round((float)($receipt['tax_rate'] ?? 0), 4) > 0 || round((float)($receipt['tax_amount'] ?? 0), 2) > 0;
+    $taxLabel = trim((string)($receipt['tax_label'] ?? 'Tax')) ?: 'Tax';
     $taxRow = $hasTax ? '
         <tr>
-            <td style="padding:6px 0;color:#cfcfcf;">' . fbgEmailEscape($taxLabel) . ' ' . fbgEmailEscape(number_format((float)($invoice['tax_rate'] ?? 0), 2)) . '%</td>
-            <td align="right" style="padding:6px 0;color:#ffffff;">' . fbgEmailEscape($formatMoney($invoice['tax_amount'] ?? 0)) . '</td>
+            <td style="padding:6px 0;color:#cfcfcf;">' . fbgEmailEscape($taxLabel) . ' ' . fbgEmailEscape(number_format((float)($receipt['tax_rate'] ?? 0), 2)) . '%</td>
+            <td align="right" style="padding:6px 0;color:#ffffff;">' . fbgEmailEscape($formatMoney($receipt['tax_amount'] ?? 0)) . '</td>
         </tr>' : '';
 
-    $subject = 'Your Frostbyt3 Gaming invoice ' . $invoiceNumber;
+    $subject = 'Your Frostbyt3 Gaming receipt ' . $receiptNumber;
 
     $panelHtml = '
                         <tr>
@@ -574,12 +574,12 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
                                     ' . $lineRows . '
                                     <tr>
                                         <td style="padding:14px 0 6px;color:#cfcfcf;">Subtotal</td>
-                                        <td align="right" style="padding:14px 0 6px;color:#ffffff;">' . fbgEmailEscape($formatMoney($invoice['subtotal'] ?? 0)) . '</td>
+                                        <td align="right" style="padding:14px 0 6px;color:#ffffff;">' . fbgEmailEscape($formatMoney($receipt['subtotal'] ?? 0)) . '</td>
                                     </tr>
                                     ' . $taxRow . '
                                     <tr>
                                         <td style="padding:10px 0 0;color:#ffffff;font-weight:bold;">Total</td>
-                                        <td align="right" style="padding:10px 0 0;color:#ffffff;font-weight:bold;">' . fbgEmailEscape($formatMoney($invoice['total'] ?? 0)) . '</td>
+                                        <td align="right" style="padding:10px 0 0;color:#ffffff;font-weight:bold;">' . fbgEmailEscape($formatMoney($receipt['total'] ?? 0)) . '</td>
                                     </tr>
                                 </table>
                             </td>
@@ -588,27 +588,27 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
     $htmlMessage = fbgRenderSiteEmail([
         'brand_name' => $companyName,
         'greeting_name' => $greetingName,
-        'headline' => 'Your invoice is ready',
-        'body_html' => 'Your invoice <strong style="color:#ffffff;">' . $safeInvoiceNumber . '</strong> is ready. A PDF copy is attached for your records.',
+        'headline' => 'Your receipt is ready',
+        'body_html' => 'Your receipt <strong style="color:#ffffff;">' . $safeReceiptNumber . '</strong> is ready. A PDF copy is attached for your records.',
         'panel_html' => $panelHtml,
-        'action_url' => $invoiceUrl,
-        'action_label' => 'View Invoice',
+        'action_url' => $receiptUrl,
+        'action_label' => 'View Receipt',
     ]);
 
     $plainLines = [];
-    foreach (($invoice['line_items'] ?? []) as $item) {
+    foreach (($receipt['line_items'] ?? []) as $item) {
         if (is_array($item)) {
-            $plainLines[] = '- ' . (string)($item['description'] ?? 'Invoice item') . ': ' . $formatMoney($item['line_total'] ?? 0);
+            $plainLines[] = '- ' . (string)($item['description'] ?? 'Receipt item') . ': ' . $formatMoney($item['line_total'] ?? 0);
         }
     }
 
     $plainMessage = "Hey {$greetingName},\n\n"
-        . "Your Frostbyt3 Gaming invoice {$invoiceNumber} is ready.\n\n"
+        . "Your Frostbyt3 Gaming receipt {$receiptNumber} is ready.\n\n"
         . (!empty($plainLines) ? implode("\n", $plainLines) . "\n\n" : '')
-        . "Subtotal: " . $formatMoney($invoice['subtotal'] ?? 0) . "\n"
-        . ($hasTax ? "{$taxLabel}: " . $formatMoney($invoice['tax_amount'] ?? 0) . "\n" : '')
-        . "Total: " . $formatMoney($invoice['total'] ?? 0) . "\n\n"
-        . "View your invoice here:\n{$invoiceUrl}\n";
+        . "Subtotal: " . $formatMoney($receipt['subtotal'] ?? 0) . "\n"
+        . ($hasTax ? "{$taxLabel}: " . $formatMoney($receipt['tax_amount'] ?? 0) . "\n" : '')
+        . "Total: " . $formatMoney($receipt['total'] ?? 0) . "\n\n"
+        . "View your receipt here:\n{$receiptUrl}\n";
 
     $mail = new PHPMailer(true);
 
@@ -643,10 +643,10 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
         $mail->Body = $htmlMessage;
         $mail->AltBody = $plainMessage;
 
-        if (function_exists('fbgCreateFrontendInvoicePdf')) {
+        if (function_exists('fbgCreateFrontendReceiptPdf')) {
             $mail->addStringAttachment(
-                fbgCreateFrontendInvoicePdf($invoice),
-                $invoicePdfFilename,
+                fbgCreateFrontendReceiptPdf($receipt),
+                $receiptPdfFilename,
                 'base64',
                 'application/pdf'
             );
@@ -654,7 +654,7 @@ function fbgSendInvoiceEmail(array $invoice, string $invoiceUrl): bool
 
         return $mail->send();
     } catch (Exception $e) {
-        error_log('Invoice email failed: ' . $e->getMessage());
+        error_log('Receipt email failed: ' . $e->getMessage());
         throw $e;
     }
 }

@@ -283,7 +283,7 @@ try {
     $renewWarning  = $canRenewAgain
         ? ''
         : 'You do not have enough balance to renew this server again.';
-    $invoice = fbgCreateFrontendInvoiceForServerRenewal(
+    $receipt = fbgCreateFrontendReceiptForServerRenewal(
         $panelUserId,
         $serverId,
         (int)($gameRow['id'] ?? 0),
@@ -323,7 +323,7 @@ try {
             'can_renew'           => $canRenewAgain,
             'renew_warning'       => $renewWarning,
             'unsuspend_warning'   => $unsuspendWarning,
-            'invoice'             => $invoice,
+            'receipt'             => $receipt,
         ],
     ]);
 } catch (Throwable $e) {

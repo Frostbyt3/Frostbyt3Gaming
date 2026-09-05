@@ -34,3 +34,7 @@ wow/
 phpinfo.php
 backend/uplimg/
 backend/fivem/
+
+# SQL Files
+panel.sql
+mainsite.sql

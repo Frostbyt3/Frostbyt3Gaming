@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     value: '22.82 USD'
                 },
                 note: 'Your server is being provisioned and installed and will appear in your dashboard shortly.',
-                invoice: {
+                receipt: {
                     number: 'FBG-999999',
                     url: '#'
                 },

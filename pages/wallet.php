@@ -47,12 +47,12 @@ $hasOnlineBalanceUploads = $paymentSettings['stripe_enabled'] || $paymentSetting
 $balance = fbgGetUserCreditBalance($userId);
 $purchaseConfirmation = null;
 
-if (is_array($balanceUploadResult) && is_array($balanceUploadResult['invoice'] ?? null)) {
-    $invoice = $balanceUploadResult['invoice'];
-    $addedAmount = (float)($invoice['subtotal'] ?? $invoice['total'] ?? 0);
-    $totalCharged = (float)($invoice['total'] ?? $addedAmount);
-    $invoiceId = (int)($invoice['id'] ?? 0);
-    $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
+if (is_array($balanceUploadResult) && is_array($balanceUploadResult['receipt'] ?? null)) {
+    $receipt = $balanceUploadResult['receipt'];
+    $addedAmount = (float)($receipt['subtotal'] ?? $receipt['total'] ?? 0);
+    $totalCharged = (float)($receipt['total'] ?? $addedAmount);
+    $receiptId = (int)($receipt['id'] ?? 0);
+    $receiptNumber = trim((string)($receipt['receipt_number'] ?? ''));
 
     if ($addedAmount > 0) {
         $purchaseConfirmation = [
@@ -81,10 +81,10 @@ if (is_array($balanceUploadResult) && is_array($balanceUploadResult['invoice'] ?
                 'value' => fbgFormatCredit($balance, $currency),
             ],
             'note' => '',
-            'invoice' => $invoiceId > 0 && $invoiceNumber !== ''
+            'receipt' => $receiptId > 0 && $receiptNumber !== ''
                 ? [
-                    'number' => $invoiceNumber,
-                    'url' => '/page.php?name=invoice&id=' . rawurlencode((string)$invoiceId),
+                    'number' => $receiptNumber,
+                    'url' => '/page.php?name=receipt&id=' . rawurlencode((string)$receiptId),
                 ]
                 : null,
             'actions' => [
@@ -105,21 +105,21 @@ if (is_array($balanceUploadResult) && is_array($balanceUploadResult['invoice'] ?
 }
 
 $transactions = fbgGetUserPaymentHistory($userId);
-$frontendInvoices = fbgGetUserFrontendInvoices($userId);
+$frontendReceipts = fbgGetUserFrontendReceipts($userId);
 $serverPurchases = fbgGetUserServerPurchaseHistory($userId);
 $showPendingTransactions = (string)($_GET['show_pending'] ?? '') === '1';
 $visibleTransactions = [];
 $hiddenPendingTransactions = 0;
-$invoiceByPaymentId = [];
+$receiptByPaymentId = [];
 
-foreach ($frontendInvoices as $invoice) {
-    if (($invoice['source_type'] ?? '') !== 'payment') {
+foreach ($frontendReceipts as $receipt) {
+    if (($receipt['source_type'] ?? '') !== 'payment') {
         continue;
     }
 
-    $sourceId = (int)($invoice['source_id'] ?? 0);
+    $sourceId = (int)($receipt['source_id'] ?? 0);
     if ($sourceId > 0) {
-        $invoiceByPaymentId[$sourceId] = $invoice;
+        $receiptByPaymentId[$sourceId] = $receipt;
     }
 }
 
@@ -279,7 +279,7 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                             <th>Date</th>
                                             <th>Type</th>
                                             <th>Status</th>
-                                            <th>Invoice</th>
+                                            <th>Receipt</th>
                                             <th class="fbg-credit-table-amount">Amount</th>
                                         </tr>
                                     </thead>
@@ -291,10 +291,10 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                             $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
                                             $type = ucfirst((string)($transaction['payment_type'] ?? 'Payment'));
                                             $completed = (int)($transaction['completed'] ?? 0) === 1;
-                                            $invoice = $invoiceByPaymentId[(int)($transaction['id'] ?? 0)] ?? null;
-                                            $invoiceNumber = trim((string)($invoice['invoice_number'] ?? $transaction['invoice_number'] ?? ''));
-                                            $invoiceUrl = $invoice && !empty($invoice['id'])
-                                                ? './page.php?name=invoice&id=' . rawurlencode((string)$invoice['id'])
+                                            $receipt = $receiptByPaymentId[(int)($transaction['id'] ?? 0)] ?? null;
+                                            $receiptNumber = trim((string)($receipt['receipt_number'] ?? $transaction['receipt_number'] ?? ''));
+                                            $receiptUrl = $receipt && !empty($receipt['id'])
+                                                ? './page.php?name=receipt&id=' . rawurlencode((string)$receipt['id'])
                                                 : '';
                                             ?>
                                             <tr>
@@ -306,9 +306,9 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <?php if ($invoiceNumber !== '' && $invoiceUrl !== ''): ?>
-                                                        <a href="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-invoice-link">
-                                                            <?php echo htmlspecialchars($invoiceNumber, ENT_QUOTES, 'UTF-8'); ?>
+                                                    <?php if ($receiptNumber !== '' && $receiptUrl !== ''): ?>
+                                                        <a href="<?php echo htmlspecialchars($receiptUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-receipt-link">
+                                                            <?php echo htmlspecialchars($receiptNumber, ENT_QUOTES, 'UTF-8'); ?>
                                                         </a>
                                                     <?php else: ?>
                                                         &mdash;
@@ -328,16 +328,16 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                     <section class="fbg-account-section">
                         <div class="fbg-settings-section-header">
                             <div>
-                                <h3>Invoices</h3>
+                                <h3>Receipts</h3>
                                 <p class="fbg-settings-note">
-                                    Invoices for completed wallet activity.
+                                    Receipts for completed wallet activity.
                                 </p>
                             </div>
                         </div>
 
-                        <?php if (empty($frontendInvoices)): ?>
+                        <?php if (empty($frontendReceipts)): ?>
                             <div class="fbg-empty-state">
-                                No invoices found.
+                                No receipts found.
                             </div>
                         <?php else: ?>
                             <div class="fbg-credit-table-wrap fbg-wallet-table-scroll">
@@ -345,36 +345,36 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                     <thead>
                                         <tr>
                                             <th>Date</th>
-                                            <th>Invoice</th>
+                                            <th>Receipt</th>
                                             <th>Status</th>
                                             <th>Source</th>
                                             <th class="fbg-credit-table-amount">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($frontendInvoices as $invoice): ?>
+                                        <?php foreach ($frontendReceipts as $receipt): ?>
                                             <?php
-                                            $createdAt = (string)($invoice['created_at'] ?? '');
+                                            $createdAt = (string)($receipt['created_at'] ?? '');
                                             $timestamp = $createdAt !== '' ? strtotime($createdAt) : false;
                                             $dateDisplay = $timestamp ? date('M j, Y g:i A', $timestamp) : 'Unknown';
-                                            $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
-                                            $invoiceStatus = ucfirst((string)($invoice['status'] ?? 'Paid'));
-                                            $sourceType = (string)($invoice['source_type'] ?? 'purchase');
+                                            $receiptNumber = trim((string)($receipt['receipt_number'] ?? ''));
+                                            $receiptStatus = ucfirst((string)($receipt['status'] ?? 'Paid'));
+                                            $sourceType = (string)($receipt['source_type'] ?? 'purchase');
                                             $sourceLabel = match ($sourceType) {
                                                 'payment' => 'Balance Upload',
                                                 'server_purchase' => 'Server Rental',
-                                                'renewal' => 'Server Renewal',
+                                                'server_renewal' => 'Server Renewal',
                                                 default => 'Rental',
                                             };
-                                            $invoiceCurrency = trim((string)($invoice['currency'] ?? '')) ?: $currency;
-                                            $invoiceUrl = './page.php?name=invoice&id=' . rawurlencode((string)($invoice['id'] ?? 0));
+                                            $receiptCurrency = trim((string)($receipt['currency'] ?? '')) ?: $currency;
+                                            $receiptUrl = './page.php?name=receipt&id=' . rawurlencode((string)($receipt['id'] ?? 0));
                                             ?>
                                             <tr>
                                                 <td><?php echo htmlspecialchars($dateDisplay); ?></td>
                                                 <td>
-                                                    <?php if ($invoiceNumber !== ''): ?>
-                                                        <a href="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-invoice-link">
-                                                            <?php echo htmlspecialchars($invoiceNumber, ENT_QUOTES, 'UTF-8'); ?>
+                                                    <?php if ($receiptNumber !== ''): ?>
+                                                        <a href="<?php echo htmlspecialchars($receiptUrl, ENT_QUOTES, 'UTF-8'); ?>" class="fbg-receipt-link">
+                                                            <?php echo htmlspecialchars($receiptNumber, ENT_QUOTES, 'UTF-8'); ?>
                                                         </a>
                                                     <?php else: ?>
                                                         &mdash;
@@ -382,12 +382,12 @@ $defaultAmount = max($minAmount, min($maxAmount > 0 ? $maxAmount : 10.00, 10.00)
                                                 </td>
                                                 <td>
                                                     <span class="fbg-credit-status is-complete">
-                                                        <?php echo htmlspecialchars($invoiceStatus); ?>
+                                                        <?php echo htmlspecialchars($receiptStatus); ?>
                                                     </span>
                                                 </td>
                                                 <td><?php echo htmlspecialchars($sourceLabel); ?></td>
                                                 <td class="fbg-credit-table-amount">
-                                                    <?php echo htmlspecialchars(fbgFormatCredit((float)($invoice['total'] ?? 0), $invoiceCurrency)); ?>
+                                                    <?php echo htmlspecialchars(fbgFormatCredit((float)($receipt['total'] ?? 0), $receiptCurrency)); ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>

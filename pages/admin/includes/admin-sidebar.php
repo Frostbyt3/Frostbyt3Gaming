@@ -114,14 +114,14 @@ if (function_exists('asset')) {
         </div>
 
         <div class="fbg-admin-nav-group">
-            <span class="fbg-admin-nav-group-title">Invoice</span>
+            <span class="fbg-admin-nav-group-title">Receipt</span>
 
-            <a href="./page.php?name=admin-invoice-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoice-settings', $currentAdminPage) ?>">
-                Invoice Settings
+            <a href="./page.php?name=admin-receipt-settings" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-receipt-settings', $currentAdminPage) ?>">
+                Receipt Settings
             </a>
 
-            <a href="./page.php?name=admin-invoices" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-invoices', $currentAdminPage) ?>">
-                Invoices
+            <a href="./page.php?name=admin-receipts" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-receipts', $currentAdminPage) ?>">
+                Receipts
             </a>
         </div>
 

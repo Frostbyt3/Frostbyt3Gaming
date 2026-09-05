@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $deleteDays = (int)($_POST['delete_days'] ?? 0);
             $tosUrl = trim((string)($_POST['tos_url'] ?? ''));
             $tosContent = (string)($_POST['tos_content'] ?? '');
-            $invoiceTax = round((float)($_POST['invoice_tax'] ?? 0), 2);
+            $receiptTax = round((float)($_POST['receipt_tax'] ?? 0), 2);
 
             if (!preg_match('/^[A-Z]{3}$/', $currency)) {
                 throw new RuntimeException('Currency must be a 3-letter currency code.');
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Terms of Service URL must be a valid URL.');
             }
 
-            if ($invoiceTax < 0) {
+            if ($receiptTax < 0) {
                 throw new RuntimeException('Server rental tax rate must be 0 or greater.');
             }
 
@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fbgAdminPaymentsSaveSecret('settings::shop::paypal::key', (string)($_POST['paypal_key'] ?? ''));
             fbgAdminPaymentsSaveSecret('settings::shop::paypal::secret', (string)($_POST['paypal_secret'] ?? ''));
 
-            fbgAdminPaymentsSaveSiteSetting('fbg_invoice_tax_rate', number_format($invoiceTax, 2, '.', ''));
+            fbgAdminPaymentsSaveSiteSetting('fbg_receipt_tax_rate', number_format($receiptTax, 2, '.', ''));
             fbgResetSettingsCache();
 
             $message = 'Shop settings updated.';
@@ -199,7 +199,7 @@ $serverRentalTaxRate = fbgGetShopTaxRate();
 
                 <div class="fbg-admin-field">
                     <label for="server-rental-tax">Server Rental Tax Rate</label>
-                    <input id="server-rental-tax" name="invoice_tax" type="number" min="0" step="0.01" value="<?= htmlspecialchars(number_format($serverRentalTaxRate, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+                    <input id="server-rental-tax" name="receipt_tax" type="number" min="0" step="0.01" value="<?= htmlspecialchars(number_format($serverRentalTaxRate, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
                     <p class="fbg-admin-help-text">
                         Applied to server rentals and renewals. Balance uploads are not taxed.
                     </p>

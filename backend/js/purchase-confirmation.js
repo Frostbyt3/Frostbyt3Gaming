@@ -159,7 +159,7 @@
             <div class="fbg-purchase-confirmation-totals"></div>
             <div class="fbg-purchase-confirmation-balance"></div>
             <p class="fbg-purchase-confirmation-note"></p>
-            <p class="fbg-purchase-confirmation-invoice"></p>
+            <p class="fbg-purchase-confirmation-receipt"></p>
             <div class="fbg-purchase-confirmation-actions"></div>
         `;
 
@@ -219,22 +219,22 @@
         noteEl.textContent = cleanText(options.note);
         noteEl.hidden = noteEl.textContent === '';
 
-        const invoiceEl = modal.querySelector('.fbg-purchase-confirmation-invoice');
-        clearChildren(invoiceEl);
+        const receiptEl = modal.querySelector('.fbg-purchase-confirmation-receipt');
+        clearChildren(receiptEl);
 
-        if (options.invoice && cleanText(options.invoice.number) !== '') {
-            invoiceEl.appendChild(document.createTextNode(`Invoice ${cleanText(options.invoice.number)}`));
+        if (options.receipt && cleanText(options.receipt.number) !== '') {
+            receiptEl.appendChild(document.createTextNode(`Receipt ${cleanText(options.receipt.number)}`));
 
-            if (cleanText(options.invoice.url) !== '') {
-                invoiceEl.appendChild(document.createTextNode(' · '));
-                const invoiceLink = makeElement('a', '', 'View Invoice');
-                invoiceLink.href = cleanText(options.invoice.url);
-                invoiceEl.appendChild(invoiceLink);
+            if (cleanText(options.receipt.url) !== '') {
+                receiptEl.appendChild(document.createTextNode(' · '));
+                const receiptLink = makeElement('a', '', 'View Receipt');
+                receiptLink.href = cleanText(options.receipt.url);
+                receiptEl.appendChild(receiptLink);
             }
 
-            invoiceEl.hidden = false;
+            receiptEl.hidden = false;
         } else {
-            invoiceEl.hidden = true;
+            receiptEl.hidden = true;
         }
 
         const actionsEl = modal.querySelector('.fbg-purchase-confirmation-actions');

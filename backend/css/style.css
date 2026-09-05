@@ -9401,14 +9401,14 @@ textarea.startup-variable-input {
     background: var(--fbg-card-bg);
 }
 
-.fbg-invoice-link {
+.fbg-receipt-link {
     color: var(--fbg-brightblue);
     font-weight: 800;
     text-decoration: none;
 }
 
-.fbg-invoice-link:hover,
-.fbg-invoice-link:focus {
+.fbg-receipt-link:hover,
+.fbg-receipt-link:focus {
     color: var(--fbg-white);
     text-decoration: underline;
 }
@@ -9482,51 +9482,51 @@ textarea.startup-variable-input {
     text-align: center;
 }
 
-.fbg-invoice-summary {
+.fbg-receipt-summary {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
 }
 
-.fbg-invoice-summary > div,
-.fbg-invoice-payment-grid > div {
+.fbg-receipt-summary > div,
+.fbg-receipt-payment-grid > div {
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
 }
 
-.fbg-invoice-summary strong,
-.fbg-invoice-payment-grid strong {
+.fbg-receipt-summary strong,
+.fbg-receipt-payment-grid strong {
     color: var(--fbg-white);
     overflow-wrap: anywhere;
 }
 
-.fbg-invoice-detail-grid,
-.fbg-invoice-payment-grid {
+.fbg-receipt-detail-grid,
+.fbg-receipt-payment-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
 }
 
-.fbg-invoice-party {
+.fbg-receipt-party {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.fbg-invoice-party strong {
+.fbg-receipt-party strong {
     color: var(--fbg-white);
     font-size: 1.02rem;
 }
 
-.fbg-invoice-party p {
+.fbg-receipt-party p {
     margin: 0;
     color: var(--fbg-offwhite);
     line-height: 1.5;
 }
 
-.fbg-invoice-totals {
+.fbg-receipt-totals {
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -9538,7 +9538,7 @@ textarea.startup-variable-input {
     background: rgba(0, 0, 0, 0.12);
 }
 
-.fbg-invoice-totals > div {
+.fbg-receipt-totals > div {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -9548,15 +9548,15 @@ textarea.startup-variable-input {
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.fbg-invoice-totals > div:last-child {
+.fbg-receipt-totals > div:last-child {
     border-bottom: 0;
 }
 
-.fbg-invoice-totals strong {
+.fbg-receipt-totals strong {
     color: var(--fbg-white);
 }
 
-.fbg-invoice-totals .is-total {
+.fbg-receipt-totals .is-total {
     color: var(--fbg-white);
     background: rgba(0, 170, 255, 0.08);
 }
@@ -9585,13 +9585,13 @@ textarea.startup-variable-input {
         align-self: flex-start;
     }
 
-    .fbg-invoice-summary,
-    .fbg-invoice-detail-grid,
-    .fbg-invoice-payment-grid {
+    .fbg-receipt-summary,
+    .fbg-receipt-detail-grid,
+    .fbg-receipt-payment-grid {
         grid-template-columns: 1fr;
     }
 
-    .fbg-invoice-totals {
+    .fbg-receipt-totals {
         width: 100%;
     }
 }

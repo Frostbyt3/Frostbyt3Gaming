@@ -324,14 +324,14 @@ document.addEventListener("DOMContentLoaded", () => {
         message.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
 
-    const invoicePayload = (invoice) => {
-        if (!invoice || !invoice.id || !invoice.invoice_number) {
+    const receiptPayload = (receipt) => {
+        if (!receipt || !receipt.id || !receipt.receipt_number) {
             return null;
         }
 
         return {
-            number: invoice.invoice_number,
-            url: `/page.php?name=invoice&id=${encodeURIComponent(invoice.id)}`
+            number: receipt.receipt_number,
+            url: `/page.php?name=receipt&id=${encodeURIComponent(receipt.id)}`
         };
     };
 
@@ -369,7 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 value: data.balance_display || button.dataset.balanceAfter || "-"
             },
             note: "Your server is being provisioned and installed and will appear in your dashboard shortly.",
-            invoice: invoicePayload(data.invoice),
+            receipt: receiptPayload(data.receipt),
             actions: [
                 {
                     label: "Dashboard",

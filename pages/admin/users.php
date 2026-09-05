@@ -891,7 +891,7 @@
                             </div>
 
                             <div class="fbg-admin-field">
-                                <label for="edit-credit">Account Balance</label>
+                                <label for="edit-credit">Wallet Balance</label>
                                 <input id="edit-credit" name="credit" type="number" step="0.01" min="0" value="<?= htmlspecialchars(number_format((float)($editingUser['credit'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
                             </div>
                         </div>
