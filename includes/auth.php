@@ -283,8 +283,10 @@
         setcookie(FBG_REMEMBER_COOKIE, $value, $params);
 
         if (array_key_exists('domain', $params)) {
-            unset($params['domain']);
-            setcookie(FBG_REMEMBER_COOKIE, $value, $params);
+            $hostOnlyParams = $params;
+            unset($hostOnlyParams['domain']);
+            $hostOnlyParams['expires'] = time() - 3600;
+            setcookie(FBG_REMEMBER_COOKIE, '', $hostOnlyParams);
         }
     }
 
