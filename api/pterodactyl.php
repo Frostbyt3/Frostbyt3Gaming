@@ -8,6 +8,10 @@ if (!function_exists('fbgPteroDb')) {
     require_once __DIR__ . '/../includes/auth.php';
 }
 
+if (function_exists('fbgAttemptRememberMeLogin')) {
+    fbgAttemptRememberMeLogin();
+}
+
 if (!defined('PTERO_BASE_URL')) {
     define('PTERO_BASE_URL', 'https://panel.frostbyt3gaming.com');
 }

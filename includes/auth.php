@@ -387,6 +387,30 @@
         fbgRememberLogin($userId);
     }
 
+    function fbgRefreshRememberLoginExpiry(int $rememberedLoginId, string $selector, string $validator): void
+    {
+        if ($rememberedLoginId <= 0 || $selector === '' || $validator === '') {
+            return;
+        }
+
+        $expiresTimestamp = time() + (FBG_REMEMBER_DAYS * 86400);
+        $expiresAt = date('Y-m-d H:i:s', $expiresTimestamp);
+
+        $stmt = db()->prepare("
+            UPDATE remembered_logins
+            SET expires_at = :expires_at,
+                last_used_at = NOW()
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $stmt->execute([
+            'expires_at' => $expiresAt,
+            'id' => $rememberedLoginId,
+        ]);
+
+        fbgSetRememberCookie($selector, $validator, $expiresTimestamp);
+    }
+
     function fbgAttemptRememberMeLogin(): bool
     {
         if (!empty($_SESSION['user_id'])) {
@@ -452,17 +476,7 @@
 
         fbgLogUserIn($user);
 
-        $updateStmt = db()->prepare("
-            UPDATE remembered_logins
-            SET last_used_at = NOW()
-            WHERE id = :id
-            LIMIT 1
-        ");
-        $updateStmt->execute([
-            'id' => (int)$row['id'],
-        ]);
-
-        fbgRotateRememberLogin($userId, $selector);
+        fbgRefreshRememberLoginExpiry((int)$row['id'], $selector, $validator);
 
         return true;
     }
