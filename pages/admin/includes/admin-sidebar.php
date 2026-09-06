@@ -107,6 +107,10 @@ if (function_exists('asset')) {
 
         <div class="fbg-admin-nav-group">
             <span class="fbg-admin-nav-group-title">Service Management</span>
+
+            <a href="./page.php?name=admin-mounts" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-mounts', $currentAdminPage) ?>">
+                Mounts
+            </a>
             
             <a href="./page.php?name=admin-nests" class="fbg-admin-nav-link<?= fbgAdminNavIsActive('admin-nests', $currentAdminPage) ?>">
                 Nests & Eggs

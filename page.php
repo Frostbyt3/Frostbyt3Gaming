@@ -46,6 +46,7 @@ $allowed = [
     'admin-database-hosts'  => 'admin/database-hosts.php',
     'admin-locations'       => 'admin/locations.php',
     'admin-nodes'           => 'admin/nodes.php',
+    'admin-mounts'          => 'admin/mounts.php',
     'admin-nests'           => 'admin/nests.php',
     'admin-image-upload'    => 'admin/image.php',
     'admin-file-upload'     => 'admin/fileupload.php',

@@ -203,6 +203,14 @@
         return (string)($result['error'] ?? $fallback);
     }
 
+    function fbgAdminServersConfirmDeletionName(array $server, string $submittedName): bool
+    {
+        $expectedName = trim((string)($server['name'] ?? ''));
+        $submittedName = trim($submittedName);
+
+        return $expectedName !== '' && hash_equals($expectedName, $submittedName);
+    }
+
     function fbgAdminServersFormatMb(mixed $value): string
     {
         $megabytes = (int)$value;
@@ -1154,6 +1162,15 @@
         }
 
         if ($action === 'delete_server') {
+            if (!fbgAdminServersConfirmDeletionName($server, (string)($_POST['delete_confirmation'] ?? ''))) {
+                fbgAdminServersRedirect(
+                    'Type the server name exactly as shown before deleting this server.',
+                    'error',
+                    $serverId,
+                    'delete'
+                );
+            }
+
             $result = pteroRequest('DELETE', "servers/{$serverId}");
             if (empty($result['ok'])) {
                 fbgAdminServersRedirect(
@@ -1168,6 +1185,15 @@
         }
 
         if ($action === 'force_delete_server') {
+            if (!fbgAdminServersConfirmDeletionName($server, (string)($_POST['delete_confirmation'] ?? ''))) {
+                fbgAdminServersRedirect(
+                    'Type the server name exactly as shown before force deleting this server.',
+                    'error',
+                    $serverId,
+                    'delete'
+                );
+            }
+
             $result = pteroRequest('DELETE', "servers/{$serverId}/force");
             if (empty($result['ok'])) {
                 fbgAdminServersRedirect(
@@ -2851,12 +2877,28 @@
                     <div class="fbg-admin-warning-box">
                         This is irreversible. All server files, users, and related data will be removed immediately if the delete succeeds.
                     </div>
+                    <p class="fbg-admin-help-text" style="margin: 14px 0 0;">
+                        Server rental, payment, and receipt records are retained for billing and audit history.
+                    </p>
                     <form method="POST" class="fbg-admin-form-actions fbg-admin-user-delete-confirm-actions">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="action" value="delete_server">
                         <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                        <div class="fbg-admin-field" style="flex: 1 1 100%; margin-bottom: 10px;">
+                            <label for="admin-server-safe-delete-confirmation">Type the server name to confirm</label>
+                            <input
+                                id="admin-server-safe-delete-confirmation"
+                                name="delete_confirmation"
+                                type="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                data-delete-confirm-input
+                                data-delete-confirm-expected="<?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?>"
+                                placeholder="<?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                        </div>
                         <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="safe-delete">Cancel</button>
-                        <button type="submit" class="btn danger-action">Delete Server</button>
+                        <button type="submit" class="btn danger-action" data-delete-confirm-submit disabled>Delete Server</button>
                     </form>
                 </div>
             </div>
@@ -2871,12 +2913,28 @@
                     <div class="fbg-admin-warning-box">
                         This is irreversible. All server files, users, and related data will be removed immediately. Force delete may leave dangling files behind on the daemon if it reports an error.
                     </div>
+                    <p class="fbg-admin-help-text" style="margin: 14px 0 0;">
+                        Server rental, payment, and receipt records are retained for billing and audit history.
+                    </p>
                     <form method="POST" class="fbg-admin-form-actions fbg-admin-user-delete-confirm-actions">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="action" value="force_delete_server">
                         <input type="hidden" name="server_id" value="<?= (int)$editingServer['id'] ?>">
+                        <div class="fbg-admin-field" style="flex: 1 1 100%; margin-bottom: 10px;">
+                            <label for="admin-server-force-delete-confirmation">Type the server name to confirm</label>
+                            <input
+                                id="admin-server-force-delete-confirmation"
+                                name="delete_confirmation"
+                                type="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                data-delete-confirm-input
+                                data-delete-confirm-expected="<?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?>"
+                                placeholder="<?= htmlspecialchars((string)$editingServer['name'], ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                        </div>
                         <button type="button" class="btn fbg-neutral-button" data-close-admin-server-modal="force-delete">Cancel</button>
-                        <button type="submit" class="btn danger-action">Force Delete Server</button>
+                        <button type="submit" class="btn danger-action" data-delete-confirm-submit disabled>Force Delete Server</button>
                     </form>
                 </div>
             </div>
@@ -3077,6 +3135,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target === 'transfer') closeOverlay(transferModal);
             if (target === 'expiration-confirm') closeOverlay(expirationConfirmModal);
         });
+    });
+
+    modal.querySelectorAll('form').forEach((form) => {
+        const confirmationInput = form.querySelector('[data-delete-confirm-input]');
+        const confirmationSubmit = form.querySelector('[data-delete-confirm-submit]');
+
+        if (!confirmationInput || !confirmationSubmit) {
+            return;
+        }
+
+        const expectedName = confirmationInput.dataset.deleteConfirmExpected || '';
+        const syncDeleteConfirmation = () => {
+            confirmationSubmit.disabled = confirmationInput.value.trim() !== expectedName.trim();
+        };
+
+        confirmationInput.addEventListener('input', syncDeleteConfirmation);
+        syncDeleteConfirmation();
     });
 
     document.addEventListener('keydown', (event) => {
